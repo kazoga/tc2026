@@ -1,0 +1,23 @@
+# colcon
+/build/
+/install/
+/log/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# C/C++ ビルド成果物
+*.o
+*.so
+*.a
+
+# エディタ/IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Claude Code ローカル設定
+.claude/
