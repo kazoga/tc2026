@@ -77,6 +77,9 @@ colcon build --packages-select ypspur_ros2
 
 ## 起動例
 
+各パッケージごとに代表的な launch を抜粋。詳細な引数・トピック名は各パッケージ README を参照。
+
+### センサ / アクチュエータドライバ
 ```bash
 # RTK GPS ドライバ
 ros2 launch rtk_gps_um982 rtk_gps_um982.launch.py
@@ -84,6 +87,43 @@ ros2 launch rtk_gps_um982 rtk_gps_um982.launch.py
 # yp-spur ロボット制御 (別端末で ypspur-coordinator も起動)
 ypspur-coordinator -d /dev/ttyACM0 -p ~/spur/my_robot.param
 ros2 launch ypspur_ros2 ypspur_ros2.launch.py
+```
+
+### 経路計画・追従
+```bash
+# 経路生成サービス (route_planner)
+ros2 launch route_planner route_planner.launch.py
+
+# 経路管理 FSM (route_manager)
+ros2 launch route_manager route_manager.launch.py \
+  start_label:=START goal_label:=GOAL \
+  checkpoint_labels:="P1,P2"
+
+# 経路追従 (route_follower)
+ros2 launch route_follower route_follower.launch.py \
+  arrival_threshold:=0.6 \
+  control_rate_hz:=20.0 \
+  start_immediately:=true
+```
+
+### 走行制御・障害物
+```bash
+# /active_target を追従して /cmd_vel を出力
+ros2 launch robot_navigator robot_navigator.launch.py \
+  obstacle_hint_topic:=/obstacle_avoidance_hint cmd_vel_topic:=/cmd_vel
+
+# 障害物監視 (LiDAR 入力 → /obstacle_avoidance_hint)
+ros2 launch obstacle_monitor obstacle_monitor.launch.py \
+  scan_topic:=/scan hint_topic:=/obstacle_avoidance_hint
+```
+
+### 認識・GUI
+```bash
+# YOLO 物体検出 (NCNN 版を推奨)
+ros2 launch yolo_detector yolo_ncnn_node.launch.py
+
+# 運用 GUI ダッシュボード
+ros2 launch robot_console robot_console.launch.py
 ```
 
 ## 外部依存 (submodule)
