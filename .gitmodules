@@ -1,0 +1,3 @@
+[submodule "src/rtk_gps_um982/third_party/UM982-RTK-GPS-Library"]
+	path = src/rtk_gps_um982/third_party/UM982-RTK-GPS-Library
+	url = https://github.com/t-nakabayashi/UM982-RTK-GPS-Library.git

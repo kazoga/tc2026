@@ -1,0 +1,12 @@
+# /etc/chrony/chrony.conf に追記するサンプル
+# (gpsd 経由で NMEA を共有メモリ refclock として食わせる)
+#
+# 前提:
+#   - gpsd がインストール済み (sudo apt install gpsd gpsd-clients)
+#   - /etc/default/gpsd に DEVICES="/dev/ttyUSB0" のような設定
+#   - UM982 を直接 gpsd に渡すと rtk_gps_um982_node とシリアル競合するため、
+#     pty 経由で分配する等の構成が必要 (詳細は README.md)
+
+refclock SHM 0 refid GPS precision 1e-1 offset 0.0 delay 0.2
+makestep 1.0 3
+rtcsync

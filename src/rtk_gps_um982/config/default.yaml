@@ -1,0 +1,22 @@
+/rtk_gps/rtk_gps_um982_node:
+  ros__parameters:
+    serial:
+      port: /dev/ttyUSB0
+      baud: 115200
+    output_rate_hz: 10
+    frame_id: gps_link
+    stamp_source: gnss_utc        # gnss_utc | ros_time | pps_edge (phase 2)
+    transport_delay_ms: 0
+    ntrip:
+      enabled: false
+      host: ""
+      port: 2101
+      mountpoint: ""
+      user: ""
+      password: ""
+    publish:
+      navsatfix: true
+      imu_heading: true
+      rtk_status: true
+    min_fix_for_publish: standalone   # none | standalone | dgps | float | fix
+    hdop_sigma: 1.0                   # NavSatFix の共分散に掛けるスケール
