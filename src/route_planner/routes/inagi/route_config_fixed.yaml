@@ -1,0 +1,4 @@
+blocks:
+  - type: fixed
+    name: "20251018"
+    segment_id: "fixed/fixed_first.csv"

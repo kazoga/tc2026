@@ -17,7 +17,21 @@ ROS 2 Jazzy ワークスペース。
 
 - Ubuntu 24.04
 - ROS 2 Jazzy
+- Python 3
 - (パッケージごとの追加要件は各 README を参照)
+
+## Python 依存モジュール
+
+Python パッケージ群で使用する pip 依存モジュールは、[`requirements.txt`](requirements.txt) にまとめている。
+対象は `obstacle_monitor`, `robot_console`, `robot_navigator`, `route_follower`,
+`route_manager`, `route_planner`, `yolo_detector` と、それらが利用する
+`route_msgs`。
+
+ROS 2 の環境を読み込んだうえで、ワークスペース直下で以下を実行する。
+
+```bash
+python3 -m pip install -r requirements.txt
+```
 
 ## ビルド
 
@@ -28,6 +42,7 @@ git clone --recursive https://github.com/t-nakabayashi/tc2026.git ~/colcon_ws
 
 cd ~/colcon_ws
 source /opt/ros/jazzy/setup.bash
+python3 -m pip install -r requirements.txt
 colcon build
 source install/setup.bash
 ```
