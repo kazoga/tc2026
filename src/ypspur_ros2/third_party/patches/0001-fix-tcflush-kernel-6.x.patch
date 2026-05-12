@@ -1,0 +1,29 @@
+From: ypspur_ros2 maintainer <noreply@example.com>
+Subject: Workaround for Linux kernel 6.x tcflush behavior (yp-spur issue #245)
+
+Disable serial_flush_out() in encode_write(). Linux kernel 6.x has changed
+tcflush(fd, TCOFLUSH) semantics so that the input buffer is also discarded,
+which causes odometry_receive_loop() to receive zero bytes and the
+coordinator to misbehave / crash under load on Ubuntu 22.04 / 24.04.
+
+Upstream issue: https://github.com/openspur/yp-spur/issues/245
+Workaround by: @BND-tc (2025-10-25), confirmed by @yamazak on Ubuntu 24.04.
+---
+ src/serial.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/serial.c b/src/serial.c
+index 6aa5751..8dd7c77 100644
+--- a/src/serial.c
++++ b/src/serial.c
+@@ -533,7 +533,9 @@ int encode_write(char* data, int len)
+   {
+     return -1;
+   }
+-  serial_flush_out();
++  // Workaround for Linux kernel 6.x tcflush behavior (yp-spur issue #245):
++  // tcflush(fd, TCOFLUSH) also flushes the input buffer, breaking odometry.
++  // serial_flush_out();
+
+   return 0;
+ }

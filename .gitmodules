@@ -1,3 +1,6 @@
 [submodule "src/rtk_gps_um982/third_party/UM982-RTK-GPS-Library"]
 	path = src/rtk_gps_um982/third_party/UM982-RTK-GPS-Library
 	url = https://github.com/t-nakabayashi/UM982-RTK-GPS-Library.git
+[submodule "src/ypspur_ros2/third_party/yp-spur"]
+	path = src/ypspur_ros2/third_party/yp-spur
+	url = https://github.com/openspur/yp-spur.git
