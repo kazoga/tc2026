@@ -15,8 +15,9 @@
 `yp-spur` 本体は Linux kernel 6.x 環境で
 [issue #245](https://github.com/openspur/yp-spur/issues/245) (tcflush が入力バッファも flush する問題)
 の影響を受けます。**Ubuntu 22.04 / 24.04 では必ずパッチが必要** で、
-本パッケージはこれを CMake から **自動適用** します
+本パッケージはこれを CMake からビルド用コピーへ **自動適用** します
 ([`third_party/patches/0001-fix-tcflush-kernel-6.x.patch`](third_party/patches/0001-fix-tcflush-kernel-6.x.patch))。
+`third_party/yp-spur` の submodule 本体は変更しません。
 
 `colcon build` 時に
 ```
