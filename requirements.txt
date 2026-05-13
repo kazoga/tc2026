@@ -1,4 +1,4 @@
-# 今回追加した ROS 2 Python パッケージで使用する pip モジュール。
+# ROS 2 Python パッケージで使用する pip モジュール。
 # rclpy, cv_bridge, 各種 msg などの ROS パッケージは rosdep/apt で導入する。
 japanize-matplotlib
 matplotlib

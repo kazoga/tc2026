@@ -1,0 +1,16 @@
+road_blockage_detector:
+  ros__parameters:
+    detections_topic: /perception/road_blockage/detections
+    amcl_pose_topic: /amcl_pose
+    road_blocked_topic: /road_blocked
+    target_class_id: 0
+    score_threshold: 0.5
+    bbox_width_min: -1.0
+    bbox_width_max: -1.0
+    bbox_height_min: -1.0
+    bbox_height_max: -1.0
+    bbox_bottom_max: -1.0
+    decision_duration: 3.0
+    decision_frame_ratio: 50.0
+    confirmation_duration: 10.0
+    multi_detection_suppression_range: 10.0

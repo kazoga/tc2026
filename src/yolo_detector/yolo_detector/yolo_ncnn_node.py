@@ -17,7 +17,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from std_msgs.msg import Header
+from std_msgs.msg import Header, Int32
 from vision_msgs.msg import (
     BoundingBox2D,
     Detection2D,
@@ -39,9 +39,21 @@ class YoloNCNNDetectorNode(Node):
         self.declare_parameter('detection_interval', 0.5)
         self.declare_parameter('confidence_threshold', 0.5)
         self.declare_parameter('class_names', ['item'])
+        self.declare_parameter('detections_topic', 'yolo_detector/detections')
+        self.declare_parameter('annotated_image_topic', 'yolo_detector/image_det')
+        self.declare_parameter('enabled_topic', '')
+        self.declare_parameter('enabled_value', 1)
+        self.declare_parameter('start_enabled', True)
 
         model_path = self.get_parameter('model_path').get_parameter_value().string_value
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
+        detections_topic = (
+            self.get_parameter('detections_topic').get_parameter_value().string_value
+        )
+        annotated_image_topic = (
+            self.get_parameter('annotated_image_topic').get_parameter_value().string_value
+        )
+        enabled_topic = self.get_parameter('enabled_topic').get_parameter_value().string_value
         self.detection_interval = (
             self.get_parameter('detection_interval').get_parameter_value().double_value
         )
@@ -51,6 +63,8 @@ class YoloNCNNDetectorNode(Node):
         self.class_names = (
             self.get_parameter('class_names').get_parameter_value().string_array_value
         )
+        self.enabled_value = self.get_parameter('enabled_value').get_parameter_value().integer_value
+        self.enabled = self.get_parameter('start_enabled').get_parameter_value().bool_value
 
         if model_path == '':
             default_model_path = os.path.join(
@@ -59,7 +73,8 @@ class YoloNCNNDetectorNode(Node):
                 'best_ncnn_model',
             )
             self.get_logger().warn(
-                'model_pathが指定されていないため、パッケージ内のNCNNモデルを利用します: '
+                'model_pathが指定されていないため、パッケージ内の'
+                'NCNNモデルを利用します: '
                 f'{default_model_path}'
             )
             model_path = default_model_path
@@ -79,12 +94,24 @@ class YoloNCNNDetectorNode(Node):
             10,
             callback_group=self.callback_group,
         )
+        if enabled_topic:
+            self.create_subscription(
+                Int32,
+                enabled_topic,
+                self.enabled_callback,
+                10,
+                callback_group=self.callback_group,
+            )
+            self.get_logger().info(
+                f'Enable control: topic={enabled_topic}, enabled_value={self.enabled_value}, '
+                f'start_enabled={self.enabled}'
+            )
 
         self.detection_image_publisher = self.create_publisher(
-            Image, 'yolo_detector/image_det', 10
+            Image, annotated_image_topic, 10
         )
         self.detection_publisher = self.create_publisher(
-            Detection2DArray, 'yolo_detector/detections', 10
+            Detection2DArray, detections_topic, 10
         )
 
         self.create_timer(
@@ -97,6 +124,8 @@ class YoloNCNNDetectorNode(Node):
         self.get_logger().info(f'Detection interval: {self.detection_interval} seconds')
         self.get_logger().info(f'Confidence threshold: {self.confidence_threshold}')
         self.get_logger().info(f'Class names: {self.class_names}')
+        self.get_logger().info(f'Detections topic: {detections_topic}')
+        self.get_logger().info(f'Annotated image topic: {annotated_image_topic}')
 
     def _load_model(self, model_path: str) -> YOLO:
         """NCNNモデルを読み込む。"""
@@ -122,8 +151,17 @@ class YoloNCNNDetectorNode(Node):
             self.latest_image = cv_image
             self.latest_header = header_copy
 
+    def enabled_callback(self, msg: Int32) -> None:
+        """推論有効化フラグを更新する。"""
+        self.enabled = int(msg.data) == int(self.enabled_value)
+
     def timer_callback(self) -> None:
-        """推論タイマーのコールバック。非ブロッキングで多重実行を防止する。"""
+        """推論タイマーのコールバック.
+
+        非ブロッキングで多重実行を防止する。
+        """
+        if not self.enabled:
+            return
         if not self.timer_lock.acquire(blocking=False):
             return
 

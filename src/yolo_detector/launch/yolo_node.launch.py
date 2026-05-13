@@ -9,7 +9,9 @@ def generate_launch_description() -> LaunchDescription:
     pkg_share = FindPackageShare('yolo_detector')
 
     image_topic_arg = DeclareLaunchArgument(
-        'image_topic', default_value='/usb_cam/image_raw', description='購読する画像トピック'
+        'image_topic',
+        default_value='/usb_cam/image_raw',
+        description='購読する画像トピック',
     )
     model_path_arg = DeclareLaunchArgument(
         'model_path',
@@ -27,6 +29,29 @@ def generate_launch_description() -> LaunchDescription:
     confidence_threshold_arg = DeclareLaunchArgument(
         'confidence_threshold', default_value='0.5', description='検出の信頼度閾値'
     )
+    detections_topic_arg = DeclareLaunchArgument(
+        'detections_topic',
+        default_value='yolo_detector/detections',
+        description='Detection2DArrayの出力トピック',
+    )
+    annotated_image_topic_arg = DeclareLaunchArgument(
+        'annotated_image_topic',
+        default_value='yolo_detector/image_det',
+        description='検出重畳画像の出力トピック',
+    )
+    enabled_topic_arg = DeclareLaunchArgument(
+        'enabled_topic',
+        default_value='',
+        description='推論有効化フラグの入力トピック',
+    )
+    enabled_value_arg = DeclareLaunchArgument(
+        'enabled_value', default_value='1', description='推論を有効化するInt32値'
+    )
+    start_enabled_arg = DeclareLaunchArgument(
+        'start_enabled',
+        default_value='true',
+        description='起動直後に推論を有効にするか',
+    )
 
     yolo_node = Node(
         package='yolo_detector',
@@ -40,6 +65,11 @@ def generate_launch_description() -> LaunchDescription:
                 'detection_interval': LaunchConfiguration('detection_interval'),
                 'image_size': LaunchConfiguration('image_size'),
                 'confidence_threshold': LaunchConfiguration('confidence_threshold'),
+                'detections_topic': LaunchConfiguration('detections_topic'),
+                'annotated_image_topic': LaunchConfiguration('annotated_image_topic'),
+                'enabled_topic': LaunchConfiguration('enabled_topic'),
+                'enabled_value': LaunchConfiguration('enabled_value'),
+                'start_enabled': LaunchConfiguration('start_enabled'),
             }
         ],
     )
@@ -51,6 +81,11 @@ def generate_launch_description() -> LaunchDescription:
             detection_interval_arg,
             image_size_arg,
             confidence_threshold_arg,
+            detections_topic_arg,
+            annotated_image_topic_arg,
+            enabled_topic_arg,
+            enabled_value_arg,
+            start_enabled_arg,
             yolo_node,
         ]
     )

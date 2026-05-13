@@ -1,13 +1,13 @@
-# 日本語文書
 # road_blockage_detector 詳細設計書
 
 ## 1. 目的とスコープ
 road_blockage_detector ノードは YOLO 推論結果と自己位置を入力として、経路封鎖看板の有無と封鎖位置を判定する。判定結果は robot_navigator を経由してロボット動作（停止／再開）へ反映される。本設計書ではノードの責務、I/F、内部処理、保持データ構造、異常時動作を定義する。
 
 ## 2. 背景と前提条件
-- YOLO 推論結果は yolo_detector パッケージが `vision_msgs/msg/Detection2DArray` として publish 済みである。
+- YOLO 推論結果は `yolo_detector` パッケージが `vision_msgs/msg/Detection2DArray` として publish 済みである。
+- `road_blockage_detector` は YOLO モデルのロードや画像推論を行わず、検出結果の意味判定だけを担当する。
 - ノードは `/amcl_pose` を唯一の自己位置情報として使用し、TF2 には依存しない。
-- 画像オーバーレイ描画と `/yolo_detector/image_raw` publish 要件は削除済みのため、本ノードでは行わない。
+- 画像オーバーレイ描画は `yolo_detector` 側の `annotated_image_topic` に任せ、本ノードでは行わない。
 - 過去の経路封鎖位置はノード内メモリで累積保持すればよい。永続化要件は無し。
 
 ## 3. ロボット挙動との連携と全体フロー
@@ -30,7 +30,7 @@ road_blockage_detector ノードは YOLO 推論結果と自己位置を入力と
 ### 5.1 サブスクライブ
 | トピック | 型 | QoS | 用途 |
 | -------- | -- | --- | ---- |
-| `/yolo_detector/detections` | `vision_msgs/msg/Detection2DArray` | SensorData | YOLO 推論結果受信。 |
+| `/perception/road_blockage/detections` | `vision_msgs/msg/Detection2DArray` | SensorData | YOLO 推論結果受信。 |
 | `/amcl_pose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | Default | 最新の自己位置キャッシュ。Detection 時刻との差も確認する。 |
 
 ### 5.2 Publish
@@ -46,16 +46,19 @@ road_blockage_detector ノードは YOLO 推論結果と自己位置を入力と
 ## 6. パラメータ仕様
 | 名称 | 型 | 既定値 | 説明 |
 | ---- | -- | ------ | ---- |
+| `detections_topic` | string | `/perception/road_blockage/detections` | YOLO 推論結果入力 topic。 |
+| `amcl_pose_topic` | string | `/amcl_pose` | 自己位置入力 topic。 |
+| `road_blocked_topic` | string | `/road_blocked` | 経路封鎖判定出力 topic。 |
 | `target_class_id` | int | 0 | 経路封鎖看板に対応するクラス ID。 |
-| `score_threshold` | float | 0.7 | 最小スコア。未満の検知は除外。 |
+| `score_threshold` | float | 0.5 | 最小スコア。未満の検知は除外。 |
 | `bbox_width_min` | float | -1 | 幅閾値下限 [pixel]。負値なら判定スキップ。 |
 | `bbox_width_max` | float | -1 | 幅閾値上限 [pixel]。負値なら判定スキップ。 |
 | `bbox_height_min` | float | -1 | 高さ閾値下限 [pixel]。負値なら判定スキップ。 |
 | `bbox_height_max` | float | -1 | 高さ閾値上限 [pixel]。負値なら判定スキップ。 |
 | `bbox_bottom_max` | float | -1 | バウンディングボックス下端の最大位置 [pixel]。画像下端からの距離で定義し、負値なら判定スキップ。 |
-| `decision_duration` | float | 2.0 | 判定期間長 [秒]。この期間のカウント履歴を保持。 |
+| `decision_duration` | float | 3.0 | 判定期間長 [秒]。この期間のカウント履歴を保持。 |
 | `decision_frame_ratio` | float | 50.0 | 判定期間内で「カウント>=1」の秒バケット割合 [%] がこの値以上で仮判定成立。 |
-| `confirmation_duration` | float | 10.0 | road_blocked=true 継続時間が本値を超えたら封鎖確定（ノード内固定。YAMLでは変更不可）。 |
+| `confirmation_duration` | float | 10.0 | road_blocked=true 継続時間が本値を超えたら封鎖確定。 |
 | `multi_detection_suppression_range` | float | 10.0 | 過去封鎖位置中心から本距離[m]以内に現在位置が入った場合はカウント0としてスキップ。 |
 
 ## 7. 内部データ構造

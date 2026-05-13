@@ -11,6 +11,10 @@ ROS2でUSBカメラの画像をYOLOモデルで物体検出するパッケージ
 - 検出結果をターミナルに表示
 - 検出結果付き画像を`yolo_detector/image_det`でPublish
 - Detection2DArray形式の検出結果を`yolo_detector/detections`でPublish
+- 出力トピックと推論有効化フラグをパラメータで切り替え、用途別に複数インスタンスを起動可能
+
+tc2026 では本パッケージを YOLO 推論層に限定し、検出結果の意味判定は下流パッケージに分離します。
+経路封鎖判定は `road_blockage_detector`、信号判定は `traffic_signal_recognizer` が担当します。
 
 ## 必要な依存関係
 
@@ -36,12 +40,12 @@ pip install ultralytics opencv-python
 3. YOLOモデルファイルを`models/`ディレクトリに配置:
 ```bash
 # モデルファイル（例: best.pt, yolo11n.pt など）を配置
-cp /path/to/your/model.pt /home/nkb/ros2_ws/src/yolo_detector/models/
+cp <model_path>.pt <ros2_ws>/src/yolo_detector/models/
 ```
 
 4. ワークスペースをビルド:
 ```bash
-cd /home/nkb/ros2_ws
+cd <ros2_ws>
 colcon build --packages-select yolo_detector
 source install/setup.bash
 ```
@@ -53,7 +57,7 @@ source install/setup.bash
 #### 1. モデルをNCNN形式に変換
 
 ```bash
-cd /home/nkb/ros2_ws/src/yolo_detector
+cd <ros2_ws>/src/yolo_detector
 python3 scripts/convert_to_ncnn.py models/best.pt
 ```
 
@@ -63,7 +67,7 @@ python3 scripts/convert_to_ncnn.py models/best.pt
 
 ```bash
 ros2 run yolo_detector yolo_ncnn_node --ros-args \
-  -p model_path:=/home/nkb/ros2_ws/src/yolo_detector/models/best_ncnn_model
+  -p model_path:=<ros2_ws>/src/yolo_detector/models/best_ncnn_model
 ```
 
 ### 方法2: PyTorch版を使用（従来版）
@@ -72,7 +76,7 @@ ros2 run yolo_detector yolo_ncnn_node --ros-args \
 
 ```bash
 ros2 run yolo_detector yolo_node --ros-args \
-  -p model_path:=/home/nkb/ros2_ws/src/yolo_detector/models/best.pt \
+  -p model_path:=<ros2_ws>/src/yolo_detector/models/best.pt \
   -p image_size:=320
 ```
 
@@ -82,7 +86,7 @@ ros2 run yolo_detector yolo_node --ros-args \
 ros2 run yolo_detector yolo_node --ros-args \
   -p image_topic:=/usb_cam/image_raw \
   -p detection_interval:=0.5 \
-  -p model_path:=/home/nkb/ros2_ws/src/yolo_detector/models/best.pt \
+  -p model_path:=<ros2_ws>/src/yolo_detector/models/best.pt \
   -p image_size:=256 \
   -p confidence_threshold:=0.5
 ```
@@ -140,22 +144,25 @@ ros2 run yolo_detector camera_simulator_node --ros-args \
 - `frame_ratio` (double, default: 10.0)
   - 画像をpublishするレート(Hz)。
 
-### 方法4: road_blockage_detectorノードで経路封鎖を検知
+### 方法4: 経路封鎖検知・信号認識と組み合わせる
 
-YOLOの検出結果から経路封鎖看板を検知する`road_blockage_detector`は、他パッケージと同様に
-YAMLパラメータファイルで設定できるようになりました。インストール後は以下のコマンドで起動できます。
+経路封鎖看板と信号は、モデル、推論頻度、起動条件、下流判定が異なるため、launch 上で
+`yolo_detector` を用途別に 2 インスタンス起動します。
+
+経路封鎖検知は `road_blockage_detector` の launch を使用します。
 
 ```bash
-ros2 run yolo_detector road_blockage_detector --ros-args \
-  --params-file $(ros2 pkg prefix yolo_detector)/share/yolo_detector/params/road_blockage_detector.yaml
+ros2 launch road_blockage_detector road_blockage_perception.launch.py
 ```
 
-`params/road_blockage_detector.yaml` にはクラスID、スコア閾値、バウンディングボックスの範囲など、
-検出時に参照する閾値がまとめられています。利用環境に合わせて値を変更してください。
-封鎖確定に必要な継続時間は `route_follower` の `stagnation_duration_sec` と整合を取るため、
-ノード内に固定しており YAML では変更できません。
-シミュレーションや rosbag 再生で利用する場合は、`use_sim_time:=true` を指定するか、
-同梱の launch ファイルを使用すると時間軸の不整合による TF 取得失敗を避けられます。
+信号認識は `traffic_signal_recognizer` の launch を使用します。
+
+```bash
+ros2 launch traffic_signal_recognizer traffic_signal_perception.launch.py
+```
+
+`yolo_detector` パッケージ内の launch は、YOLO ノード単体の検証用として残します。
+運用時の経路封鎖検知・信号認識は、それぞれの下流パッケージの統合 launch から起動します。
 
 ## 出力例
 
@@ -175,10 +182,12 @@ ros2 run yolo_detector road_blockage_detector --ros-args \
 - `yolo_detector/image_det` (`sensor_msgs/Image`)
   - 入力画像に検出結果のバウンディングボックス・クラス名・スコアを重畳した画像。
   - ヘッダは入力画像のヘッダを引き継ぎます。
+  - `annotated_image_topic` パラメータで出力先を変更できます。
 
 - `yolo_detector/detections` (`vision_msgs/Detection2DArray`)
   - 検出結果（クラスIDはクラス名文字列、scoreに信頼度）。
   - ヘッダは入力画像のヘッダを引き継ぎます。
+  - `detections_topic` パラメータで出力先を変更できます。
 
 ## ディレクトリ構造
 
@@ -203,7 +212,7 @@ yolo_detector/
 ### モデルが見つからないエラー
 モデルファイルのパスを確認し、正しいパスを`model_path`パラメータで指定してください:
 ```bash
-ls /home/nkb/ros2_ws/src/yolo_detector/models/
+ls <ros2_ws>/src/yolo_detector/models/
 ```
 
 ### ultralyticsがインストールされていない

@@ -34,24 +34,31 @@ class RoadBlockageDetector(Node):
         qos_sensor_data = QoSProfile(depth=10, reliability=QoSReliabilityPolicy.BEST_EFFORT)
         self.detections_subscriber = self.create_subscription(
             Detection2DArray,
-            '/yolo_detector/detections',
+            self.detections_topic,
             self._detections_callback,
             qos_sensor_data,
         )
         self.amcl_subscriber = self.create_subscription(
             PoseWithCovarianceStamped,
-            '/amcl_pose',
+            self.amcl_pose_topic,
             self._amcl_pose_callback,
             10,
         )
-        self.road_blocked_publisher = self.create_publisher(Bool, '/road_blocked', 10)
+        self.road_blocked_publisher = self.create_publisher(Bool, self.road_blocked_topic, 10)
 
-        self.get_logger().info('road_blockage_detector を起動しました。')
+        self.get_logger().info(
+            'road_blockage_detector を起動しました。'
+            f' detections={self.detections_topic}, amcl_pose={self.amcl_pose_topic}, '
+            f'road_blocked={self.road_blocked_topic}'
+        )
 
     def _declare_parameters(self) -> None:
         """ノードが使用するパラメータを宣言する."""
 
         self.declare_parameter('target_class_id', 0)
+        self.declare_parameter('detections_topic', '/perception/road_blockage/detections')
+        self.declare_parameter('amcl_pose_topic', '/amcl_pose')
+        self.declare_parameter('road_blocked_topic', '/road_blocked')
         self.declare_parameter('score_threshold', 0.5)
         self.declare_parameter('bbox_width_min', -1.0)
         self.declare_parameter('bbox_width_max', -1.0)
@@ -67,6 +74,9 @@ class RoadBlockageDetector(Node):
         """宣言済みパラメータを読み込む."""
 
         self.target_class_id = self._get_int_parameter('target_class_id')
+        self.detections_topic = self._get_string_parameter('detections_topic')
+        self.amcl_pose_topic = self._get_string_parameter('amcl_pose_topic')
+        self.road_blocked_topic = self._get_string_parameter('road_blocked_topic')
         self.score_threshold = self._get_double_parameter('score_threshold')
         self.bbox_width_min = self._get_double_parameter('bbox_width_min')
         self.bbox_width_max = self._get_double_parameter('bbox_width_max')
@@ -90,6 +100,11 @@ class RoadBlockageDetector(Node):
 
         return self.get_parameter(name).get_parameter_value().double_value
 
+    def _get_string_parameter(self, name: str) -> str:
+        """文字列パラメータを取得するヘルパー."""
+
+        return self.get_parameter(name).get_parameter_value().string_value
+
     def _amcl_pose_callback(self, msg: PoseWithCovarianceStamped) -> None:
         """最新の amcl_pose をキャッシュする."""
 
@@ -102,7 +117,9 @@ class RoadBlockageDetector(Node):
         detection_time = Time.from_msg(msg.header.stamp)
         pose = self._lookup_pose(detection_time)
         if pose is None:
-            self.get_logger().warn('自己位置が取得できないため検知をスキップします。')
+            self.get_logger().warn(
+                '自己位置が取得できないため検知をスキップします。'
+            )
             self._record_count(detection_time, 0)
             return
 
@@ -143,8 +160,11 @@ class RoadBlockageDetector(Node):
 
         best_pair: Optional[Tuple[int, float]] = None
         for result in detection.results:
-            class_id = int(result.id)
-            score = float(result.score)
+            try:
+                class_id = int(result.id)
+                score = float(result.score)
+            except (TypeError, ValueError):
+                continue
             if best_pair is None or score > best_pair[1]:
                 best_pair = (class_id, score)
         return best_pair
@@ -168,7 +188,8 @@ class RoadBlockageDetector(Node):
         if self.bbox_bottom_max >= 0:
             if bottom_distance is None:
                 self.get_logger().warn(
-                    '画像高さ情報が無いため bbox_bottom_max 判定をスキップします。',
+                    '画像高さ情報が無いため bbox_bottom_max 判定を'
+                    'スキップします。',
                 )
             elif bottom_distance > self.bbox_bottom_max:
                 return False
@@ -210,7 +231,9 @@ class RoadBlockageDetector(Node):
             if previous == 0:
                 self.blocked_state_started_at = self.get_clock().now().nanoseconds / 1e9
                 self._publish_road_blocked(True, force=True)
-                self.get_logger().info('封鎖を仮判定しました。走行を停止します。')
+                self.get_logger().info(
+                    '封鎖を仮判定しました。走行を停止します。'
+                )
         else:
             if self.temporary_decision_count > 0:
                 elapsed = None
@@ -222,7 +245,9 @@ class RoadBlockageDetector(Node):
                 self.blocked_state_started_at = None
                 self._publish_road_blocked(False)
                 if elapsed is not None:
-                    self.get_logger().info(f'封鎖判定を解除しました。継続時間: {elapsed:.2f} 秒')
+                    self.get_logger().info(
+                        f'封鎖判定を解除しました。継続時間: {elapsed:.2f} 秒'
+                    )
                 else:
                     self.get_logger().info('封鎖判定を解除しました。')
         self._handle_confirmation(pose)
@@ -250,7 +275,10 @@ class RoadBlockageDetector(Node):
         target_stamp = self.latest_amcl_time or Time()
         confirmation_pose = pose or self._lookup_pose(target_stamp)
         if confirmation_pose is None:
-            self.get_logger().warn('封鎖確定時に自己位置を取得できませんでした。記録をスキップします。')
+            self.get_logger().warn(
+                '封鎖確定時に自己位置を取得できませんでした。'
+                '記録をスキップします。'
+            )
             return
 
         self.blocked_positions.append(self._copy_pose(confirmation_pose))
@@ -271,7 +299,8 @@ class RoadBlockageDetector(Node):
         time_diff_sec = abs(self.latest_amcl_time.nanoseconds - stamp.nanoseconds) / 1e9
         if time_diff_sec >= 3.0:
             self.get_logger().warn(
-                'Detection と /amcl_pose のタイムスタンプに3秒以上の差があります。'
+                'Detection と /amcl_pose のタイムスタンプに'
+                '3秒以上の差があります。'
             )
 
         return self._copy_pose(self.latest_amcl_pose)
@@ -321,13 +350,16 @@ class RoadBlockageDetector(Node):
             return
 
         self._publish_road_blocked(False)
-        self.get_logger().info('多重検知抑止範囲を離脱したため road_blocked を解除します。')
+        self.get_logger().info(
+            '多重検知抑止範囲を離脱したため road_blocked を解除します。'
+        )
 
     def _publish_road_blocked(self, is_blocked: bool, force: bool = False) -> None:
         """road_blocked を Publish する.
 
-        同じブール値であっても内部状態の変化（新しい封鎖イベントの開始）に応じて
-        force=True で再通知を行う。force=False の場合は従来どおり状態変化時のみ通知する。
+        同じブール値であっても内部状態の変化に応じて force=True で
+        再通知を行う。force=False の場合は従来どおり状態変化時のみ
+        通知する。
         """
 
         if not force and self.road_blocked_state == is_blocked:
@@ -362,6 +394,7 @@ def main(args=None) -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
 

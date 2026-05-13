@@ -6,17 +6,17 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description() -> LaunchDescription:
-    pkg_share = FindPackageShare('yolo_detector')
-    default_param = PathJoinSubstitution([pkg_share, 'params', 'road_blockage_detector.yaml'])
+    pkg_share = FindPackageShare('road_blockage_detector')
+    default_param = PathJoinSubstitution([pkg_share, 'params', 'default.yaml'])
 
     param_file_arg = DeclareLaunchArgument(
         'param_file',
         default_value=default_param,
-        description='road_blockage_detectorのパラメータファイル',
+        description='road_blockage_detectorノードのパラメータファイル',
     )
 
     road_blockage_node = Node(
-        package='yolo_detector',
+        package='road_blockage_detector',
         executable='road_blockage_detector',
         name='road_blockage_detector',
         output='screen',

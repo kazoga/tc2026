@@ -64,15 +64,20 @@ git clone --recursive https://github.com/t-nakabayashi/tc2026.git ~/colcon_ws
 cd ~/colcon_ws
 source /opt/ros/jazzy/setup.bash
 python3 -m pip install -r requirements.txt
-colcon build
+colcon build --symlink-install
 source install/setup.bash
 ```
+
+開発時は `--symlink-install` 付きのビルドを推奨する。Python ソース、launch、config、
+route、map、waypoint などの install 対象ファイルが `install/` 配下へ symlink されるため、
+既存ファイルの内容変更を再ビルドなしで反映しやすい。
+新規ファイル追加、ファイル名変更、install 対象の変更を行った場合は再ビルドする。
 
 選択的にビルドする場合:
 
 ```bash
-colcon build --packages-select rtk_gps_um982_msgs rtk_gps_um982
-colcon build --packages-select ypspur_ros2
+colcon build --symlink-install --packages-select rtk_gps_um982_msgs rtk_gps_um982
+colcon build --symlink-install --packages-select ypspur_ros2
 ```
 
 ## 起動例

@@ -7,7 +7,7 @@
 ### 方法1: Ultralyticsのコマンドでダウンロード
 
 ```bash
-cd /home/nkb/ros2_ws/src/yolo_detector/models
+cd <ros2_ws>/src/yolo_detector/models
 pip install ultralytics
 yolo export model=yolo11n.pt format=torchscript
 ```
@@ -19,7 +19,7 @@ from ultralytics import YOLO
 import os
 
 # このディレクトリに移動
-os.chdir('/home/nkb/ros2_ws/src/yolo_detector/models')
+os.chdir('<ros2_ws>/src/yolo_detector/models')
 
 # モデルを読み込むと自動的にダウンロードされる
 model = YOLO('yolo11n.pt')
@@ -30,7 +30,7 @@ print("モデルがダウンロードされました")
 
 公式リポジトリからダウンロード:
 ```bash
-cd /home/nkb/ros2_ws/src/yolo_detector/models
+cd <ros2_ws>/src/yolo_detector/models
 wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt
 ```
 

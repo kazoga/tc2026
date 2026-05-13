@@ -24,7 +24,7 @@
 ## 2. yp-spur 本体の取り込み
 
 openspur/yp-spur を `third_party/yp-spur/` に **git submodule** として取り込み、
-ビルド時に `add_subdirectory()` で同時ビルドする。
+ビルド時に `build/` 配下へコピーしたうえで `add_subdirectory()` で同時ビルドする。
 
 ### 2.1 Issue #245 への対処
 
@@ -52,18 +52,31 @@ Linux kernel 6.x 環境 (Ubuntu 22.04+) で `tcflush(fd, TCOFLUSH)` が出力バ
 
 ### 2.2 パッチ適用方法
 
-CMake から `git apply --check` で適用済みかを判定し、未適用なら `git apply`。
-冪等に動作させる。submodule 自体は upstream を指したまま (fork しない)。
+CMake から `third_party/yp-spur` をビルドディレクトリへコピーし、コピー先に対して
+`git apply --check` で適用可否を判定し、未適用なら `git apply`。
+submodule 自体は upstream を指したまま変更しない。
+コピー先はリポジトリの `build/` 配下にあるため、`GIT_CEILING_DIRECTORIES` を指定して
+親リポジトリの ignore 設定に影響されないようにする。
 
 ```cmake
+file(COPY ${YPSPUR_DIR}/ DESTINATION ${YPSPUR_BUILD_DIR}
+  PATTERN ".git" EXCLUDE
+)
 execute_process(
-  COMMAND git apply --check ${PATCH_FILE}
-  WORKING_DIRECTORY ${YPSPUR_DIR}
+  COMMAND ${CMAKE_COMMAND} -E env
+    GIT_CEILING_DIRECTORIES=${WORKSPACE_ROOT}
+    git apply --check ${PATCH_FILE}
+  WORKING_DIRECTORY ${YPSPUR_BUILD_DIR}
   RESULT_VARIABLE can_apply
   OUTPUT_QUIET ERROR_QUIET
 )
 if(can_apply EQUAL 0)
-  execute_process(COMMAND git apply ${PATCH_FILE} WORKING_DIRECTORY ${YPSPUR_DIR})
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E env
+      GIT_CEILING_DIRECTORIES=${WORKSPACE_ROOT}
+      git apply ${PATCH_FILE}
+    WORKING_DIRECTORY ${YPSPUR_BUILD_DIR}
+  )
 endif()
 ```
 

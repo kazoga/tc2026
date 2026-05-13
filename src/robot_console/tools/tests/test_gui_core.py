@@ -89,7 +89,9 @@ if 'sensor_msgs' not in sys.modules:
 
 import geometry_msgs.msg
 
-if 'numpy' not in sys.modules:
+try:
+    import numpy  # noqa: F401
+except ImportError:
     numpy_stub = types.ModuleType('numpy')
 
     def _frombuffer(data, dtype):  # pragma: no cover - スタブのみ
@@ -107,6 +109,7 @@ if 'PIL' not in sys.modules:
         mode = 'RGB'
         width = 1
         height = 1
+        info = {}
 
         def resize(self, size, _filter=None):
             self.width, self.height = size
@@ -115,7 +118,7 @@ if 'PIL' not in sys.modules:
         def copy(self):
             return self
 
-        def paste(self, _other, box=None):
+        def paste(self, _other, box=None, mask=None):
             return None
 
         def convert(self, _mode):
@@ -131,6 +134,7 @@ if 'PIL' not in sys.modules:
         return _DummyImage()
 
     image_module.Image = _DummyImage
+    image_module.NEAREST = 0
     image_module.fromarray = _fromarray
     image_module.new = _new
     imagetk_module.PhotoImage = _DummyImage
@@ -140,7 +144,7 @@ if 'PIL' not in sys.modules:
     sys.modules['PIL.Image'] = image_module
     sys.modules['PIL.ImageTk'] = imagetk_module
 
-from robot_console.gui_core import GuiCore
+from robot_console.gui_core import GuiCore, default_launch_profiles
 from robot_console.ui_main import UiMain, compute_route_progress
 from robot_console.utils import ConsoleLogBuffer, GuiCommandType, FollowerStateView, RouteStateView
 
@@ -357,3 +361,24 @@ def test_ui_main_runtime_state_initializer_sets_defaults() -> None:
     assert ui_main._latest_snapshot is None
     assert ui_main._line_stop_active_since is None
     assert ui_main._last_line_stop_state is False
+
+
+def test_default_launch_profiles_use_perception_packages() -> None:
+    """認識系カードの起動先を確認する。"""
+
+    profiles = {profile.profile_id: profile for profile in default_launch_profiles()}
+
+    assert 'yolo_detector' not in profiles
+    road = profiles['road_blockage_detector']
+    assert road.package == 'road_blockage_detector'
+    assert road.launch_file == 'road_blockage_perception.launch.py'
+    assert road.alternate_launch_file == 'road_blockage_perception_yolo.launch.py'
+    assert road.param_argument == 'detector_param_file'
+    assert road.simulator_package == 'yolo_detector'
+
+    signal = profiles['traffic_signal_recognizer']
+    assert signal.package == 'traffic_signal_recognizer'
+    assert signal.launch_file == 'traffic_signal_perception.launch.py'
+    assert signal.alternate_launch_file is None
+    assert signal.param_argument == 'recognizer_param_file'
+    assert signal.simulator_package == 'yolo_detector'
