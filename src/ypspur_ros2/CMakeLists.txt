@@ -8,10 +8,6 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
 endif()
 
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
-endif()
-
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -84,6 +80,9 @@ add_subdirectory(${YPSPUR_BUILD_DIR} ${CMAKE_CURRENT_BINARY_DIR}/yp-spur-build)
 # -----------------------------------------------------------------------------
 
 add_executable(ypspur_node src/ypspur_node.cpp)
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  target_compile_options(ypspur_node PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 target_include_directories(ypspur_node PRIVATE
   ${YPSPUR_BUILD_DIR}/include
 )
