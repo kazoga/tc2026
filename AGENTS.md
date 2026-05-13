@@ -247,7 +247,7 @@ from <package_name>.<module_name> import SomeClass
 
 - このワークスペースは ROS 2 Jazzy を前提とする。
 - ビルド前に、各自の開発環境に合わせて ROS 2 環境を有効化する。
-- 基本ビルドは以下を使う。
+- 開発時の基本ビルドは以下を使う。
 
 ```bash
 colcon build --symlink-install
@@ -257,6 +257,20 @@ colcon build --symlink-install
 
 ```bash
 colcon build --symlink-install --packages-select <package_name>
+```
+
+- ビルド確認では、`--symlink-install` 付きと無しの両方を確認する。
+
+```bash
+colcon build --symlink-install --packages-select <package_name>
+colcon build --packages-select <package_name>
+```
+
+- ワークスペース全体の確認が必要な場合も、`--symlink-install` 付きと無しの両方を確認する。
+
+```bash
+colcon build --symlink-install
+colcon build
 ```
 
 - ビルド失敗時は、最初の本質的なエラーを特定してから修正する。

@@ -8,7 +8,6 @@ setup(
     version='0.1.0',
     packages=[package_name, 'um982'],
     package_dir={
-        package_name: package_name,
         'um982': um982_src,
     },
     data_files=[
