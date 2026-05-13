@@ -11,7 +11,9 @@
 
 ### 2.2 launch の時間設定
 - `use_sim_time` の引数を `road_blockage_detector.launch.py` と統合版 launch から削除し、ノード側でも同パラメータを参照しないようにした。これにより `/clock` 有無に関わらず `/amcl_pose` に合わせた時間軸で動作する。
-- tc2026 の 3 パッケージ構成では、`road_blockage_perception.launch.py` が `yolo_detector` の NCNN インスタンスと `road_blockage_detector` を起動する。
+- tc2026 の 3 パッケージ構成では、`road_blockage_perception.launch.py` が `yolo_detector`
+  の NCNN インスタンスと `road_blockage_detector` を起動する。PyTorch 版で検証する場合は
+  `road_blockage_perception_yolo.launch.py` を使用する。
 
 ## 3. 対応方針と修正内容
 - 自己位置は `/amcl_pose` のみを使用し、Detection と `/amcl_pose` のヘッダー時刻差が 3 秒以上なら警告ログを出す。

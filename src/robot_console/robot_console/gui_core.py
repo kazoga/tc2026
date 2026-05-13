@@ -73,6 +73,7 @@ class NodeLaunchProfile:
     default_param: Optional[str] = None
     param_package: Optional[str] = None
     param_argument: Optional[str] = 'param_file'
+    simulator_package: Optional[str] = None
     simulator_launch_file: Optional[str] = None
     user_arguments: Optional[List[str]] = None
 
@@ -156,10 +157,11 @@ class NodeLaunchManager:
             )
 
         if simulator_enabled and profile.simulator_launch_file:
+            simulator_package = profile.simulator_package or profile.package
             sim_args = [
                 "ros2",
                 "launch",
-                profile.package,
+                simulator_package,
                 profile.simulator_launch_file,
             ]
             sim_process = subprocess.Popen(
@@ -1357,15 +1359,26 @@ def default_launch_profiles() -> List[NodeLaunchProfile]:
             simulator_launch_file='laser_scan_simulator.launch.py',
         ),
         NodeLaunchProfile(
-            profile_id='yolo_detector',
-            display_name='Yolo Detector',
-            package='yolo_detector',
-            launch_file='yolo_ncnn_with_road_blockage.launch.py',
-            alternate_launch_file='yolo_with_road_blockage.launch.py',
-            launch_toggle_label='yolo_node モード',
+            profile_id='road_blockage_detector',
+            display_name='Road Blockage Detector',
+            package='road_blockage_detector',
+            launch_file='road_blockage_perception.launch.py',
+            alternate_launch_file='road_blockage_perception_yolo.launch.py',
+            launch_toggle_label='PyTorch版YOLOを使用',
             use_alternate_launch=False,
-            param_package='yolo_detector',
-            param_argument='route_param_file',
+            param_package='road_blockage_detector',
+            param_argument='detector_param_file',
+            simulator_package='yolo_detector',
+            simulator_launch_file='camera_simulator_node.launch.py',
+        ),
+        NodeLaunchProfile(
+            profile_id='traffic_signal_recognizer',
+            display_name='Traffic Signal Recognizer',
+            package='traffic_signal_recognizer',
+            launch_file='traffic_signal_perception.launch.py',
+            param_package='traffic_signal_recognizer',
+            param_argument='recognizer_param_file',
+            simulator_package='yolo_detector',
             simulator_launch_file='camera_simulator_node.launch.py',
         ),
     ]

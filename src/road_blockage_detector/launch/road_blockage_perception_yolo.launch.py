@@ -8,7 +8,6 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description() -> LaunchDescription:
     yolo_pkg_share = FindPackageShare('yolo_detector')
     road_pkg_share = FindPackageShare('road_blockage_detector')
-    default_route_param = PathJoinSubstitution([road_pkg_share, 'params', 'default.yaml'])
 
     image_topic_arg = DeclareLaunchArgument(
         'image_topic',
@@ -17,21 +16,23 @@ def generate_launch_description() -> LaunchDescription:
     )
     model_path_arg = DeclareLaunchArgument(
         'model_path',
-        default_value=PathJoinSubstitution([yolo_pkg_share, 'models', 'best_ncnn_model']),
-        description='NCNNモデルディレクトリのパス',
+        default_value=PathJoinSubstitution([yolo_pkg_share, 'models', 'best.pt']),
+        description='経路封鎖看板検出用PyTorchモデル',
     )
     detection_interval_arg = DeclareLaunchArgument(
         'detection_interval',
         default_value='0.5',
         description='推論を行うインターバル（秒）',
     )
-    confidence_threshold_arg = DeclareLaunchArgument(
-        'confidence_threshold', default_value='0.5', description='検出の信頼度閾値'
+    image_size_arg = DeclareLaunchArgument(
+        'image_size',
+        default_value='320',
+        description='推論時の入力画像サイズ',
     )
-    route_param_file_arg = DeclareLaunchArgument(
-        'route_param_file',
-        default_value=default_route_param,
-        description='road_blockage_detectorのパラメータファイル',
+    confidence_threshold_arg = DeclareLaunchArgument(
+        'confidence_threshold',
+        default_value='0.5',
+        description='検出の信頼度閾値',
     )
     detections_topic_arg = DeclareLaunchArgument(
         'detections_topic',
@@ -43,10 +44,15 @@ def generate_launch_description() -> LaunchDescription:
         default_value='/perception/road_blockage/image_det',
         description='検出重畳画像の出力トピック',
     )
+    detector_param_file_arg = DeclareLaunchArgument(
+        'detector_param_file',
+        default_value=PathJoinSubstitution([road_pkg_share, 'params', 'default.yaml']),
+        description='road_blockage_detectorノードのパラメータファイル',
+    )
 
-    yolo_ncnn_node = Node(
+    yolo_node = Node(
         package='yolo_detector',
-        executable='yolo_ncnn_node',
+        executable='yolo_node',
         name='yolo_detector_road_blockage',
         output='screen',
         parameters=[
@@ -54,6 +60,7 @@ def generate_launch_description() -> LaunchDescription:
                 'image_topic': LaunchConfiguration('image_topic'),
                 'model_path': LaunchConfiguration('model_path'),
                 'detection_interval': LaunchConfiguration('detection_interval'),
+                'image_size': LaunchConfiguration('image_size'),
                 'confidence_threshold': LaunchConfiguration('confidence_threshold'),
                 'detections_topic': LaunchConfiguration('detections_topic'),
                 'annotated_image_topic': LaunchConfiguration('annotated_image_topic'),
@@ -66,7 +73,12 @@ def generate_launch_description() -> LaunchDescription:
         executable='road_blockage_detector',
         name='road_blockage_detector',
         output='screen',
-        parameters=[LaunchConfiguration('route_param_file')],
+        parameters=[
+            LaunchConfiguration('detector_param_file'),
+            {
+                'detections_topic': LaunchConfiguration('detections_topic'),
+            },
+        ],
     )
 
     return LaunchDescription(
@@ -74,11 +86,12 @@ def generate_launch_description() -> LaunchDescription:
             image_topic_arg,
             model_path_arg,
             detection_interval_arg,
+            image_size_arg,
             confidence_threshold_arg,
-            route_param_file_arg,
             detections_topic_arg,
             annotated_image_topic_arg,
-            yolo_ncnn_node,
+            detector_param_file_arg,
+            yolo_node,
             road_blockage_node,
         ]
     )

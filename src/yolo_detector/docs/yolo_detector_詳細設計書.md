@@ -17,8 +17,7 @@ tc2026 の認識系では、本パッケージは画像推論層に責務を限�
 | `yolo_ncnn_node` | `yolo_detector/yolo_ncnn_node.py` | NCNN 形式モデルを用いた YOLO 推論。経路封鎖看板など、CPU 推論を軽量化したい用途を想定する。 |
 | `camera_simulator_node` | `yolo_detector/camera_simulator_node.py` | 静止画を `sensor_msgs/msg/Image` として publish する検証補助ノード。 |
 
-`road_blockage_detector` の実行 entry point は本パッケージから削除する。既存 launch との互換のため、
-`yolo_with_road_blockage.launch.py` と `yolo_ncnn_with_road_blockage.launch.py` は残すが、
+`road_blockage_detector` の実行 entry point と旧実装ファイルは本パッケージから削除する。
 経路封鎖判定ノード本体は `road_blockage_detector` パッケージから起動する。
 
 ## 3. 外部 I/F
@@ -79,12 +78,11 @@ ROS 2 内で維持する。
 | --- | --- |
 | `yolo_node.launch.py` | PyTorch 版 YOLO ノード単体を起動する。 |
 | `yolo_ncnn_node.launch.py` | NCNN 版 YOLO ノード単体を起動する。 |
-| `yolo_with_road_blockage.launch.py` | 互換用。PyTorch 版 YOLO と `road_blockage_detector` を起動する。 |
-| `yolo_ncnn_with_road_blockage.launch.py` | 互換用。NCNN 版 YOLO と `road_blockage_detector` を起動する。 |
 
 新規構成では、経路封鎖検知全体は `road_blockage_detector` パッケージの
-`road_blockage_perception.launch.py`、信号認識全体は `traffic_signal_recognizer` パッケージの
-`traffic_signal_perception.launch.py` から起動する。
+`road_blockage_perception.launch.py` または `road_blockage_perception_yolo.launch.py`、
+信号認識全体は `traffic_signal_recognizer` パッケージの `traffic_signal_perception.launch.py`
+から起動する。
 
 ## 7. エラー処理とログ
 

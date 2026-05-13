@@ -17,12 +17,15 @@
 - **イベントバナー**：`road_blocked` → `manual_start` → `sig_recog` の優先順位で最新イベントを表示。60 秒経過で自動クリア。
 - **制御コマンドタブ**：各トピックの送信 UI を Notebook 形式でまとめ、Spinbox やラジオボタンで値を入力。`frame_image_path` タグでは静止画パスを入力して `/frame_image_path` トピックへ単発 publish できます。送信結果は最終送信値と時刻として即座に反映されます。
 - **画像パネル**：ルート地図（`/active_route` の付帯画像）、障害物ビュー（`/sensor_viewer`）、カメラ映像（`/usb_cam/image_raw`・`/sig_det_imgs`）。レターボックス処理でアスペクト比を保持し、障害物ヒント値を左上にオーバレイ表示。
-- **ノード起動サイドバー**：主要ノードカードに加え `Yolo Detector` カードを配置。インストール済み `road_blockage_detector` の `params/` 配下から YAML を自動列挙し、`yolo_ncnn_node` / `yolo_node` をトグルスイッチで切り替えて起動できます。Simulator をオンにすると `camera_simulator_node` を同時起動し、他カード同様に起動・停止やパラメータ切替が可能です。
+- **ノード起動サイドバー**：主要ノードカードに加え `Road Blockage Detector` と
+  `Traffic Signal Recognizer` カードを配置。各カードは対応パッケージの統合 launch を起動し、
+  下流判定ノードと用途別 `yolo_detector` インスタンスを同時に立ち上げます。
 
 ### Console Logs タブ
 - ノードごとに最新ログをリングバッファで保持。GUI 右クリックからコピーでき、検索バーでフィルタリング可能です。
 - 各セクションには `RUNNING/STOPPED/ERROR` インジケータと、直近の起動／停止時刻が表示されます。
-- `Yolo Detector` も他ノード同様にパラメータ一覧・コンソールログタブへカードを追加し、選択した `road_blockage_detector` の YAML 内容表示やログファイルの直接オープンが可能です。
+- 認識系 2 カードも他ノード同様にパラメータ一覧・コンソールログタブへ追加し、選択した
+  YAML 内容表示やログファイルの直接オープンが可能です。
 
 ## 起動方法
 ### 通常起動
@@ -67,6 +70,10 @@ ros2 launch robot_console robot_console.launch.py \
 ## ノード起動管理
 - プロファイル定義は `config/node_launch_profiles.yaml`（必要に応じて作成）にまとめられ、起動対象・既定パラメータ・シミュレータ有無を記述します。
 - GUI で選択した YAML は `ros2 launch <package> <file> param_file:=<path>` として渡され、`NodeLaunchManager` が `SIGINT → SIGTERM → SIGKILL` の順に安全に停止処理を行います。
+- `Road Blockage Detector` は既定で NCNN 版 YOLO を使い、カードの「PyTorch版YOLOを使用」を
+  有効にした場合のみ PyTorch 版 launch へ切り替えます。
+- `Traffic Signal Recognizer` は信号用 PyTorch モデルのみを起動候補とし、NCNN 版への切替は
+  提供しません。
 - ログはノード単位でリングバッファへ収集され、Console Logs タブから確認できます。
 
 ## 運用上のヒント

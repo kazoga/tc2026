@@ -28,6 +28,7 @@ if 'PIL.Image' not in sys.modules:
         def __init__(self) -> None:
             self.width = 1
             self.height = 1
+            self.info = {}
 
         @property
         def size(self) -> tuple[int, int]:  # pragma: no cover - スタブ用
@@ -40,7 +41,7 @@ if 'PIL.Image' not in sys.modules:
         def copy(self):  # pragma: no cover - スタブ用
             return self
 
-        def paste(self, _other, box=None):  # pragma: no cover - スタブ用
+        def paste(self, _other, box=None, mask=None):  # pragma: no cover - スタブ用
             return None
 
     def _new(_mode, size, color=None):
@@ -49,6 +50,7 @@ if 'PIL.Image' not in sys.modules:
         return image
 
     image_module.Image = _StubImage
+    image_module.NEAREST = 0
     image_module.new = _new
     sys.modules['PIL.Image'] = image_module
     pil_root.Image = image_module

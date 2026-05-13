@@ -71,12 +71,17 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 
 ### 3.4 ノード起動サイドバー
 - 右端に折り畳み式のサイドカラムを設け、`Canvas` の論理幅を 288px（従来の 320px から約 10% 縮小）に固定してメインパネルの表示領域を拡張する。開閉ボタンでサイドバーの表示・非表示を切り替える。
-- 項目順：`route_planner`、`route_manager`、`route_follower`、`robot_navigator`、`obstacle_monitor`。
+- 項目順：`route_planner`、`route_manager`、`route_follower`、`robot_navigator`、
+  `obstacle_monitor`、`road_blockage_detector`、`traffic_signal_recognizer`。
 - サイドバー上部に「全起動」「全停止」ボタンを常設し、現在の Combobox 選択値とシミュレータ設定を尊重しながら、`NodeLaunchProfile` の優先順位順に逐次処理する。
 - 各カードに含める要素：
   - 状態インジケータ（停止／起動中／エラー）。
   - パラメータファイル `Combobox`（既定は `params/default.yaml`。表示はファイル名のみで、内部では実パスへマッピングする）。
-  - `robot_navigator` と `obstacle_monitor` のみ「Simulator 同時起動」チェックボックス (`robot_simulator` / `laser_scan_simulator`)。
+  - `robot_navigator`、`obstacle_monitor`、認識系カードでは「Simulator 同時起動」
+    チェックボックスを表示する。認識系カードの simulator は `yolo_detector` の
+    `camera_simulator_node.launch.py` を起動する。
+  - `road_blockage_detector` のみ PyTorch 版 YOLO へ切り替える launch toggle を表示する。
+    `traffic_signal_recognizer` は PyTorch モデルのみを使用し、NCNN 版候補は表示しない。
   - 起動／停止ボタン。アクション時刻をツールチップに表示。
 - パネル全体を `Canvas` + `Scrollbar` で包み、縦スクロールに対応。
 - YAML 候補抽出は `NodeLaunchManager` 初期化時に実施する。`ament_index_python.packages.get_package_share_directory()` で各パッケージの `share/<package>` を特定し、以下の順で `glob('*.yaml')` を行う。
@@ -86,7 +91,9 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 - 取得したパスは正規化したうえで重複除去し、ソートしたリストを `NodeLaunchProfile.available_params` に格納する。Combobox で選択できるのはこのリストに含まれるファイルのみとし、空リストの場合は起動ボタンを無効化して GUI に警告ラベルを表示する。
 
 ### 3.5 コンソールログタブ
-- `Notebook` の第2タブに 2列グリッドで 5 セクションを配置。順序は上段左から `route_planner`、`route_manager`、`route_follower`、下段左 `robot_navigator`、下段右 `obstacle_monitor`。
+- `Notebook` の第2タブに 2列グリッドでセクションを配置する。順序は
+  `route_planner`、`route_manager`、`route_follower`、`robot_navigator`、
+  `obstacle_monitor`、`road_blockage_detector`、`traffic_signal_recognizer` とする。
 - 各セクションは `LabelFrame` + `Text` ウィジェット + 縦スクロールバー。起動マネージャが受信した stdout/stderr を `INFO/ERR` プレフィックス付きで追記する。表示領域は操作者が必要に応じて開き、未読管理は行わない。
 
 ### 3.6 UI と ROS インタフェースの対応表
@@ -190,15 +197,32 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 - **障害物固定送出**：送出開始時に内部状態 `override_active=True` を設定し、0.5Hz のタイマーで上書きメッセージを送信する。停止ボタンでタイマーを解除し、通常の受信値表示に復帰する。
 
 ## 7. ノード起動管理
-- `NodeLaunchProfile`（dataclass）で以下を定義：`profile_id`, `display_name`, `package`, `launch_file`, `param_argument`, `default_param`, `simulator_launch_file`。
+- `NodeLaunchProfile`（dataclass）で以下を定義：`profile_id`, `display_name`, `package`,
+  `launch_file`, `alternate_launch_file`, `param_argument`, `default_param`,
+  `simulator_package`, `simulator_launch_file`。
 - プロファイル定義は `robot_console/config/node_launch_profiles.yaml` に集約し、各ノードごとに以下を記載する。
   - `default_param`: 既定で選択する YAML ファイル。
   - `param_search_paths`: `share` 直下からの相対パスまたは絶対パスのリスト。ワイルドカード対応。
   - `simulator_profile`: シミュレータ併起動に必要な launch 設定（対象パッケージ、実行可能名、追加パラメータ）。
   - `launch_priority`: 「全起動」操作時の起動順序。小さいほど優先。
-- `NodeLaunchManager` 初期化時に `NodeLaunchProfile` を読み込み、前述のパス探索ルールに沿って `available_params` を構築する。`share/<package>/params/` 等に存在しない場合はログへ警告を残し、GUI 側では該当カードの起動ボタンを無効化する。また、`route_manager`、`route_follower`、`robot_navigator`、`obstacle_monitor`、`route_planner` の `setup.py` を確認し、いずれも `share/<package>/params/` へ YAML がインストールされることを事前に検証済みである。
-- `NodeLaunchManager` は `subprocess.Popen` を用いて `ros2 launch <package> <launch_file>` を実行し、各ノードを独立プロセスとして起動する。`NodeLaunchProfile` には `package`, `launch_file`, `param_argument`, `default_param`, `simulator_launch_file`, `display_name`, `profile_id` を保持する。`param_argument` が指定されている場合のみ `param_file:=<path>` を引数に追加し、`simulator_launch_file` があるプロファイル（robot_navigator と obstacle_monitor）ではチェックボックスに応じてシミュレータ用の `ros2 launch` を追加起動する。
-- 追加パラメータファイルは `share/<package>/params/` と `share/<package>/config/` を起点に探索し、`robot_console/config/node_params/<package>/` や `node_launch_profiles.yaml` に定義されたパスも併せて取り込む。`route_planner`、`route_manager`、`route_follower`、`robot_navigator`、`obstacle_monitor` の `setup.py` を確認し、いずれも `share/<package>/params/` へ YAML がインストールされることを事前に確認済みである。
+- `NodeLaunchManager` 初期化時に `NodeLaunchProfile` を読み込み、前述のパス探索ルールに沿って
+  `available_params` を構築する。`share/<package>/params/` 等に存在しない場合はログへ警告を残し、
+  GUI 側では該当カードの起動ボタンを無効化する。
+- `NodeLaunchManager` は `subprocess.Popen` を用いて
+  `ros2 launch <package> <launch_file>` を実行し、各ノードを独立プロセスとして起動する。
+  `param_argument` が指定されている場合のみ `<argument>:=<path>` を引数に追加する。
+  `simulator_launch_file` があるプロファイルでは、`simulator_package` が指定されていれば
+  そのパッケージから simulator launch を追加起動する。
+- 追加パラメータファイルは `share/<package>/params/` と `share/<package>/config/` を起点に探索し、
+  `robot_console/config/node_params/<package>/` や `node_launch_profiles.yaml` に定義されたパスも
+  併せて取り込む。`param_package` が指定されている場合は、launch 所属パッケージとは別に
+  パラメータ所有パッケージも探索対象に含める。
+- 認識系の既定プロファイルは以下とする。
+  - `road_blockage_detector`: `road_blockage_perception.launch.py` を起動し、選択 YAML は
+    `detector_param_file:=<path>` として渡す。toggle 有効時は
+    `road_blockage_perception_yolo.launch.py` を使用する。
+  - `traffic_signal_recognizer`: `traffic_signal_perception.launch.py` を起動し、選択 YAML は
+    `recognizer_param_file:=<path>` として渡す。NCNN 切替は持たない。
 - **起動要求の処理手順**：
   1. GUI から `GuiCore.request_launch()` が呼ばれると、コマンドキューに `profile_id` が積まれる。
   2. ROS 側ワーカーがキューを取り出し、対応する `NodeLaunchProfile` と `NodeLaunchState.selected_param` を参照してコマンド配列 `['ros2', 'launch', package, launch_file, param_argument:=<path>]` を組み立てる。

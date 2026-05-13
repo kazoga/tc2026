@@ -161,9 +161,8 @@ ros2 launch road_blockage_detector road_blockage_perception.launch.py
 ros2 launch traffic_signal_recognizer traffic_signal_perception.launch.py
 ```
 
-既存 launch との互換のため、`yolo_with_road_blockage.launch.py` と
-`yolo_ncnn_with_road_blockage.launch.py` も残していますが、経路封鎖判定ノード本体は
-`road_blockage_detector` パッケージから起動されます。
+`yolo_detector` パッケージ内の launch は、YOLO ノード単体の検証用として残します。
+運用時の経路封鎖検知・信号認識は、それぞれの下流パッケージの統合 launch から起動します。
 
 ## 出力例
 
