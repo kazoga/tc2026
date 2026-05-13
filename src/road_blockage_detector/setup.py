@@ -4,7 +4,7 @@ from typing import List, Tuple
 
 from setuptools import setup
 
-package_name = 'yolo_detector'
+package_name = 'road_blockage_detector'
 
 
 def list_data_files(target_dir: str) -> List[Tuple[str, List[str]]]:
@@ -28,34 +28,24 @@ data_files = [
     ('share/' + package_name, ['package.xml']),
 ]
 
-for subdir in ['models', 'params', 'launch']:
+for subdir in ['params', 'launch', 'docs']:
     if os.path.isdir(subdir):
         data_files.extend(list_data_files(subdir))
-
-# scriptsディレクトリのファイルも含める
-script_files = glob('scripts/*.py')
-if script_files:
-    data_files.append((os.path.join('share', package_name, 'scripts'), script_files))
 
 setup(
     name=package_name,
     version='0.0.1',
     packages=[package_name],
     data_files=data_files,
-    install_requires=[
-        'setuptools',
-        'ultralytics',
-    ],
+    install_requires=['setuptools'],
     zip_safe=True,
     maintainer='user',
     maintainer_email='user@todo.todo',
-    description='YOLO11n object detection for ROS2',
+    description='Road blockage decision node based on YOLO detections',
     license='TODO: License declaration',
     entry_points={
         'console_scripts': [
-            'yolo_node = yolo_detector.yolo_node:main',
-            'yolo_ncnn_node = yolo_detector.yolo_ncnn_node:main',
-            'camera_simulator_node = yolo_detector.camera_simulator_node:main',
+            'road_blockage_detector = road_blockage_detector.road_blockage_detector_node:main',
         ],
     },
 )

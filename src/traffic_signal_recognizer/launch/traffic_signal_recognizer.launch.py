@@ -6,21 +6,21 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description() -> LaunchDescription:
-    pkg_share = FindPackageShare('road_blockage_detector')
+    pkg_share = FindPackageShare('traffic_signal_recognizer')
     default_param = PathJoinSubstitution([pkg_share, 'params', 'default.yaml'])
 
     param_file_arg = DeclareLaunchArgument(
         'param_file',
         default_value=default_param,
-        description='road_blockage_detectorのパラメータファイル',
+        description='traffic_signal_recognizerノードのパラメータファイル',
     )
 
-    road_blockage_node = Node(
-        package='road_blockage_detector',
-        executable='road_blockage_detector',
-        name='road_blockage_detector',
+    recognizer_node = Node(
+        package='traffic_signal_recognizer',
+        executable='traffic_signal_recognizer',
+        name='traffic_signal_recognizer',
         output='screen',
         parameters=[LaunchConfiguration('param_file')],
     )
 
-    return LaunchDescription([param_file_arg, road_blockage_node])
+    return LaunchDescription([param_file_arg, recognizer_node])

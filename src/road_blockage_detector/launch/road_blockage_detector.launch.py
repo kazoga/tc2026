@@ -12,7 +12,7 @@ def generate_launch_description() -> LaunchDescription:
     param_file_arg = DeclareLaunchArgument(
         'param_file',
         default_value=default_param,
-        description='road_blockage_detectorのパラメータファイル',
+        description='road_blockage_detectorノードのパラメータファイル',
     )
 
     road_blockage_node = Node(
