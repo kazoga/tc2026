@@ -29,6 +29,7 @@ GitHub リポジトリに登録し、開発メンバ間で共通利用するこ�
 .
 ├── AGENTS.md
 ├── README.md
+├── requirements.txt
 ├── docs/
 ├── src/
 ├── build/
@@ -38,6 +39,7 @@ GitHub リポジトリに登録し、開発メンバ間で共通利用するこ�
 
 - `src/` 配下に ROS 2 パッケージを配置する。
 - `src/<package_name>/` を 1 つの ROS 2 パッケージの基本単位として扱う。
+- `requirements.txt` はワークスペース共通の Python pip 依存関係を管理するファイルとして扱う。
 - ワークスペース全体に関わる資料は `docs/` 配下に置く。
 - 特定パッケージに閉じる資料は `src/<package_name>/docs/` 配下に置く。
 - `build/`, `install/`, `log/` は colcon の生成物として扱い、直接修正しない。
@@ -145,6 +147,7 @@ src/<package_name>/
 - パッケージ構成を不用意に崩さない。
 - コード変更と設計書・検討記録の整合を保つ。
 - 依存関係を追加する場合は、`package.xml`, `setup.py`, `CMakeLists.txt` の必要箇所を確認する。
+- pip install が必要な Python モジュールを追加する場合は、ワークスペース直下の `requirements.txt` にも記述する。
 - ROS 非依存で表現できるロジックは、ノード本体ではなく `*_core.py` などの独立したモジュールに寄せる。
 - ノード本体は ROS 入出力とライフサイクル管理を中心に薄く保つ。
 - 新規パッケージを追加する場合は、推奨構成に従う。
