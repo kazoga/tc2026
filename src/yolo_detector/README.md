@@ -1,230 +1,194 @@
-# YOLO Detector for ROS2
+# yolo_detector パッケージ README
 
-ROS2でUSBカメラの画像をYOLOモデルで物体検出するパッケージです。
+## 概要
+`yolo_detector` は、カメラ画像を YOLO モデルへ入力し、検出結果を
+`vision_msgs/msg/Detection2DArray` と重畳画像として配信する ROS 2 パッケージです。
+tc2026 では本パッケージを YOLO 推論層に限定し、経路封鎖や信号 GO/STOP などの
+意味判定は下流の `road_blockage_detector` と `traffic_signal_recognizer` が担当します。
 
-## 機能
+## 主な機能
+- `/usb_cam/image_raw` などの `sensor_msgs/msg/Image` を購読し、YOLO 推論を実行。
+- PyTorch `.pt` モデル用の `yolo_node` と、NCNN モデル用の `yolo_ncnn_node` を提供。
+- `detections_topic` と `annotated_image_topic` を launch 引数で切り替え可能。
+- `enabled_topic` による推論有効化制御に対応。信号認識では `/recog_flag==1` の間だけ推論できます。
+- 静止画を `/usb_cam/image_raw` へ publish する検証補助ノード `camera_simulator_node` を提供。
 
-- `/usb_cam/image_raw` トピックから画像をサブスクライブ
-- YOLOモデル（PyTorch / NCNN）を使用してCPUで物体検出
-- **NCNN版は通常のPyTorch版より高速（推奨）**
-- detection_interval間隔で推論を実行（タイマー周期に直接使用）
-- 検出結果をターミナルに表示
-- 検出結果付き画像を`yolo_detector/detection_image`でPublish
-- Detection2DArray形式の検出結果を`yolo_detector/detections`でPublish
-- 出力トピックと推論有効化フラグをパラメータで切り替え、用途別に複数インスタンスを起動可能
+## ノード構成
+| 実行ファイル | 用途 |
+| --- | --- |
+| `yolo_node` | PyTorch `.pt` モデルを使用する YOLO 推論ノード。 |
+| `yolo_ncnn_node` | NCNN 形式モデルを使用する YOLO 推論ノード。CPU 推論の軽量化用途を想定します。 |
+| `camera_simulator_node` | 指定した静止画を `/usb_cam/image_raw` へ周期 publish する補助ノード。 |
 
-tc2026 では本パッケージを YOLO 推論層に限定し、検出結果の意味判定は下流パッケージに分離します。
-経路封鎖判定は `road_blockage_detector`、信号判定は `traffic_signal_recognizer` が担当します。
-
-## 必要な依存関係
-
-### ROS2パッケージ
-- rclpy
-- sensor_msgs
-- cv_bridge
-
-### Pythonパッケージ
+## 起動方法
+### PyTorch 版 YOLO
 ```bash
-pip install ultralytics opencv-python
+ros2 launch yolo_detector yolo_node.launch.py \
+  image_topic:=/usb_cam/image_raw \
+  detection_interval:=0.5 \
+  image_size:=320 \
+  confidence_threshold:=0.5
 ```
 
-## インストール
-
-1. ワークスペースのsrcディレクトリに配置されていることを確認
-
-2. 必要なPythonパッケージをインストール:
+### NCNN 版 YOLO
 ```bash
-pip install ultralytics opencv-python
+ros2 launch yolo_detector yolo_ncnn_node.launch.py \
+  image_topic:=/usb_cam/image_raw \
+  detection_interval:=0.5 \
+  confidence_threshold:=0.5
 ```
 
-3. YOLOモデルファイルを`models/`ディレクトリに配置:
+### 静止画配信ノード
+`camera_simulator_node` は `frame_image_path` の画像を読み込み、`/usb_cam/image_raw` へ publish します。
+出力 topic は固定です。
+
 ```bash
-# モデルファイル（例: best.pt, yolo11n.pt など）を配置
-cp <model_path>.pt <ros2_ws>/src/yolo_detector/models/
+ros2 launch yolo_detector camera_simulator_node.launch.py \
+  frame_image_path:=<image_path> \
+  frame_width:=640 \
+  frame_height:=480 \
+  frame_ratio:=10.0
 ```
 
-4. ワークスペースをビルド:
+## yolo_detector 単体での動作確認
+`yolo_detector` 付属の launch だけを使い、YOLO 推論結果の publish を確認します。
+既定の付属モデルを使う場合は `model_path` の指定を省略できます。
+別モデルで確認する場合だけ `model_path` を指定してください。
+
+### カメラ映像の topic がすでに流れている場合
+1. 入力画像 topic が publish されていることを確認します。
+
 ```bash
-cd <ros2_ws>
-colcon build --packages-select yolo_detector
-source install/setup.bash
+ros2 topic hz /usb_cam/image_raw
 ```
 
-## 使用方法
+2. YOLO ノードを起動します。NCNN モデルを使う場合は以下を実行します。
 
-### 方法1: NCNN版を使用（高速・推奨）
+```bash
+ros2 launch yolo_detector yolo_ncnn_node.launch.py \
+  image_topic:=/usb_cam/image_raw
+```
 
-#### 1. モデルをNCNN形式に変換
+PyTorch モデルを使う場合は以下を実行します。
+
+```bash
+ros2 launch yolo_detector yolo_node.launch.py \
+  image_topic:=/usb_cam/image_raw
+```
+
+3. 出力 topic を確認します。
+
+```bash
+ros2 topic echo /yolo_detector/detections --once
+ros2 topic hz /yolo_detector/detection_image
+```
+
+4. 画像を確認する場合は `rqt_image_view` などで `/yolo_detector/detection_image` を表示します。
+
+### 自分で静止画を使って publish する場合
+1. 静止画配信ノードを起動します。
+
+```bash
+ros2 launch yolo_detector camera_simulator_node.launch.py \
+  frame_image_path:=<image_path> \
+  frame_width:=640 \
+  frame_height:=480 \
+  frame_ratio:=10.0
+```
+
+2. 別ターミナルで YOLO ノードを起動します。
+
+```bash
+ros2 launch yolo_detector yolo_ncnn_node.launch.py \
+  image_topic:=/usb_cam/image_raw
+```
+
+PyTorch モデルを使う場合は `yolo_node.launch.py` と `.pt` モデルを指定します。
+
+```bash
+ros2 launch yolo_detector yolo_node.launch.py \
+  image_topic:=/usb_cam/image_raw
+```
+
+3. `/yolo_detector/detections` と `/yolo_detector/detection_image` が publish されることを確認します。
+
+```bash
+ros2 topic echo /yolo_detector/detections --once
+ros2 topic hz /yolo_detector/detection_image
+```
+
+## 認識系パッケージとの組み合わせ
+経路封鎖と信号認識では、モデル、出力 topic、推論有効化条件、下流判定が異なります。
+運用時は下流パッケージ側の統合 launch から用途別 `yolo_detector` インスタンスを起動します。
+
+```bash
+# 経路封鎖検知: NCNN版 YOLO + road_blockage_detector
+ros2 launch road_blockage_detector road_blockage_perception.launch.py
+
+# 経路封鎖検知: PyTorch版 YOLO + road_blockage_detector
+ros2 launch road_blockage_detector road_blockage_perception_yolo.launch.py
+
+# 信号認識: PyTorch版 YOLO + traffic_signal_recognizer
+ros2 launch traffic_signal_recognizer traffic_signal_perception.launch.py
+```
+
+## ROS インタフェース
+### Subscribe
+| パラメータ | 既定値 | 型 | 説明 |
+| --- | --- | --- | --- |
+| `image_topic` | `/usb_cam/image_raw` | `sensor_msgs/msg/Image` | 推論対象の入力画像。 |
+| `enabled_topic` | 空文字 | `std_msgs/msg/Int32` | 指定時、`enabled_value` と一致する間だけ推論を有効化。 |
+
+### Publish
+| パラメータ | 既定値 | 型 | 説明 |
+| --- | --- | --- | --- |
+| `detections_topic` | `yolo_detector/detections` | `vision_msgs/msg/Detection2DArray` | YOLO 検出結果。 |
+| `annotated_image_topic` | `yolo_detector/detection_image` | `sensor_msgs/msg/Image` | 検出矩形とスコアを重畳した画像。 |
+
+## パラメータ
+| 名称 | 既定値 | 対象 | 説明 |
+| --- | --- | --- | --- |
+| `model_path` | launch ごとに設定 | 共通 | PyTorch `.pt` ファイル、または NCNN モデルディレクトリ。 |
+| `image_topic` | `/usb_cam/image_raw` | 共通 | 購読する画像 topic。 |
+| `detection_interval` | `0.5` | 共通 | 推論タイマー周期 [秒]。 |
+| `confidence_threshold` | `0.5` | 共通 | 検出 confidence の下限。 |
+| `detections_topic` | `yolo_detector/detections` | 共通 | `Detection2DArray` の出力 topic。 |
+| `annotated_image_topic` | `yolo_detector/detection_image` | 共通 | 検出重畳画像の出力 topic。 |
+| `enabled_topic` | 空文字 | 共通 | 推論有効化フラグの入力 topic。空文字なら常時有効。 |
+| `enabled_value` | `1` | 共通 | 推論を有効化する `Int32` 値。 |
+| `start_enabled` | `true` | 共通 | 起動直後に推論を有効にするか。 |
+| `image_size` | `320` | PyTorch | 推論時の入力画像サイズ。 |
+| `class_names` | `['item']` | NCNN | NCNN モデルの class id と対応する class name。 |
+
+## モデル配置
+モデルは `models/` 配下に配置します。`setup.py` は `models/` を
+`install/yolo_detector/share/yolo_detector/models/` 配下へインストールします。
+付属 launch の既定値は `FindPackageShare('yolo_detector')` から install/share 配下の
+モデルパスを組み立てるため、既定モデル名を使う場合は `model_path` を指定する必要はありません。
+
+```bash
+cp <model_file>.pt <ros2_ws>/src/yolo_detector/models/
+```
+
+launch 引数で `model_path` を上書きする場合、指定した文字列はそのままノードへ渡されます。
+相対パスは「実行時のカレントディレクトリ」基準で解釈されるため、パッケージ相対パスとしては
+扱われません。付属モデル以外を指定する場合は、実行場所に依存しないパスを指定してください。
+
+NCNN 形式へ変換する場合は、`scripts/convert_to_ncnn.py` を使用します。
 
 ```bash
 cd <ros2_ws>/src/yolo_detector
 python3 scripts/convert_to_ncnn.py models/best.pt
 ```
 
-これにより `models/best_ncnn_model/` ディレクトリが作成されます。
-
-#### 2. NCNN版ノードを起動
-
+## 開発・ビルド
 ```bash
-ros2 run yolo_detector yolo_ncnn_node --ros-args \
-  -p model_path:=<ros2_ws>/src/yolo_detector/models/best_ncnn_model
-```
-
-### 方法2: PyTorch版を使用（従来版）
-
-#### カスタムモデルで起動
-
-```bash
-ros2 run yolo_detector yolo_node --ros-args \
-  -p model_path:=<ros2_ws>/src/yolo_detector/models/best.pt \
-  -p image_size:=320
-```
-
-#### パラメータ付きで起動
-
-```bash
-ros2 run yolo_detector yolo_node --ros-args \
-  -p image_topic:=/usb_cam/image_raw \
-  -p detection_interval:=0.5 \
-  -p model_path:=<ros2_ws>/src/yolo_detector/models/best.pt \
-  -p image_size:=256 \
-  -p confidence_threshold:=0.5
-```
-
-### パラメータ
-
-#### 共通パラメータ（両方のノードで使用可能）
-
-- `image_topic` (string, default: "/usb_cam/image_raw")
-  - サブスクライブする画像トピック名
-
-- `detection_interval` (double, default: 0.5)
-  - 推論タイマーの周期（秒）。この間隔で直接推論を実行する。
-
-- `confidence_threshold` (double, default: 0.5)
-  - 検出の信頼度閾値
-
-- `model_path` (string, default: "")
-  - モデルファイル/ディレクトリのパス
-  - NCNN版: モデルディレクトリ（例: `/path/to/best_ncnn_model`）
-  - PyTorch版: .ptファイルのパス（例: `/path/to/best.pt`）
-
-#### PyTorch版のみのパラメータ
-
-- `image_size` (int, default: 320)
-  - 推論時の画像サイズ（小さいほど高速、大きいほど精度向上）
-  - 推奨値: 256（高速）、320（バランス）、416（高精度）
-
-#### NCNN版のみのパラメータ
-
-- `class_names` (string array, default: ["item"])
-  - クラス名のリスト
-
-### 方法3: camera_simulatorノードで静止画を配信
-
-検出用の入力が無い環境向けに、任意の静止画を`/usb_cam/image_raw`として配信する
-`camera_simulator_node`を追加しました。
-
-```bash
-ros2 run yolo_detector camera_simulator_node --ros-args \
-  -p frame_image_path:=/path/to/image.jpg \
-  -p frame_width:=640 \
-  -p frame_height:=480 \
-  -p frame_ratio:=10.0
-```
-
-#### camera_simulatorノードのパラメータ
-
-- `frame_image_path` (string, default: "")
-  - 配信する静止画のパス。`cv2.imread()`で読み込める画像を指定。
-- `frame_width` (int, default: -1)
-  - リサイズ後の横幅。負値の場合はリサイズ無し。片方のみ指定時はアスペクト比維持で拡縮。
-- `frame_height` (int, default: -1)
-  - リサイズ後の高さ。負値の場合はリサイズ無し。
-- `frame_ratio` (double, default: 10.0)
-  - 画像をpublishするレート(Hz)。
-
-### 方法4: 経路封鎖検知・信号認識と組み合わせる
-
-経路封鎖看板と信号は、モデル、推論頻度、起動条件、下流判定が異なるため、launch 上で
-`yolo_detector` を用途別に 2 インスタンス起動します。
-
-経路封鎖検知は `road_blockage_detector` の launch を使用します。
-
-```bash
-ros2 launch road_blockage_detector road_blockage_perception.launch.py
-```
-
-信号認識は `traffic_signal_recognizer` の launch を使用します。
-
-```bash
-ros2 launch traffic_signal_recognizer traffic_signal_perception.launch.py
-```
-
-`yolo_detector` パッケージ内の launch は、YOLO ノード単体の検証用として残します。
-運用時の経路封鎖検知・信号認識は、それぞれの下流パッケージの統合 launch から起動します。
-
-## 出力例
-
-```
-[INFO] [yolo_ncnn_detector_node]: ============================================================
-[INFO] [yolo_ncnn_detector_node]: Detection Results (Inference time: 0.085s = 11.8fps):
-[INFO] [yolo_ncnn_detector_node]: Detected 2 object(s):
-[INFO] [yolo_ncnn_detector_node]:   [1] item (ID:0): 0.81 (x1:535, y1:222, x2:579, y2:316)
-[INFO] [yolo_ncnn_detector_node]:   [2] item (ID:0): 0.77 (x1:71, y1:220, x2:116, y2:316)
-[INFO] [yolo_ncnn_detector_node]: ============================================================
-```
-
-**NCNN版は通常のPyTorch版と比較して3〜5倍高速です！**
-
-## Publishトピック
-
-- `yolo_detector/detection_image` (`sensor_msgs/Image`)
-  - 入力画像に検出結果のバウンディングボックス・クラス名・スコアを重畳した画像。
-  - ヘッダは入力画像のヘッダを引き継ぎます。
-  - `annotated_image_topic` パラメータで出力先を変更できます。
-
-- `yolo_detector/detections` (`vision_msgs/Detection2DArray`)
-  - 検出結果（クラスIDはクラス名文字列、scoreに信頼度）。
-  - ヘッダは入力画像のヘッダを引き継ぎます。
-  - `detections_topic` パラメータで出力先を変更できます。
-
-## ディレクトリ構造
-
-```
-yolo_detector/
-├── yolo_detector/
-│   ├── __init__.py
-│   └── yolo_node.py          # メインノード
-├── models/
-│   ├── README.md
-│   └── best.pt              # YOLOモデルファイル（配置済み）
-├── resource/
-│   └── yolo_detector
-├── test/
-├── package.xml
-├── setup.py
-└── README.md
+cd <ros2_ws>
+colcon build --symlink-install --packages-select yolo_detector
+colcon build --packages-select yolo_detector
 ```
 
 ## トラブルシューティング
-
-### モデルが見つからないエラー
-モデルファイルのパスを確認し、正しいパスを`model_path`パラメータで指定してください:
-```bash
-ls <ros2_ws>/src/yolo_detector/models/
-```
-
-### ultralyticsがインストールされていない
-```bash
-pip install ultralytics
-```
-
-### cv_bridgeのエラー
-```bash
-sudo apt install ros-<your-distro>-cv-bridge
-```
-
-## ライセンス
-
-TODO: ライセンスを指定してください
+- モデル読み込みに失敗する場合は、`model_path` が実在する `.pt` ファイルまたは NCNN モデルディレクトリを指しているか確認してください。
+- 静止画入力で何も publish されない場合は、`frame_image_path` の画像を `cv2.imread()` で読み込めるか確認してください。
+- 信号認識用の統合 launch では `/recog_flag==1` の間だけ YOLO 推論が有効です。単体確認では `start_enabled:=true`、統合確認では `/recog_flag` の publish 状態を確認してください。
