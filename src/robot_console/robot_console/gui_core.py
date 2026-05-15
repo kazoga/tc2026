@@ -787,7 +787,7 @@ class GuiCore:
 
     def _update_camera_frame_locked(self) -> None:
         mode = 'drive'
-        if self._camera_signal_forced or self._manual_signal.sig_recog == 2:
+        if self._follower_state.state == 'WAITING_STOP' and self._follower_state.signal_stop_active:
             mode = 'signal'
         if mode == 'signal':
             frame = self._signal_camera_frame or self._placeholders['camera_signal']

@@ -36,7 +36,7 @@ tc2026 の認識系では、本パッケージは画像推論層に責務を限�
 | パラメータ | 既定値 | 型 | 用途 |
 | --- | --- | --- | --- |
 | `detections_topic` | `yolo_detector/detections` | `vision_msgs/msg/Detection2DArray` | YOLO 検出結果。 |
-| `annotated_image_topic` | `yolo_detector/image_det` | `sensor_msgs/msg/Image` | 検出矩形とスコアを重畳した画像。 |
+| `annotated_image_topic` | `yolo_detector/detection_image` | `sensor_msgs/msg/Image` | 検出矩形とスコアを重畳した画像。 |
 
 検出結果の `header` は入力画像の `header` を引き継ぐ。`Detection2D.results[0].id` には
 class id を文字列化して格納し、`score` には confidence を格納する。
@@ -50,7 +50,7 @@ class id を文字列化して格納し、`score` には confidence を格納す
 | `detection_interval` | 共通 | `0.5` | 推論 timer 周期 [秒]。 |
 | `confidence_threshold` | 共通 | `0.5` | YOLO 推論時の confidence 閾値。 |
 | `detections_topic` | 共通 | `yolo_detector/detections` | 検出結果出力 topic。 |
-| `annotated_image_topic` | 共通 | `yolo_detector/image_det` | 重畳画像出力 topic。 |
+| `annotated_image_topic` | 共通 | `yolo_detector/detection_image` | 重畳画像出力 topic。 |
 | `enabled_topic` | 共通 | 空文字 | 推論有効化フラグ topic。空文字なら購読しない。 |
 | `enabled_value` | 共通 | `1` | 推論を有効化する `Int32` 値。 |
 | `start_enabled` | 共通 | `true` | 起動直後に推論を有効とみなすか。 |

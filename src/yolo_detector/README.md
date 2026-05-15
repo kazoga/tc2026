@@ -9,7 +9,7 @@ ROS2でUSBカメラの画像をYOLOモデルで物体検出するパッケージ
 - **NCNN版は通常のPyTorch版より高速（推奨）**
 - detection_interval間隔で推論を実行（タイマー周期に直接使用）
 - 検出結果をターミナルに表示
-- 検出結果付き画像を`yolo_detector/image_det`でPublish
+- 検出結果付き画像を`yolo_detector/detection_image`でPublish
 - Detection2DArray形式の検出結果を`yolo_detector/detections`でPublish
 - 出力トピックと推論有効化フラグをパラメータで切り替え、用途別に複数インスタンスを起動可能
 
@@ -179,7 +179,7 @@ ros2 launch traffic_signal_recognizer traffic_signal_perception.launch.py
 
 ## Publishトピック
 
-- `yolo_detector/image_det` (`sensor_msgs/Image`)
+- `yolo_detector/detection_image` (`sensor_msgs/Image`)
   - 入力画像に検出結果のバウンディングボックス・クラス名・スコアを重畳した画像。
   - ヘッダは入力画像のヘッダを引き継ぎます。
   - `annotated_image_topic` パラメータで出力先を変更できます。

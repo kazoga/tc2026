@@ -7,7 +7,8 @@
 YOLO モデルのロードと推論は `yolo_detector` に任せ、本パッケージは
 `vision_msgs/msg/Detection2DArray` から GO/STOP を判定する。
 
-外部 interface は既存互換を優先し、`/recog_flag`、`/sig_recog`、`/sig_det_imgs` を維持する。
+外部 interface は route stack との接続契約を優先し、`/recog_flag` と `/sig_recog` を維持する。
+判定重畳画像は `/perception/traffic_signal/decision_image` に publish する。
 `/recog_flag == 1` の間だけ判定を有効化し、直近 `judge_count` 回の判定が green の場合に
 `/sig_recog=1` を publish する。それ以外は `/sig_recog=2` を publish する。
 

@@ -40,7 +40,7 @@ class YoloDetectorNode(Node):
         self.declare_parameter('image_size', 320)
         self.declare_parameter('confidence_threshold', 0.5)
         self.declare_parameter('detections_topic', 'yolo_detector/detections')
-        self.declare_parameter('annotated_image_topic', 'yolo_detector/image_det')
+        self.declare_parameter('annotated_image_topic', 'yolo_detector/detection_image')
         self.declare_parameter('enabled_topic', '')
         self.declare_parameter('enabled_value', 1)
         self.declare_parameter('start_enabled', True)

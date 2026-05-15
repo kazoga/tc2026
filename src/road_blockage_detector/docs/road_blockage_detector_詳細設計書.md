@@ -1,13 +1,14 @@
 # road_blockage_detector 詳細設計書
 
 ## 1. 目的とスコープ
-road_blockage_detector ノードは YOLO 推論結果と自己位置を入力として、経路封鎖看板の有無と封鎖位置を判定する。判定結果は robot_navigator を経由してロボット動作（停止／再開）へ反映される。本設計書ではノードの責務、I/F、内部処理、保持データ構造、異常時動作を定義する。
+road_blockage_detector ノードは YOLO 推論結果、カメラ画像、自己位置を入力として、経路封鎖看板の有無と封鎖位置を判定する。判定結果は robot_navigator を経由してロボット動作（停止／再開）へ反映される。本設計書ではノードの責務、I/F、内部処理、保持データ構造、判定重畳画像、異常時動作を定義する。
 
 ## 2. 背景と前提条件
 - YOLO 推論結果は `yolo_detector` パッケージが `vision_msgs/msg/Detection2DArray` として publish 済みである。
 - `road_blockage_detector` は YOLO モデルのロードや画像推論を行わず、検出結果の意味判定だけを担当する。
 - ノードは `/amcl_pose` を唯一の自己位置情報として使用し、TF2 には依存しない。
-- 画像オーバーレイ描画は `yolo_detector` 側の `annotated_image_topic` に任せ、本ノードでは行わない。
+- YOLO の生の検出矩形だけを確認する画像は `yolo_detector` 側の `/perception/road_blockage/detection_image` を使用する。
+- 本ノードは、経路封鎖判定の根拠を確認するため、raw 画像に判定状態と有効検知情報を重畳した `/perception/road_blockage/decision_image` を publish する。
 - 過去の経路封鎖位置はノード内メモリで累積保持すればよい。永続化要件は無し。
 
 ## 3. ロボット挙動との連携と全体フロー
@@ -25,20 +26,29 @@ road_blockage_detector ノードは YOLO 推論結果と自己位置を入力と
 | 責務2 | 判定期間内のカウント履歴から封鎖確率を評価し、`road_blocked` Bool を publish する。 |
 | 責務3 | 確定封鎖とみなした自己位置を履歴として保持し、再侵入時の多重検知抑止を行う。 |
 | 責務4 | `/amcl_pose` が取得できない場合や Detection と `/amcl_pose` の時刻差が大きい場合に警告ログを出力する。 |
+| 責務5 | 判定状態、検知割合、有効検知数、仮判定経過時間を画像へ重畳し、運用確認用の判定画像を publish する。 |
 
 ## 5. 外部 I/F
 ### 5.1 サブスクライブ
 | トピック | 型 | QoS | 用途 |
 | -------- | -- | --- | ---- |
 | `/perception/road_blockage/detections` | `vision_msgs/msg/Detection2DArray` | SensorData | YOLO 推論結果受信。 |
+| `/usb_cam/image_raw` | `sensor_msgs/msg/Image` | SensorData | 判定重畳画像の元画像。 |
 | `/amcl_pose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | Default | 最新の自己位置キャッシュ。Detection 時刻との差も確認する。 |
 
 ### 5.2 Publish
 | トピック | 型 | QoS | 条件 |
 | -------- | -- | --- | ---- |
 | `/road_blocked` | `std_msgs/msg/Bool` | Default | 仮判定状態遷移時（false→true、true→false）にのみ publish し、robot_navigator へ通知する。 |
+| `/perception/road_blockage/decision_image` | `sensor_msgs/msg/Image` | SensorData | `Detection2DArray` 処理時に、判定状態と有効検知情報を重畳して publish する。 |
 
-### 5.3 自己位置取得
+### 5.3 画像 topic の位置づけ
+- `/perception/road_blockage/detection_image` は `yolo_detector_road_blockage` が publish する YOLO 生検出の確認用画像である。
+- `/perception/road_blockage/decision_image` は `road_blockage_detector` が publish する意味判定後の確認用画像である。
+- `robot_console` は通常走行時の認識表示として `/perception/road_blockage/decision_image` を表示する。未受信時は画像未受信として扱う。
+- 判定重畳画像は運用確認用であり、制御判断の正本は `/road_blocked` とする。
+
+### 5.4 自己位置取得
 - `/amcl_pose` を subscribe し、メッセージヘッダーの時刻を含めてキャッシュする。
 - Detection2DArray のヘッダー時刻と最新の `/amcl_pose` ヘッダー時刻に 3 秒以上の差がある場合は警告を出すが、処理自体は続行する。
 - 最新 `/amcl_pose` が未取得の場合は警告を出して検知処理をスキップする。
@@ -47,8 +57,11 @@ road_blockage_detector ノードは YOLO 推論結果と自己位置を入力と
 | 名称 | 型 | 既定値 | 説明 |
 | ---- | -- | ------ | ---- |
 | `detections_topic` | string | `/perception/road_blockage/detections` | YOLO 推論結果入力 topic。 |
+| `image_topic` | string | `/usb_cam/image_raw` | 判定重畳画像の元画像 topic。 |
 | `amcl_pose_topic` | string | `/amcl_pose` | 自己位置入力 topic。 |
 | `road_blocked_topic` | string | `/road_blocked` | 経路封鎖判定出力 topic。 |
+| `decision_image_topic` | string | `/perception/road_blockage/decision_image` | 判定状態を重畳した画像の出力 topic。 |
+| `publish_decision_image` | bool | `true` | 判定重畳画像を publish するか。 |
 | `target_class_id` | int | 0 | 経路封鎖看板に対応するクラス ID。 |
 | `score_threshold` | float | 0.5 | 最小スコア。未満の検知は除外。 |
 | `bbox_width_min` | float | -1 | 幅閾値下限 [pixel]。負値なら判定スキップ。 |
@@ -71,15 +84,25 @@ road_blockage_detector ノードは YOLO 推論結果と自己位置を入力と
 | `latest_amcl_pose` | `Pose` | `/amcl_pose` からの最新値キャッシュ。 |
 | `latest_amcl_time` | `rclpy.time.Time` | `/amcl_pose` メッセージヘッダーの時刻。Detection のヘッダー時刻との乖離チェックに利用。 |
 | `blocked_state_started_at` | float | road_blocked=true に遷移した ROS 時刻 (秒)。経過時間で確定判定。 |
+| `latest_image` | `numpy.ndarray` | `image_topic` から受信した最新画像。判定重畳画像の生成に利用。 |
+| `latest_image_header` | `std_msgs/msg/Header` | `latest_image` に対応するヘッダー。publish 時に可能な範囲で継承する。 |
+| `last_valid_detection_count` | int | 最新フレームで閾値条件を満たした検知数。画像重畳と debug ログに利用。 |
+| `last_detection_ratio` | float | 最新の `count_history` から算出した検知割合 [%]。画像重畳と debug ログに利用。 |
 
 ## 8. 処理フロー
 1. **起動処理**
    - パラメータ宣言・取得。
    - サブスクライバ／パブリッシャを生成。
+   - `publish_decision_image=true` の場合、画像 subscriber と判定画像 publisher を生成する。
    - 判定期間から秒単位バケットの上限幅を決定し、deque を初期化。
    - ロガーで起動を通知。
 
-2. **検知メッセージ受信 (`Detection2DArray` コールバック)**
+2. **画像受信 (`sensor_msgs/msg/Image` コールバック)**
+   - `image_topic` の最新画像とヘッダーをキャッシュする。
+   - 画像変換に失敗した場合は警告または error ログを出し、直前の画像を維持する。
+   - 画像受信のみでは判定処理を行わない。
+
+3. **検知メッセージ受信 (`Detection2DArray` コールバック)**
    1. 最新の `/amcl_pose` を取得できていない場合は警告を出して処理を終了。取得済みの場合はヘッダー時刻差を確認し、3 秒以上ずれていれば警告を出す。
    2. `blocked_positions` と比較し、現在位置がいずれかの確定封鎖地点から `multi_detection_suppression_range` 未満なら、`count_history` へ 0 を push し残処理をスキップ。
    3. 各 `Detection2D` について以下を実施：
@@ -88,8 +111,9 @@ road_blockage_detector ノードは YOLO 推論結果と自己位置を入力と
       - クラス ID が `target_class_id` と一致しない場合は除外。
       - バウンディングボックスの幅・高さ・下端位置を算出し、指定閾値の範囲に入らなければ除外。ただし負値指定の閾値は判定をスキップ。
    4. 条件を満たした検知数を計数し、メッセージ時刻の秒バケットに加算する。新規バケットを生成する際は `decision_duration` 秒より古いバケットを削除する。
+   5. `publish_decision_image=true` かつ最新画像が存在する場合、検知結果と判定状態を重畳した画像を publish する。
 
-3. **判定ロジック**
+4. **判定ロジック**
    - `count_history` の秒バケット数を分母とし、値が `>=1` のバケット割合を算出。
    - 割合が `decision_frame_ratio` 以上の場合：
      - `temporary_decision_count` を +1。
@@ -98,22 +122,51 @@ road_blockage_detector ノードは YOLO 推論結果と自己位置を入力と
      - `temporary_decision_count` を 0 にリセット。
      - 直前まで >0 だった場合は road_blocked=false を publish し、封鎖計測時間をログに出したうえで `blocked_state_started_at` を None に戻す（誤検知として走行再開）。
 
-4. **封鎖確定処理**
+5. **封鎖確定処理**
    - `temporary_decision_count > 0` かつ `blocked_state_started_at` が設定済みの場合に経過時間をチェック。
    - `now - blocked_state_started_at >= confirmation_duration` なら、最新 `/amcl_pose` から取得した pose を `blocked_positions` に追加し、仮判定カウントを 0 にクリア、`blocked_state_started_at` も None に戻す。road_blocked は true のまま維持し、以降は `route_follower` の滞留判定と `route_manager` のリルート処理により走行再開が行われる。
 
-## 9. ロギング方針
+## 9. 画像出力
+`/perception/road_blockage/decision_image` には以下を重畳する。
+
+- 有効検知として採用した bbox。封鎖判定中と封鎖確定で色分けして描画する。
+- 閾値未満または対象 class でない bbox は描画しない。
+- `road_blocked=<true|false>` の現在状態。
+- 最新フレームの有効検知数。
+- `decision_frame_ratio` と現在の検知割合 [%]。
+- 仮判定中の場合は、`confirmation_duration` に対する経過時間または残り時間。
+- 多重検知抑止範囲内で処理を抑制した場合は、その旨を短いテキストで表示する。
+
+画像生成は運用確認用であり、制御判断の正本は `/road_blocked` とする。元画像が未受信の場合は画像 publish をスキップし、判定処理自体は継続する。
+
+## 10. ロギング方針
 | レベル | タイミング |
 | ------ | ---------- |
 | info | ノード起動、road_blocked true/false への遷移、封鎖確定時（位置情報含む）。 |
-| warn | `/amcl_pose` 未取得時、Detection と `/amcl_pose` の時刻差が 3 秒以上ある場合、検知メッセージが連続で欠損した場合。 |
+| warn | `/amcl_pose` 未取得時、Detection と `/amcl_pose` の時刻差が 3 秒以上ある場合、検知メッセージが連続で欠損した場合、判定画像の元画像が長時間未受信の場合。 |
 | debug | フィルタ後の検知数、割合計算結果、履歴長などの内部状態（パラメータでオンオフ可）。 |
 
-## 10. エラー／例外ハンドリング
+## 11. エラー／例外ハンドリング
 - `Detection2DArray` に要素が無い場合でも `count_history` へ 0 を push し、割合計算を継続する。
 - `/amcl_pose` が未取得の場合は処理をスキップし、警告ログを出力する。回復後は通常処理へ復帰する。
 - Detection のヘッダー時刻と `/amcl_pose` のヘッダー時刻の差が大きい場合は警告のみを出し、処理は継続する。
+- 画像変換に失敗した場合は判定重畳画像の publish のみをスキップし、`road_blocked` 判定は継続する。
+- 判定画像 publish は制御系へ影響させない。画像処理例外は捕捉してログ出力に留める。
 
-## 11. 今後の検討事項
+## 12. traffic_signal_recognizer との対応関係
+`road_blockage_detector` と `traffic_signal_recognizer` は、YOLO 推論層の後段で意味判定を行う対になるパッケージとして扱う。
+
+| 項目 | road_blockage_detector | traffic_signal_recognizer |
+| ---- | ---- | ---- |
+| YOLO 入力 | `/perception/road_blockage/detections` | `/perception/traffic_signal/detections` |
+| raw 画像入力 | `/usb_cam/image_raw` | `/usb_cam/image_raw` |
+| 制御出力 | `/road_blocked` | `/sig_recog` |
+| 判定重畳画像 | `/perception/road_blockage/decision_image` | `/perception/traffic_signal/decision_image` |
+| YOLO 生検出画像 | `/perception/road_blockage/detection_image` | `/perception/traffic_signal/detection_image` |
+
+`/perception/*/detection_image` は YOLO 推論結果の確認用、`/perception/*/decision_image` は後段判定結果の確認用として使い分ける。
+
+## 13. 今後の検討事項
 - road_blocked publish の QoS（信頼性・一回送信）を要件に応じて調整する。
 - `blocked_positions` の上限や経過時間による自動削除の必要性を実走テストで検討する。
+- 判定重畳画像に表示する項目の量、色、文字サイズは robot_console の表示サイズで実機確認して調整する。

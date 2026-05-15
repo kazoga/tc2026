@@ -22,7 +22,7 @@
 画像パネル,ルート地図,active_route,route_msgs/msg/Route.msg,route_image,640x360へリサイズし、画像なしの場合はプレースホルダ表示
 画像パネル,障害物ビュー,sensor_viewer,sensor_msgs/msg/Image.msg,data,400x400へletterboxし、障害物ヒントのオーバレイを重畳
 画像パネル,障害物オーバレイ,obstacle_avoidance_hint,route_msgs/msg/ObstacleAvoidanceHint.msg,"front_blocked,front_clearance_m,left_offset_m,right_offset_m",遮蔽状況・余裕距離・左右オフセットをオーバレイ表示
-画像パネル,外部カメラ,usb_cam/image_raw / sig_det_imgs,sensor_msgs/msg/Image.msg,data,WAITING_STOPやsig_recogの値に応じdrive/signalフレームを選択し480x360に調整
+画像パネル,外部カメラ,perception/road_blockage/decision_image / perception/traffic_signal/decision_image,sensor_msgs/msg/Image.msg,data,信号停止waypoint待機中のみsignalフレームを選択し、それ以外はdriveフレームを480x360に調整
 障害物ビュー,遮蔽,obstacle_avoidance_hint,route_msgs/msg/ObstacleAvoidanceHint.msg,front_blocked,
 障害物ビュー,余裕,obstacle_avoidance_hint,route_msgs/msg/ObstacleAvoidanceHint.msg,front_clearance_m,
 障害物ビュー,左、右,obstacle_avoidance_hint,route_msgs/msg/ObstacleAvoidanceHint.msg,"left_offset_m,right_offset_m",

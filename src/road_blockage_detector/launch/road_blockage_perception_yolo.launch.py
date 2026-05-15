@@ -41,7 +41,7 @@ def generate_launch_description() -> LaunchDescription:
     )
     annotated_image_topic_arg = DeclareLaunchArgument(
         'annotated_image_topic',
-        default_value='/perception/road_blockage/image_det',
+        default_value='/perception/road_blockage/detection_image',
         description='検出重畳画像の出力トピック',
     )
     detector_param_file_arg = DeclareLaunchArgument(
@@ -77,6 +77,7 @@ def generate_launch_description() -> LaunchDescription:
             LaunchConfiguration('detector_param_file'),
             {
                 'detections_topic': LaunchConfiguration('detections_topic'),
+                'image_topic': LaunchConfiguration('image_topic'),
             },
         ],
     )

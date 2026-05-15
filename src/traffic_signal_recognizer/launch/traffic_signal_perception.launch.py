@@ -46,7 +46,7 @@ def generate_launch_description() -> LaunchDescription:
     )
     annotated_image_topic_arg = DeclareLaunchArgument(
         'annotated_image_topic',
-        default_value='/perception/traffic_signal/image_det',
+        default_value='/perception/traffic_signal/detection_image',
         description='YOLO検出重畳画像の出力トピック',
     )
     recognizer_param_file_arg = DeclareLaunchArgument(

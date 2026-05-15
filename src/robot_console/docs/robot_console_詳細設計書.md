@@ -110,7 +110,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 | road_blocked タブ | True/False 送信 | `/road_blocked` | トピックを購読し、外部ノードからの受信値を常に優先表示する。未接続の場合は直近送信値を明示する。 |
 | 画像パネル（ルート地図） | 640×360 へレターボックス付きで縮小 | `/active_route` 内に含まれる `route_image` | 受信できない場合は「No Image」プレースホルダを表示する。 |
 | 画像パネル（障害物ビュー） | 1:1 画像 + 数値オーバレイ | `/sensor_viewer`, `/obstacle_avoidance_hint` | オーバレイ文字列は GuiCore で整形。 |
-| 画像パネル（外部カメラ） | 16:9 / 4:3 レターボックス描画 | `/usb_cam/image_raw`, `/sig_det_imgs` | `sig_recog` が STOP の間は `/sig_det_imgs` を表示し、未取得時は「No Image」プレースホルダを描画。 |
+| 画像パネル（外部カメラ） | 16:9 / 4:3 レターボックス描画 | `/perception/road_blockage/decision_image`, `/perception/traffic_signal/decision_image` | 信号停止 waypoint 待機中は `/perception/traffic_signal/decision_image` を表示し、それ以外は `/perception/road_blockage/decision_image` を表示する。未取得時は「No Image」プレースホルダを描画。 |
 | ノード起動カード各種 | 起動/停止、パラメータ選択、Simulator チェック | `ros2 launch` 経由で `route_planner` などを起動 | パラメータファイルは自動抽出リストを利用。 |
 | コンソールログタブ | stdout/stderr 表示 | NodeLaunchManager の `stdout`, `stderr` | 未読管理は行わず、常に最新状態のみ表示。 |
 
@@ -146,8 +146,8 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 | `/odom` | `nav_msgs/msg/Odometry` | 30Hz | 速度比較（将来拡張用ログ）。 |
 | `/obstacle_avoidance_hint` | `route_msgs/msg/ObstacleAvoidanceHint` | 10Hz | 障害物パネル、オーバレイ数値。 |
 | `/sensor_viewer` | `sensor_msgs/msg/Image` | 5Hz | 障害物画像パネル。 |
-| `/usb_cam/image_raw` | `sensor_msgs/msg/Image` | 5Hz | 走行時カメラパネル (16:9)。 |
-| `/sig_det_imgs` | `sensor_msgs/msg/Image` | 5Hz | 信号停止時カメラパネル (4:3)。 |
+| `/perception/road_blockage/decision_image` | `sensor_msgs/msg/Image` | 5Hz | 通常走行時カメラパネル (16:9)。 |
+| `/perception/traffic_signal/decision_image` | `sensor_msgs/msg/Image` | 5Hz | 信号停止時カメラパネル (4:3)。 |
 | `/manual_start` | `std_msgs/msg/Bool` | イベント（ラッチ） | 手動・信号・封鎖バナー、manual_start タブの現在値。 |
 | `/sig_recog` | `std_msgs/msg/Int32` | イベント（ラッチ） | 手動・信号・封鎖バナー、sig_recog タブの現在値。 |
 | `/road_blocked` | `std_msgs/msg/Bool` | イベント（ラッチ） | 手動・信号・封鎖バナー、road_blocked タブの現在値。 |
@@ -185,7 +185,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
   - `commands.override_timer_hz.obstacle_hint`（default: 0.5）：障害物固定送出の周期。
   - `logs.buffer.max_lines`（default: 2000）：ログリングバッファの上限。超過時は古い行から破棄する。
   - `logs.console_level`（default: `info`）：robot_console 自身のログ出力レベル。`debug` を指定するとデバッグ時のみ追加情報を出力する。
-  - `topics.camera.drive`（default: `/usb_cam/image_raw`）、`topics.camera.signal`（default: `/sig_det_imgs`）：外部カメラの購読トピック。
+  - `topics.camera.drive`（default: `/perception/road_blockage/decision_image`）、`topics.camera.signal`（default: `/perception/traffic_signal/decision_image`）：外部カメラの購読トピック。
   - `topics.road_blocked.external_priority`（default: `true`）：外部ノードからの road_blocked 値を GUI 操作より優先するかどうか。
 - パラメータが未設定の場合は既定値で補完し、欠落を `warn` ログで通知する。`ros2 param set` による変更が入った場合は即時に反映し、`topics.*` を更新した際は購読の再生成を行う。
 
