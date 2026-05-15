@@ -36,6 +36,11 @@ import math
 import os
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+os.environ.setdefault("MPLBACKEND", "Agg")
+import matplotlib
+
+if hasattr(matplotlib, "use"):
+    matplotlib.use("Agg", force=True)
 import matplotlib.pyplot as plt
 import japanize_matplotlib
 import networkx as nx
