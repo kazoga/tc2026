@@ -74,7 +74,7 @@ tc2026 では画像 topic を `/perception/traffic_signal/decision_image` へ完
 | `red_class_ids` | `[0]` | red とみなす class id。 |
 | `green_class_names` | `['green']` | green とみなす class name。 |
 | `red_class_names` | `['red']` | red とみなす class name。 |
-| `class_names` | `['red', 'green']` | `Detection2D.results.id` から class name を復元するための対応表。 |
+| `class_names` | `['red', 'green']` | `Detection2D.results[].hypothesis.class_id` から class name を復元するための対応表。 |
 | `hold_go` | `false` | 一度 GO 判定した後に GO を保持するか。 |
 | `publish_stop_when_disabled` | `false` | 無効化時に STOP を publish するか。 |
 | `decision_image_topic` | `/perception/traffic_signal/decision_image` | 判定重畳画像の出力 topic。 |

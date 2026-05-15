@@ -206,9 +206,9 @@ class TrafficSignalRecognizerNode(Node):
         best_pair: Optional[Tuple[int, float]] = None
         for result in detection.results:
             try:
-                class_id = int(result.id)
-                score = float(result.score)
-            except (TypeError, ValueError):
+                class_id = int(result.hypothesis.class_id)
+                score = float(result.hypothesis.score)
+            except (AttributeError, TypeError, ValueError):
                 continue
             if best_pair is None or score > best_pair[1]:
                 best_pair = (class_id, score)
@@ -285,8 +285,8 @@ class TrafficSignalRecognizerNode(Node):
     def _bbox_to_xyxy(detection: Detection2D) -> Tuple[int, int, int, int]:
         """Detection2D.bbox を OpenCV 描画用座標へ変換する."""
 
-        center_x = detection.bbox.center.x
-        center_y = detection.bbox.center.y
+        center_x = detection.bbox.center.position.x
+        center_y = detection.bbox.center.position.y
         half_w = detection.bbox.size_x / 2.0
         half_h = detection.bbox.size_y / 2.0
         return (

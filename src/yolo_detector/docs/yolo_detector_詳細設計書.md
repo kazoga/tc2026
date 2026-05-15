@@ -38,8 +38,9 @@ tc2026 の認識系では、本パッケージは画像推論層に責務を限�
 | `detections_topic` | `yolo_detector/detections` | `vision_msgs/msg/Detection2DArray` | YOLO 検出結果。 |
 | `annotated_image_topic` | `yolo_detector/detection_image` | `sensor_msgs/msg/Image` | 検出矩形とスコアを重畳した画像。 |
 
-検出結果の `header` は入力画像の `header` を引き継ぐ。`Detection2D.results[0].id` には
-class id を文字列化して格納し、`score` には confidence を格納する。
+検出結果の `header` は入力画像の `header` を引き継ぐ。`Detection2D.results[0].hypothesis.class_id`
+には class id を文字列化して格納し、`Detection2D.results[0].hypothesis.score` には confidence
+を格納する。
 
 ## 4. パラメータ
 

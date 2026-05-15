@@ -1,13 +1,15 @@
 # ROS 2 Python パッケージで使用する pip モジュール。
 # rclpy, cv_bridge, 各種 msg などの ROS パッケージは rosdep/apt で導入する。
-japanize-matplotlib
-matplotlib
-ncnn
-networkx
-numpy
-opencv-python
-pandas
-Pillow
-PyYAML
-requests
-ultralytics
+japanize-matplotlib>=1.1,<2.0
+matplotlib>=3.8,<4.0
+ncnn>=1.0,<2.0
+networkx>=3.2,<4.0
+# ROS 2 Jazzy の cv_bridge は NumPy 1.x ABI 前提のため、NumPy 2.x は使用しない。
+numpy>=1.26,<2.0
+# opencv-python 4.12 以降は NumPy 2.x を要求するため、cv_bridge 互換の範囲に固定する。
+opencv-python>=4.10,<4.12
+pandas>=2.1,<3.0
+Pillow>=10.0,<13.0
+PyYAML>=6.0,<7.0
+requests>=2.31,<3.0
+ultralytics>=8.3,<9.0
