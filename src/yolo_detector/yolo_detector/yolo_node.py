@@ -40,7 +40,7 @@ class YoloDetectorNode(Node):
         self.declare_parameter('image_size', 320)
         self.declare_parameter('confidence_threshold', 0.5)
         self.declare_parameter('detections_topic', 'yolo_detector/detections')
-        self.declare_parameter('annotated_image_topic', 'yolo_detector/image_det')
+        self.declare_parameter('annotated_image_topic', 'yolo_detector/detection_image')
         self.declare_parameter('enabled_topic', '')
         self.declare_parameter('enabled_value', 1)
         self.declare_parameter('start_enabled', True)
@@ -256,13 +256,13 @@ class YoloDetectorNode(Node):
         detection.header = header
 
         hypothesis = ObjectHypothesisWithPose()
-        hypothesis.id = str(cls_id)
-        hypothesis.score = confidence
+        hypothesis.hypothesis.class_id = str(cls_id)
+        hypothesis.hypothesis.score = confidence
         detection.results.append(hypothesis)
 
         bbox = BoundingBox2D()
-        bbox.center.x = (x1 + x2) / 2.0
-        bbox.center.y = (y1 + y2) / 2.0
+        bbox.center.position.x = (x1 + x2) / 2.0
+        bbox.center.position.y = (y1 + y2) / 2.0
         bbox.center.theta = 0.0
         bbox.size_x = x2 - x1
         bbox.size_y = y2 - y1

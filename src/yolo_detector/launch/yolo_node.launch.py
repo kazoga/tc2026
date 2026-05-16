@@ -36,7 +36,7 @@ def generate_launch_description() -> LaunchDescription:
     )
     annotated_image_topic_arg = DeclareLaunchArgument(
         'annotated_image_topic',
-        default_value='yolo_detector/image_det',
+        default_value='yolo_detector/detection_image',
         description='検出重畳画像の出力トピック',
     )
     enabled_topic_arg = DeclareLaunchArgument(

@@ -59,13 +59,13 @@ class TrafficSignalRecognizerNode(Node):
         )
 
         self.sig_recog_publisher = self.create_publisher(Int32, self.sig_recog_topic, 10)
-        self.sig_image_publisher = self.create_publisher(Image, self.sig_det_image_topic, 10)
+        self.decision_image_publisher = self.create_publisher(Image, self.decision_image_topic, 10)
 
         self.get_logger().info(
             'traffic_signal_recognizer を起動しました。'
             f' recog_flag={self.recog_flag_topic}, detections={self.detections_topic}, '
             f'image={self.image_topic}, sig_recog={self.sig_recog_topic}, '
-            f'sig_det_imgs={self.sig_det_image_topic}'
+            f'decision_image={self.decision_image_topic}'
         )
 
     def _declare_parameters(self) -> None:
@@ -75,7 +75,10 @@ class TrafficSignalRecognizerNode(Node):
         self.declare_parameter('detections_topic', '/perception/traffic_signal/detections')
         self.declare_parameter('image_topic', '/usb_cam/image_raw')
         self.declare_parameter('sig_recog_topic', '/sig_recog')
-        self.declare_parameter('sig_det_image_topic', '/sig_det_imgs')
+        self.declare_parameter(
+            'decision_image_topic',
+            '/perception/traffic_signal/decision_image',
+        )
         self.declare_parameter('confidence_threshold', 0.8)
         self.declare_parameter('judge_count', 3)
         self.declare_parameter('go_status', 1)
@@ -97,7 +100,7 @@ class TrafficSignalRecognizerNode(Node):
         self.detections_topic = self._get_string_parameter('detections_topic')
         self.image_topic = self._get_string_parameter('image_topic')
         self.sig_recog_topic = self._get_string_parameter('sig_recog_topic')
-        self.sig_det_image_topic = self._get_string_parameter('sig_det_image_topic')
+        self.decision_image_topic = self._get_string_parameter('decision_image_topic')
         self.confidence_threshold = self._get_double_parameter('confidence_threshold')
         self.judge_count = self._get_int_parameter('judge_count')
         self.go_status = self._get_int_parameter('go_status')
@@ -160,7 +163,7 @@ class TrafficSignalRecognizerNode(Node):
             self.latest_image = cv_image.copy()
 
         if not self.enabled and self.publish_image_when_disabled:
-            self.sig_image_publisher.publish(msg)
+            self.decision_image_publisher.publish(msg)
 
     def _detections_callback(self, msg: Detection2DArray) -> None:
         """Detection2DArray を受信し、信号判定を行う."""
@@ -203,9 +206,9 @@ class TrafficSignalRecognizerNode(Node):
         best_pair: Optional[Tuple[int, float]] = None
         for result in detection.results:
             try:
-                class_id = int(result.id)
-                score = float(result.score)
-            except (TypeError, ValueError):
+                class_id = int(result.hypothesis.class_id)
+                score = float(result.hypothesis.score)
+            except (AttributeError, TypeError, ValueError):
                 continue
             if best_pair is None or score > best_pair[1]:
                 best_pair = (class_id, score)
@@ -241,7 +244,7 @@ class TrafficSignalRecognizerNode(Node):
         except Exception as exc:
             self.get_logger().error(f'信号認識画像の変換に失敗しました: {exc}')
             return
-        self.sig_image_publisher.publish(image_msg)
+        self.decision_image_publisher.publish(image_msg)
 
     def _draw_decision_border(self, image: np.ndarray, decision: SignalDecision) -> None:
         """GO/STOP 判定を画像枠として描画する."""
@@ -282,8 +285,8 @@ class TrafficSignalRecognizerNode(Node):
     def _bbox_to_xyxy(detection: Detection2D) -> Tuple[int, int, int, int]:
         """Detection2D.bbox を OpenCV 描画用座標へ変換する."""
 
-        center_x = detection.bbox.center.x
-        center_y = detection.bbox.center.y
+        center_x = detection.bbox.center.position.x
+        center_y = detection.bbox.center.position.y
         half_w = detection.bbox.size_x / 2.0
         half_h = detection.bbox.size_y / 2.0
         return (

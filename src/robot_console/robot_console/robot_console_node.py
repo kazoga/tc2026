@@ -64,8 +64,18 @@ class RobotConsoleNode(Node):
         self.create_subscription(FollowerState, 'follower_state', self._core.update_follower_state, 10)
         self.create_subscription(ObstacleAvoidanceHint, 'obstacle_avoidance_hint', self._core.update_obstacle_hint, 10)
         self.create_subscription(ImageMsg, 'sensor_viewer', self._core.update_sensor_viewer, 10)
-        self.create_subscription(ImageMsg, 'usb_cam/image_raw', lambda msg: self._core.update_camera_image(msg, 'drive'), 10)
-        self.create_subscription(ImageMsg, 'sig_det_imgs', lambda msg: self._core.update_camera_image(msg, 'signal'), 10)
+        self.create_subscription(
+            ImageMsg,
+            'perception/road_blockage/decision_image',
+            lambda msg: self._core.update_camera_image(msg, 'drive'),
+            10,
+        )
+        self.create_subscription(
+            ImageMsg,
+            'perception/traffic_signal/decision_image',
+            lambda msg: self._core.update_camera_image(msg, 'signal'),
+            10,
+        )
         self.create_subscription(PoseStamped, 'active_target', self._core.update_active_target, 10)
         self.create_subscription(
             PoseWithCovarianceStamped,

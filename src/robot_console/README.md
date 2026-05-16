@@ -16,7 +16,7 @@
 - **ステータスカード列**：ルート進捗、フォロワ状態、速度・目標距離カードを 5Hz 以内で更新。
 - **イベントバナー**：`road_blocked` → `manual_start` → `sig_recog` の優先順位で最新イベントを表示。60 秒経過で自動クリア。
 - **制御コマンドタブ**：各トピックの送信 UI を Notebook 形式でまとめ、Spinbox やラジオボタンで値を入力。`frame_image_path` タグでは静止画パスを入力して `/frame_image_path` トピックへ単発 publish できます。送信結果は最終送信値と時刻として即座に反映されます。
-- **画像パネル**：ルート地図（`/active_route` の付帯画像）、障害物ビュー（`/sensor_viewer`）、カメラ映像（`/usb_cam/image_raw`・`/sig_det_imgs`）。レターボックス処理でアスペクト比を保持し、障害物ヒント値を左上にオーバレイ表示。
+- **画像パネル**：ルート地図（`/active_route` の付帯画像）、障害物ビュー（`/sensor_viewer`）、カメラ映像（`/perception/road_blockage/decision_image`・`/perception/traffic_signal/decision_image`）。レターボックス処理でアスペクト比を保持し、障害物ヒント値を左上にオーバレイ表示。
 - **ノード起動サイドバー**：主要ノードカードに加え `Road Blockage Detector` と
   `Traffic Signal Recognizer` カードを配置。各カードは対応パッケージの統合 launch を起動し、
   下流判定ノードと用途別 `yolo_detector` インスタンスを同時に立ち上げます。
@@ -43,7 +43,7 @@ ros2 launch robot_console robot_console.launch.py \
 | `ui.image_rate_limit_hz.*` | double | route:2 / sensor:5 / camera_drive:5 / camera_signal:5 | 画像パネルごとの最大更新頻度。|
 | `commands.cooldown_ms.*` | int | 500 | manual_start / sig_recog / road_blocked の連打抑止時間。|
 | `commands.override_timer_hz.obstacle_hint` | double | 0.5 | 障害物ヒント固定送出の周期。|
-| `topics.camera.drive` / `topics.camera.signal` | string | `/usb_cam/image_raw` / `/sig_det_imgs` | 外部カメラの購読トピック名。|
+| `topics.camera.drive` / `topics.camera.signal` | string | `/perception/road_blockage/decision_image` / `/perception/traffic_signal/decision_image` | 外部カメラの購読トピック名。|
 | `topics.road_blocked.external_priority` | bool | true | 外部 `/road_blocked` を GUI 送信より優先するか。|
 
 ## ROS インタフェース
@@ -62,7 +62,7 @@ ros2 launch robot_console robot_console.launch.py \
 | `/follower_state` | `route_msgs/msg/FollowerState` | フォロワ状態カード、イベントログ。|
 | `/active_route` | `route_msgs/msg/Route` | ルート地図画像とウェイポイント一覧。|
 | `/sensor_viewer` | `sensor_msgs/msg/Image` | 障害物ビュー画像パネル。|
-| `/usb_cam/image_raw` / `/sig_det_imgs` | `sensor_msgs/msg/Image` | 走行カメラ・信号監視パネル。|
+| `/perception/road_blockage/decision_image` / `/perception/traffic_signal/decision_image` | `sensor_msgs/msg/Image` | 走行カメラ・信号監視パネル。|
 | `/active_target` / `/amcl_pose` | `geometry_msgs/msg/PoseStamped` / `PoseWithCovarianceStamped` | 目標距離計算。|
 | `/cmd_vel` | `geometry_msgs/msg/Twist` | 速度カード。|
 | `/manual_start` / `/sig_recog` / `/road_blocked` | `std_msgs/msg/Bool` / `Int32` / `Bool` | イベントバナー、タブ表示の現在値。|

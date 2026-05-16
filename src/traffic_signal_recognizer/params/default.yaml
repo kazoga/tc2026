@@ -4,7 +4,7 @@ traffic_signal_recognizer:
     detections_topic: /perception/traffic_signal/detections
     image_topic: /usb_cam/image_raw
     sig_recog_topic: /sig_recog
-    sig_det_image_topic: /sig_det_imgs
+    decision_image_topic: /perception/traffic_signal/decision_image
     confidence_threshold: 0.8
     judge_count: 3
     go_status: 1
