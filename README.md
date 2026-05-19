@@ -41,6 +41,22 @@ ROS 2 Jazzy ワークスペース。
 - Python 3
 - (パッケージごとの追加要件は各 README を参照)
 
+## Codex ローカル実行設定
+
+Codex app / CLI / IDE Extension で `ros2 run`, `ros2 launch`, `ros2 topic` などを含む
+ローカル環境の動作確認を行う場合は、`~/.codex/config.toml` に以下を追記する。
+
+```toml
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = true
+```
+
+この設定は、Codex がワークスペース内で ROS 2 ノードや確認用コマンドを実行するためのもの。
+実機 driver や実ロボットを動かす確認は、各手順で明示された場合を除き実行しない。
+
 ## Python 依存モジュール
 
 Python パッケージ群で使用する pip 依存モジュールは、[`requirements.txt`](requirements.txt) にまとめている。

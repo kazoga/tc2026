@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import rclpy
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
@@ -29,9 +29,18 @@ from .utils import GuiCommandType
 class RobotConsoleNode(Node):
     """GuiCore と tkinter UI を連携させる ROS ノード。"""
 
-    def __init__(self, gui_core: Optional[GuiCore] = None) -> None:
+    def __init__(
+        self,
+        gui_core: Optional[GuiCore] = None,
+        console_log_directory: Optional[Union[str, Path]] = None,
+    ) -> None:
         super().__init__('robot_console')
-        log_dir_param = self.declare_parameter('console_log_directory', '').value
+        declared_log_dir = self.declare_parameter('console_log_directory', '').value
+        log_dir_param = (
+            str(console_log_directory)
+            if console_log_directory is not None
+            else declared_log_dir
+        )
         resolved_log_dir: Optional[Path] = None
         if isinstance(log_dir_param, str) and log_dir_param:
             candidate = Path(log_dir_param).expanduser()

@@ -3,6 +3,11 @@
 このファイルは、Codex がこの ROS 2 ワークスペースで作業する際の共通指示である。
 GitHub リポジトリに登録し、開発メンバ間で共通利用することを前提とする。
 
+このファイルは、クラウド環境で作業する場合とローカル環境で作業する場合の
+どちらにも適用する共通ルールである。ローカル環境で `ros2 run`, `ros2 launch`,
+`ros2 topic`, `ros2 service` などの ROS 2 実行確認を行う場合に限り、
+追加で `AGENTS.local.md` を参照する。
+
 ---
 
 # Common Instructions
@@ -295,6 +300,8 @@ colcon build
 
 - Codex は原則として `ros2 run`, `ros2 launch`, `ros2 topic`, `ros2 service`, `ros2 action`, `ros2 interface` などの ROS 2 実行確認を行わない。
 - 実機、センサ、GUI、Gazebo、外部デバイス、長時間起動ノードに依存する確認も原則として行わない。
+- ローカル環境でユーザーから ROS 2 実行確認を明示された場合のみ、`AGENTS.local.md` の
+  追加ルールに従って `ros2` コマンドを実行してよい。
 - 必要な動作確認が `colcon build` と pytest で代替できない場合は、未確認事項として作業報告に明記する。
 - README やドキュメントに利用者向けの実行手順を書く場合は、リポジトリ外の絶対パスを使わない。
 

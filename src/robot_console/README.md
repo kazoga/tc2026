@@ -85,6 +85,63 @@ ros2 launch robot_console robot_console.launch.py \
 - GUI なしでロジックを確認したい場合は `python3 -m robot_console.gui_core` でユニットテスト用メインを実行できます（PyYAML / Pillow / OpenCV が未導入でもフォールバック動作）。
 - モック画面は `python3 tools/mock_ui.py` で起動し、ROS 環境なしに画面レイアウトと操作フローを確認できます。
 - `tools/tests/` 配下に pytest ベースのテストを収録しています。`pytest tools/tests` を実行してロジックの回帰を検出してください。
+- `tools/headless_route_stack_eval.py` は tkinter 画面を生成せず、`GuiCore` に
+  GUI 操作相当の入力を与えて route stack の簡易回帰評価を行う補助ツールです。
+  `route_planner`、`route_manager`、`route_follower`、`robot_navigator`、
+  `robot_simulator` を起動し、`/route_state`、`/active_route`、`/follower_state`、
+  `/cmd_vel`、`/manual_start` を監視します。
+
+  ```bash
+  source install/setup.bash
+  run_id=$(date +%Y%m%d_%H%M%S)
+  mkdir -p "log/codex/${run_id}/ros" "log/codex/${run_id}/robot_console"
+  export ROS_LOG_DIR="$PWD/log/codex/${run_id}/ros"
+  python3 src/robot_console/tools/headless_route_stack_eval.py \
+    --start-label 10 \
+    --goal-label 30 \
+    --console-log-directory "log/codex/${run_id}/robot_console"
+  ```
+
+  既定では `route_planner` / `route_manager` に `tsukuba.yaml`、`route_follower` /
+  `robot_navigator` に `default.yaml` を使い、`robot_navigator` の simulator を有効にします。
+  評価終了時は `GuiCore.request_stop_all()` 相当の停止処理を行い、各 profile の
+  停止状態を出力します。異なる範囲を評価する場合は `--start-label`、`--goal-label`、
+  `--timeout-sec`、`--post-goal-wait-sec`、`--no-simulator` などを指定してください。
+- `tools/gui_route_stack_eval.py` は `UiMain` を実際に生成し、座標クリックではなく
+  automation hook 経由で Combobox、Entry、Checkbutton、Button 相当の操作を行います。
+  ローカルデスクトップまたは X11 転送ありの環境で実行してください。
+
+  ```bash
+  source install/setup.bash
+  run_id=$(date +%Y%m%d_%H%M%S)
+  mkdir -p "log/codex/${run_id}/ros" "log/codex/${run_id}/robot_console"
+  export ROS_LOG_DIR="$PWD/log/codex/${run_id}/ros"
+  python3 src/robot_console/tools/gui_route_stack_eval.py \
+    --start-label 10 \
+    --goal-label 30 \
+    --console-log-directory "log/codex/${run_id}/robot_console" \
+    --verify-log-open-buttons
+  ```
+
+### 評価ツール実行時のログ
+
+Codex が評価ツールを実行する場合は、ワークスペース直下の `log/codex/` 配下に
+実行ごとのログディレクトリを作成し、`ROS_LOG_DIR` を設定してから実行する運用を
+基本にします。
+
+```bash
+run_id=$(date +%Y%m%d_%H%M%S)
+mkdir -p "log/codex/${run_id}/ros" "log/codex/${run_id}/robot_console"
+export ROS_LOG_DIR="$PWD/log/codex/${run_id}/ros"
+```
+
+`ros2 launch robot_console robot_console.launch.py` 経由で起動した場合は、`ROS_LOG_DIR` が
+`console_log_directory` として `RobotConsoleNode` に渡され、`NodeLaunchManager` が
+各 profile の stdout/stderr をその配下に保存します。評価ツールを Python から
+直接実行する場合は、`--console-log-directory` に
+`log/codex/<run_id>/robot_console` を指定してください。この場合も、
+`NodeLaunchManager` が各 profile の stdout/stderr をその配下へ保存します。
+保存済み ROS ログは `ROS_LOG_DIR` 配下を参照してください。
 
 ## 依存パッケージ
 - GUI 機能：`tkinter`（標準ライブラリ）、`Pillow`（画像描画）、`opencv-python`（画像デコード）。Pillow / OpenCV は未導入でも縮退動作します。
