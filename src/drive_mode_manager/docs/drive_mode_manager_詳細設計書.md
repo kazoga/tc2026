@@ -159,7 +159,6 @@ GUI は表示専用とし、状態遷移コマンドや速度指令を publish �
 | パラメータ | 型 | 既定値 | 内容 |
 | --- | --- | --- | --- |
 | `initial_mode` | string | `autonomous` | 起動直後の走行状態。`autonomous` または `manual` |
-| `main_display_ratio` | double | `0.70` | GUI 主表示帯の高さ比率。許容範囲は 0.60 から 0.80 |
 | `manual_transition_trigger` | string | `l1_ps_button_hold` | 手動遷移トリガ種別 |
 | `manual_transition_hold_s` | double | `2.0` | L1 + PS 長押し判定時間 |
 | `manual_to_auto_l1_released_s` | double | `1.0` | L1 入力なし継続判定時間 |
@@ -170,8 +169,6 @@ GUI は表示専用とし、状態遷移コマンドや速度指令を publish �
 | `publish_rate_hz` | double | `20.0` | `/cmd_vel` と status の publish 周期 |
 | `l1_button_index` | int | `4` | PS3 L1 ボタン index |
 | `ps_button_index` | int | `16` | PS ボタン index。実機確認後に調整する |
-| `max_autonomous_resume_linear_x` | double | `0.8` | GUI 警告用の復帰予定直進速度閾値 |
-| `max_autonomous_resume_angular_z` | double | `1.2` | GUI 警告用の復帰予定角速度閾値 |
 
 `ps_button_index` は controller driver により変わる可能性がある。PS ボタンが `/joy` で安定して
 取得できない場合は、`manual_transition_trigger` を `l1_start_button_hold` などに変更できる
@@ -198,6 +195,16 @@ GUI は表示専用とし、状態遷移コマンドや速度指令を publish �
 
 tc2025 の `joystick_teleop.py` と同じ軸・ボタン・倍率を初期値として採用する。ただし、
 自律 cmd の passthrough は本ノードでは行わない。
+
+### 6.3 `drive_status_gui_node`
+
+| パラメータ | 型 | 既定値 | 内容 |
+| --- | --- | --- | --- |
+| `main_display_ratio` | double | `0.70` | GUI 主表示帯の高さ比率。許容範囲は 0.60 から 0.80 |
+| `turn_preview_seconds` | double | `1.0` | 出力 cmd の角速度から進行方向矢印を描画する予測時間。`yaw = angular_z * turn_preview_seconds` として算出する |
+| `manual_to_auto_l1_released_s` | double | `1.0` | 手動中に L1 を離してから自律復帰条件成立までの表示用しきい値 |
+| `max_autonomous_resume_linear_x` | double | `0.8` | GUI 警告用の復帰予定直進速度閾値 |
+| `max_autonomous_resume_angular_z` | double | `1.2` | GUI 警告用の復帰予定角速度閾値 |
 
 ## 7. データモデル・内部状態
 
@@ -242,6 +249,7 @@ bool ps_button_pressed
 float32 ps_hold_progress_s
 
 bool manual_input_active
+bool manual_cmd_alive
 bool autonomous_cmd_alive
 
 bool auto_resume_pending
@@ -340,8 +348,8 @@ QoS は速度指令系を Reliable / Volatile / depth 1 とする。速度指令
 
 `drive_status_gui_node` は Qt の GUI スレッドと rclpy executor スレッドを分ける。
 ROS callback から Qt widget や scene item を直接更新せず、`gui_core.py` の dataclass snapshot を
-lock 付きで更新し、Qt signal/slot で GUI スレッドへ通知する。GUI スレッドは 100ms から
-200ms 周期で snapshot を描画へ反映する。
+lock 付きで更新する。GUI スレッドは `QTimer` により 100ms 周期で snapshot を読み取り、
+描画へ反映する。
 
 ## 11. 起動・終了・launch 設計
 
@@ -351,7 +359,9 @@ lock 付きで更新し、Qt signal/slot で GUI スレッドへ通知する。G
 | --- | --- | --- |
 | `manual_teleop_node` | true | `/joy` から `/cmd_vel/manual` を生成する |
 | `drive_cmd_mux_node` | true | `/cmd_vel` の唯一の publish 元 |
-| `drive_status_gui_node` | true | 実機運用時は別画面表示を推奨 |
+| `manual_teleop_node` | 常時 | `/joy` から `/cmd_vel/manual` を生成する。mux と同時起動する |
+| `drive_cmd_mux_node` | 常時 | `/cmd_vel/autonomous` と `/cmd_vel/manual` を選択し、最終 `/cmd_vel` を publish する |
+| `drive_status_gui_node` | `start_gui` で制御 | 実機運用時は別画面表示を推奨。headless 評価では起動しない |
 
 `tc2026_system_bringup` から実機 profile を起動する場合は、`robot_navigator` の
 `cmd_vel_topic` を `/cmd_vel/autonomous` に remap し、`ypspur_ros2` は `/cmd_vel` を購読する。
@@ -410,17 +420,19 @@ GUI 内部では `AUTONOMOUS` / `MANUAL` を状態名として扱うが、画面
 | --- | --- | --- |
 | 主表示帯 | `x=0`, `y=0`, `w=W`, `h=0.70H` | 規定状態表示。`自律 / Auto` または `操縦 / Manual` を最大表示する |
 | 補助表示エリア | `x=0`, `y=0.70H`, `w=W`, `h=0.30H` | 状態判断を助ける補助情報を固定スロットで表示する |
-| 補助左スロット | 補助表示エリア左 35% | 最終出力 cmd。全画面で常時表示する |
-| 補助中央スロット | 補助表示エリア中央 30% | 画面固有の最重要補助情報を表示する |
-| 補助右スロット | 補助表示エリア右 35% | GNSS/RTK 状態を基本表示する。カウントダウン中のみ復帰予定 cmd を優先表示する |
-| 主表示帯右下ラベル | 主表示帯内の右下 | `Output Source` と `Reason` を小さく表示する |
+| 補助左スロット | 補助表示エリア左 | 通常時は最終出力 cmd、自律復帰カウントダウン中は復帰予定 cmd を表示する |
+| 補助中央スロット | 補助表示エリア中央 | 画面固有の最重要補助情報を表示する |
+| 補助右スロット | 補助表示エリア右 | 通常時は GNSS/RTK 状態、自律復帰カウントダウン中は復帰方向と警告文を表示する |
+| 主表示帯右下ラベル | 主表示帯内の右下 | mux の採用元、自律 cmd 入力有無、手動 cmd 入力有無を小さく表示する |
 
 主表示帯の高さ比率は `main_display_ratio` パラメータで変更可能とし、許容範囲は 0.60 から 0.80 とする。
 既定値 0.70 は、規定状態表示を遠目に認識しやすくしつつ、補助情報を下部に 1 行分確保するための値である。
 
-補助左スロットには、すべての画面で最終出力 `/cmd_vel` を表示する。並進速度は `linear.x` を
+補助左スロットには、通常時は最終出力 `/cmd_vel` を表示する。自律復帰カウントダウン中は、
+現在出力がゼロであることは主表示帯右下と中央カウントダウンで示し、補助左スロットには
+復帰時に採用される予定の `/cmd_vel/autonomous` を `復帰時Cmd` として表示する。並進速度は
 `m/s` の数値で表示する。角速度 `angular.z` は数値より直感的な把握を優先し、左旋回・右旋回・直進を
-矢印で表示する。矢印の曲率または太さは角速度の絶対値に応じて 3 段階程度で変化させる。
+矢印で表示する。
 
 | `angular.z` | 表示 |
 | --- | --- |
@@ -432,10 +444,10 @@ GUI 内部では `AUTONOMOUS` / `MANUAL` を状態名として扱うが、画面
 停止表示を出す。角速度の数値は通常表示しないが、debug 表示を有効にした場合のみ小さく併記する。
 
 補助右スロットは、マニュアル走行画面と通常の自律走行画面で GNSS/RTK 情報を共通表示する。
-表示項目は `/rtk_gps/rtk_status` を主入力とし、RTK state、衛星数、heading 有効性、データ鮮度を
-短く並べる。GNSS/RTK は走行モードに関係なく自律復帰可否や自己位置信頼性の判断に使うため、
-マニュアル走行中も隠さない。自律復帰カウントダウン画面では、復帰予定 cmd の確認を優先するため、
-GNSS/RTK は主表示帯右下ラベルまたは補助右スロット内の小さなサブ行に縮退表示する。
+表示項目は `/rtk_gps/rtk_status` を主入力とし、RTK state、衛星数、heading を短く並べる。
+GNSS/RTK は走行モードに関係なく自律復帰可否や自己位置信頼性の判断に使うため、
+マニュアル走行中も隠さない。自律復帰カウントダウン画面では復帰方向と警告文の確認を優先し、
+補助右スロットは GNSS/RTK ではなく復帰予定 cmd から算出した方向表示に切り替える。
 
 ### 13.2 マニュアル走行画面
 
@@ -446,18 +458,16 @@ GNSS/RTK は主表示帯右下ラベルまたは補助右スロット内の小�
 | 領域 | 表示内容 | 表示方法 |
 | --- | --- | --- |
 | 主表示帯 | `操縦 / Manual` | 黄色背景、画面幅いっぱい、高さは既定で画面高の 70% |
-| 主表示帯の右下 | `Output Source` と `Reason` | `MANUAL_CMD` / `ZERO`、停止理由を小さめに表示する |
+| 主表示帯の右下 | mux 状態 | 出力 cmd の採用元、自律 cmd 入力有無、手動 cmd 入力有無を表示する |
 | 補助左スロット | 最終出力 cmd | 並進速度を `m/s` 数値、角速度を旋回矢印で表示する |
-| 補助中央スロット | 手動入力と自律復帰条件 | L1 デッドマン、手動 cmd alive、自律 cmd alive、L1 release 経過秒数 / 判定しきい値を表示する |
-| 補助右スロット | GNSS/RTK 状態 | 自律走行通常時と同じく、RTK state、衛星数、heading 有効性、データ鮮度を表示する |
+| 補助中央スロット | 手動入力と自律復帰条件 | 自律復帰可否、L1 ON/OFF、L1 OFF 経過秒数 / 判定しきい値を表示する |
+| 補助右スロット | GNSS/RTK 状態 | 自律走行通常時と同じく、RTK state、衛星数、heading を表示する |
 
-`MANUAL` 中に L1 が押されていない場合、Output Source は `ZERO` であり、画面中央には
-「L1 released / output zero」を出す。L1 押下中かつ手動 cmd が有効な場合のみ
-`MANUAL_CMD` として進行方向を表示する。
-補助中央スロットの自律復帰条件では、自律走行への自動復帰が有効かどうかを
-`autonomous_cmd_alive` で表示する。L1 が離されている間は、`l1_released_elapsed_s` /
-`manual_to_auto_l1_released_s` の形で経過秒数と判定しきい値を表示する。L1 押下中は経過秒数を
-0 に戻し、`L1 hold` として意図的に手動保持中であることを示す。
+`MANUAL` 中に L1 が押されていない場合、`output_source` は `ZERO` であり、補助中央には
+`L1: OFF` と `L1 OFF時間: <elapsed> / <threshold> 秒` を出す。L1 押下中かつ手動 cmd が
+有効な場合のみ `MANUAL_CMD` として進行方向を表示する。補助中央スロットの自律復帰条件では、
+`autonomous_cmd_alive` を `自律復帰: 有効/無効` として表示する。L1 押下中は
+`L1: ON` とし、L1 OFF 経過秒数は復帰判定中だけ表示する。
 
 ### 13.3 自律走行画面（自律復帰カウントダウン中）
 
@@ -469,13 +479,15 @@ GNSS/RTK は主表示帯右下ラベルまたは補助右スロット内の小�
 | 領域 | 表示内容 | 表示方法 |
 | --- | --- | --- |
 | 主表示帯 | `自律 / Auto` | 緑色背景、画面幅いっぱい、高さは既定で画面高の 70% |
-| 主表示帯の右下 | `Output Source=ZERO` と `Auto resume pending` | 状態表示を邪魔しないサイズで表示する |
-| 補助左スロット | 最終出力 cmd | 現在は `ZERO`。並進速度 `0.00 m/s` と停止表示を出す |
-| 補助中央スロット | `auto_resume_remaining_s` | 補助情報として大きく表示し、1 秒未満は警告色にする |
-| 補助右スロット | 復帰予定自律 cmd | 予定並進速度を `m/s` 数値、予定角速度を旋回矢印で表示する。自律 cmd alive と復帰保留理由も併記する |
+| 主表示帯の右下 | mux 状態 | 出力 cmd は `ZERO`、自律 cmd 入力有無、手動 cmd 入力有無を表示する |
+| 補助左スロット | 復帰時 cmd | 復帰時に採用予定の自律 cmd の並進速度を `m/s` 数値、角速度を旋回矢印で表示する |
+| 補助中央スロット | `auto_resume_remaining_s` | `自律走行開始まで` と残り秒数を大きく表示する |
+| 補助右スロット | 復帰方向 | 予定 cmd から `直進` / `左旋回` / `右旋回` を表示し、必要に応じて警告文を併記する |
 
-復帰予定 cmd が `max_autonomous_resume_linear_x` または `max_autonomous_resume_angular_z` を超える場合は、
-速度表示を警告色にする。初期設計では GUI 警告に留めるが、将来は mux 側で復帰保留する拡張を検討する。
+復帰予定 cmd が `max_autonomous_resume_linear_x` を超える場合は `速度注意！`、
+`max_autonomous_resume_angular_z` を超える場合または `angular.z * turn_preview_seconds` が 90 度を
+超える場合は `急旋回注意！` を表示する。`linear.x < 0` の場合は `後退注意！` を表示する。
+初期実装では GUI 警告に留め、mux 側での復帰保留は将来拡張とする。
 
 ### 13.4 自律走行画面（通常）
 
@@ -485,19 +497,19 @@ GNSS/RTK は主表示帯右下ラベルまたは補助右スロット内の小�
 | 領域 | 表示内容 | 表示方法 |
 | --- | --- | --- |
 | 主表示帯 | `自律 / Auto` | 緑色背景、画面幅いっぱい、高さは既定で画面高の 70% |
-| 主表示帯の右下 | `Output Source` と Reason | `AUTONOMOUS_CMD` は通常色、`ZERO` は停止理由を強調する |
+| 主表示帯の右下 | mux 状態 | 出力 cmd の採用元、自律 cmd 入力有無、手動 cmd 入力有無を表示する |
 | 補助左スロット | 最終出力 cmd | 並進速度を `m/s` 数値、角速度を旋回矢印で表示する |
-| 補助中央スロット | 経路進捗 | `FollowerState.state`、次 waypoint label、次 waypoint までの距離を表示する |
-| 補助右スロット | GNSS/RTK 状態 | RTK state、衛星数、heading 有効性、データ鮮度を表示する |
+| 補助中央スロット | 経路進捗 | `FollowerState.active_waypoint_label` と `FollowerState.state` を表示する |
+| 補助右スロット | GNSS/RTK 状態 | RTK state、衛星数、heading を表示する |
 
 `mode=AUTONOMOUS` で `output_source=ZERO` の場合は、自律 cmd timeout、起動直後、復帰保留などの
-停止理由を `Reason` と中央表示で明確にする。
+停止理由を mux 状態や中央表示で明確にする。
 
 通常の自律走行画面の補助中央スロットでは、`route_msgs/msg/FollowerState` を主入力として使う。
-`state` は「走行中」「信号停止」「手動解除待ち」などの運用表示へ変換し、`active_waypoint_label` を
-次 waypoint label として表示する。距離は `active_target_distance_m` を使い、単位 `m` 付きの
-数値で表示する。`FollowerState.state` の語彙が GUI 表示に十分でない場合は、`route_follower` 側で
-状態語彙を拡張するか、`drive_status_gui_node` 側で表示用の変換表を持つ。
+`active_waypoint_label` を `WP: <label>`、`state` を `状態: <state>` として表示する。
+`FollowerState` がまだ届いていない場合は、`ManagerStatus.state` と `ManagerStatus.last_cause` を
+補助表示として使う。距離や詳細な状態語彙の変換は初期 UI には含めず、必要になった時点で
+`route_follower` 側の状態語彙拡張または GUI 側の表示変換表として追加する。
 
 ### 13.5 GUI 実装ライブラリ方針
 
@@ -508,7 +520,7 @@ GUI 実装は、`PyQt5` の `Qt Widgets` と `QGraphicsView` / `QGraphicsScene` 
   ウィンドウサイズに合わせて等比拡縮しやすい。
 - scroll bar を無効化しても、scene 全体を `KeepAspectRatio` で常に表示できる。
 - `QPainter` による速度矢印、バー、円弧ゲージ、警告枠などの描画が容易である。
-- Qt の signal/slot により、ROS callback thread から GUI thread へ安全に snapshot を渡せる。
+- ROS callback thread は lock 付きの表示 snapshot を更新し、GUI thread は `QTimer` で定期的に snapshot を読み取って再描画できる。
 - stylesheet により、3 画面の色、余白、文字サイズの設計を統一しやすい。
 
 実装構成は以下を推奨する。
@@ -518,7 +530,7 @@ GUI 実装は、`PyQt5` の `Qt Widgets` と `QGraphicsView` / `QGraphicsScene` 
 | GUI framework | `PyQt5.QtWidgets` | メインウィンドウ、描画 view、イベントループ |
 | 固定比率描画 | `QGraphicsView`, `QGraphicsScene` | 16:9 論理キャンバスをウィンドウへ等比拡縮する |
 | カスタム描画 | `QGraphicsItem` または `QPainter` | 速度矢印、ゲージ、警告枠、状態帯を描く |
-| ROS 連携 | `rclpy` + `QThread` + Qt signal | ROS executor と GUI thread を分離する |
+| ROS 連携 | `rclpy` + `MultiThreadedExecutor` + `threading.Thread` + `QTimer` | ROS executor と GUI thread を分離し、GUI thread から snapshot を読む |
 | 状態保持 | `dataclasses` | GUI 表示用 snapshot を不変に近い形で渡す |
 
 論理キャンバスは 1600x900 または 1920x1080 とし、全 UI 要素をこの座標系で配置する。
@@ -546,7 +558,7 @@ GUI 実装は、`PyQt5` の `Qt Widgets` と `QGraphicsView` / `QGraphicsScene` 
 | `builtin_interfaces` | `DriveModeStatus.stamp` |
 | `route_msgs` | `DriveModeStatus`, `FollowerState`, `ManagerStatus` |
 | `rtk_gps_um982_msgs` | GUI の RTK 状態表示 |
-| `python3-pyqt5` | 専用 GUI。16:9 論理キャンバス、等比拡縮、Qt signal/slot による thread 連携 |
+| `python3-pyqt5` | 専用 GUI。16:9 論理キャンバス、等比拡縮、Qt event loop と ROS executor thread の分離 |
 
 `DriveModeStatus.msg` を `route_msgs` に追加する実装時は、`route_msgs/CMakeLists.txt` に msg を追加し、
 `drive_mode_manager/package.xml` の `route_msgs` 依存を維持する。
@@ -563,9 +575,10 @@ GUI 実装は、`PyQt5` の `Qt Widgets` と `QGraphicsView` / `QGraphicsScene` 
 | `test_autonomous_cmd_timeout_outputs_zero` | `drive_mode_core.py` | 自律 cmd timeout 時にゼロ出力 |
 | `test_manual_deadman_outputs_zero_when_l1_released` | `manual_teleop_core.py` | L1 非押下でゼロ Twist |
 | `test_axis_deadzone_and_invert` | `manual_teleop_core.py` | deadzone、反転、倍率 |
-| `test_drive_status_view_mode_selection` | `gui_core.py` | マニュアル走行、自律復帰カウントダウン中、自律走行通常の 3 画面選択 |
 | `test_regulation_state_label_mapping` | `gui_core.py` | `MODE_MANUAL` は `操縦 / Manual`、`MODE_AUTONOMOUS` はカウントダウン中も `自律 / Auto` と表示する |
 | `test_aspect_ratio_fit_rect` | `gui_core.py` | ウィンドウサイズ変更時に 16:9 全体表示を維持する |
+| `test_planned_direction_text_warns_for_resume_limits` | `gui_core.py` | 復帰予定 cmd が速度・角速度しきい値を超えた場合に警告文を表示する |
+| `test_planned_direction_text_warns_for_reverse_resume` | `gui_core.py` | 復帰予定 cmd が後退の場合に警告文を表示する |
 
 受け入れ条件は以下である。
 
@@ -573,8 +586,8 @@ GUI 実装は、`PyQt5` の `Qt Widgets` と `QGraphicsView` / `QGraphicsScene` 
 - `colcon build --symlink-install --packages-select route_msgs drive_mode_manager` が成功する。
 - `colcon build --packages-select route_msgs drive_mode_manager` が成功する。
 - 実機 `/joy` で L1 と PS ボタン index を確認し、PS が不安定な場合は代替 trigger を決める。
-- GUI の resize 単体テストまたは手動確認で、16:9 の全内容がスクロールなしで表示されることを確認する。
-- ROS 実行確認が必要な GUI 表示、controller 入力、実機駆動は自動テスト外の未確認事項として扱う。
+- `DriveStatusGuiCore.fit_rect()` の単体テストで 16:9 表示領域の算出を確認する。
+- 画面を使う GUI 表示確認、controller 入力、実機駆動は自動テスト外の未確認事項として扱う。
 
 ## 16. 互換性・移行・影響範囲
 
@@ -602,10 +615,8 @@ timeout 停止、turbo 倍率である。自律 cmd passthrough と waypoint fla
 - 自律復帰予定速度が閾値を超えた場合、GUI 表示だけにするか、mux 側で復帰を保留するかを決める。
 - GPS/RTK、次 waypoint、自律走行状態の表示元を `/drive_mode_status` に含めるか、
   既存 status topic の購読表示に留めるかを決める。
-- `DriveModeStatus.msg` を `route_msgs` に置く方針で問題ないかを合意する。
 - 専用 GUI をどの PC・画面で表示するかを運用手順で決める。
-- `python3-pyqt5` を標準依存として採用するか、既存 `robot_console` と同じ `tkinter` fallback も
-  維持するかを実装前に決める。
+- 画面を使った GUI の実表示確認で、文字の重なり、警告文、RTK/waypoint 表示の視認性を確認する。
 
 ## 18. 改版履歴
 
@@ -613,3 +624,4 @@ timeout 停止、turbo 倍率である。自律 cmd passthrough と waypoint fla
 | --- | --- | --- |
 | 0.1 | 2026-05-19 | 初版。添付検討資料と tc2025 ROS 1 資産をもとに、`drive_mode_manager` の責務、topic、状態遷移、GUI、テスト計画を整理した |
 | 0.2 | 2026-05-20 | レギュレーションの状態表示に準拠し、マニュアル走行、自律復帰カウントダウン中、自律走行通常の 3 画面構成と、PyQt5/Qt Graphics View による 16:9 等比拡縮 UI 方針を追記した |
+| 0.3 | 2026-05-21 | 実装後の UI 仕様に合わせ、mux 状態表示、復帰時 cmd 表示、復帰方向警告、RTK/waypoint 表示、GUI パラメータ所属、GUI 非依存テスト項目を更新した |

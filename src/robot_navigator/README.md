@@ -2,7 +2,9 @@
 
 ## 概要
 `robot_navigator` は `/active_target`（`PoseStamped`）を追従する時間最適制御を実装し、
-`/cmd_vel` を出力する移動体ナビゲーションノードです。Phase2 では障害物距離を
+`cmd_vel_topic` で指定した `Twist` トピックへ自律速度指令を出力する移動体ナビゲーションノードです。
+単体起動では `/cmd_vel`、統合起動では `drive_mode_manager` の mux に渡す `/cmd_vel/autonomous` を
+既定出力として扱います。Phase2 では障害物距離を
 `ObstacleAvoidanceHint` または `LaserScan` から取得して減速・停止を行い、進行方向を
 `visualization_msgs/Marker` で可視化します。試験用に `/cmd_vel` を受け取って自己位置を
 配信する `robot_simulator` ノード（同パッケージ内）も併載しています。
@@ -14,7 +16,7 @@
 - 角速度は PID（`kp=0.65`, `ki=0.001`, `kd=0.02`）で生成し、角度誤差に応じて線速度をスケール。
 - `/direction_marker` に進行方向を示す矢印 Marker を Publish。
 - `log_csv_path` が書き込み可能な場合、制御内部状態を CSV として逐次出力。
-- 必要なトピックが揃わない場合は `/cmd_vel` にゼロを出力し、WARN ログを一定周期で発行。
+- 必要なトピックが揃わない場合は `cmd_vel_topic` にゼロを出力し、WARN ログを一定周期で発行。
 
 ## 起動方法
 ### launch を用いた起動
@@ -22,9 +24,22 @@
 ros2 launch robot_navigator robot_navigator.launch.py \
   obstacle_hint_topic:=/obstacle_avoidance_hint cmd_vel_topic:=/cmd_vel
 ```
+- 単体 launch では `cmd_vel_topic` の既定値は `/cmd_vel` です。
 - launch 引数で入出力トピックをリマップ可能。`param_file` で任意の YAML を指定できます。
 - `obstacle_distance_mode` を `scan` に設定すると `/scan` を購読し、`hint` の場合は
   `/obstacle_avoidance_hint` を使用します。
+
+
+### 統合 launch を用いた起動
+```bash
+ros2 launch robot_navigator all.launch.py use_drive_mode_manager:=true
+```
+- `all.launch.py` では `drive_mode_manager` の `drive_cmd_mux_node` を併用し、
+  `robot_navigator` の自律速度指令は既定で `/cmd_vel/autonomous` へ出力します。
+- 最終的な `/cmd_vel` は `drive_cmd_mux_node` が publish するため、実機 bringup では
+  他ノードが直接 `/cmd_vel` を publish しない構成にしてください。
+- `use_drive_mode_manager:=false` を指定した場合は mux を起動せず、`cmd_vel_topic` の値に従って
+  `robot_navigator` が直接 Twist を publish します。
 
 ### 実行ファイルを直接起動
 ```bash
@@ -47,7 +62,7 @@ ros2 run robot_navigator robot_navigator
 ### Publisher
 | 名称 | 型 | 説明 | QoS |
 |------|----|------|-----|
-| `/cmd_vel` | `geometry_msgs/Twist` | 車体指令速度。 | RELIABLE / VOLATILE / depth=10 |
+| `/cmd_vel` または `/cmd_vel/autonomous` | `geometry_msgs/Twist` | `cmd_vel_topic` で指定した速度指令。統合起動時は `/cmd_vel/autonomous` を `drive_mode_manager` へ渡す。 | RELIABLE / VOLATILE / depth=10 |
 | `/direction_marker` | `visualization_msgs/Marker` | 進行方向矢印。`marker_frame` で指定したフレームに出力。 | RELIABLE / VOLATILE / depth=1 |
 
 > サービス・アクションは提供しません。
@@ -71,21 +86,22 @@ ros2 run robot_navigator robot_navigator
 | `log_csv_path` | string | `~/control_log.csv` | CSV ログ出力先パス。
 
 ## 状態管理・処理フロー
-1. `/odom`・`/amcl_pose`・`/active_target` の受信状況を監視し、欠損時は `/cmd_vel` にゼロを出力して
+1. `/odom`・`/amcl_pose`・`/active_target` の受信状況を監視し、欠損時は `cmd_vel_topic` にゼロを出力して
    WARN を 5 秒周期で報告する。
 2. 入力が揃うと `compute_time_optimal_cmd_vel()` を呼び出し、角度誤差の PID 制御で角速度を算出。
 3. 線速度は角度誤差および障害物距離に基づくスケールを適用し、`max_acc_v` に従って加速度を制限。
 4. `/obstacle_avoidance_hint` または `/scan` から得た前方距離が `min_obstacle_distance` 未満なら停止し、
    `safety_distance` 未満では線速度を線形減衰させる。
-5. 指令を `/cmd_vel` に Publish し、`/direction_marker` で現在の進行方向を可視化する。
+5. 指令を `cmd_vel_topic` に Publish し、`/direction_marker` で現在の進行方向を可視化する。
 6. CSV ログが有効な場合は制御ループの各種値（速度、誤差、障害物距離）を逐次書き出す。
 
 ## 動作確認手順
-1. `robot_simulator`（当パッケージ内）を起動し、`/cmd_vel` を受け取って `/amcl_pose`・`/odom` を配信させる。
+1. `robot_simulator`（当パッケージ内）を起動し、最終 `/cmd_vel` を受け取って `/amcl_pose`・`/odom` を配信させる。
 2. `route_follower` もしくは手動で `/active_target` を Publish し、目標指令を入力する。
 3. `obstacle_monitor` を起動して `/obstacle_avoidance_hint` を供給するか、`obstacle_distance_mode:=scan`
    として `/scan` を直接購読させる。
-4. `robot_navigator` を launch し、`/cmd_vel`・`/direction_marker` の挙動、CSV ログの内容を確認する。
+4. `robot_navigator` を launch し、単体構成では `/cmd_vel`、統合構成では `/cmd_vel/autonomous` と
+   `/drive_mode_status`、最終 `/cmd_vel`、`/direction_marker` の挙動、CSV ログの内容を確認する。
 
 ## デバッグのヒント
 - CSV ログが生成されない場合は `log_csv_path` のディレクトリ権限を確認してください。

@@ -20,7 +20,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from route_msgs.msg import FollowerState, Route, RouteState
+from route_msgs.msg import DriveModeStatus, FollowerState, Route, RouteState
 from std_msgs.msg import Bool
 
 from robot_console.robot_console_node import RobotConsoleNode
@@ -31,6 +31,7 @@ DEFAULT_LAUNCH_ORDER = (
     "route_planner",
     "route_manager",
     "route_follower",
+    "drive_mode_manager",
     "robot_navigator",
 )
 STOPPED_STATUSES = {NodeLaunchStatus.STOPPED, NodeLaunchStatus.ERROR}
@@ -73,6 +74,8 @@ class TopicMonitor(Node):
         self.route_state_count = 0
         self.follower_state_count = 0
         self.cmd_vel_count = 0
+        self.autonomous_cmd_vel_count = 0
+        self.drive_mode_status_count = 0
         self.active_route_count = 0
         self.manual_start_count = 0
 
@@ -82,6 +85,12 @@ class TopicMonitor(Node):
             FollowerState, "/follower_state", self._on_follower_state, 10
         )
         self.create_subscription(Twist, "/cmd_vel", self._on_cmd_vel, 10)
+        self.create_subscription(
+            Twist, "/cmd_vel/autonomous", self._on_autonomous_cmd_vel, 10
+        )
+        self.create_subscription(
+            DriveModeStatus, "/drive_mode_status", self._on_drive_mode_status, 10
+        )
         self.create_subscription(Bool, "/manual_start", self._on_manual_start, 10)
         self.create_timer(config.summary_period_sec, self._on_summary)
 
@@ -144,6 +153,18 @@ class TopicMonitor(Node):
                 flush=True,
             )
 
+    def _on_autonomous_cmd_vel(self, msg: Twist) -> None:
+        self.autonomous_cmd_vel_count += 1
+
+    def _on_drive_mode_status(self, msg: DriveModeStatus) -> None:
+        self.drive_mode_status_count += 1
+        if self.drive_mode_status_count == 1 or msg.auto_resume_pending:
+            print(
+                f"[monitor] {self.elapsed():6.1f}s /drive_mode_status "
+                f"mode={msg.mode} source={msg.output_source} reason={msg.reason!r}",
+                flush=True,
+            )
+
     def _on_manual_start(self, msg: Bool) -> None:
         self.manual_start_count += 1
         print(
@@ -158,6 +179,8 @@ class TopicMonitor(Node):
             f"active_route={self.active_route_count} "
             f"follower_state={self.follower_state_count} "
             f"cmd_vel={self.cmd_vel_count} "
+            f"cmd_vel_autonomous={self.autonomous_cmd_vel_count} "
+            f"drive_mode_status={self.drive_mode_status_count} "
             f"manual_start={self.manual_start_count}",
             flush=True,
         )
@@ -217,6 +240,9 @@ class HeadlessRouteStackEvaluator:
         self._select_param("robot_navigator", self._config.robot_navigator_param)
         core.update_launch_override("route_manager", "start_label", self._config.start_label)
         core.update_launch_override("route_manager", "goal_label", self._config.goal_label)
+        core.update_launch_override("drive_mode_manager", "start_gui", "false")
+        core.update_launch_override("robot_navigator", "cmd_vel_topic", "/cmd_vel/autonomous")
+        core.update_launch_override("robot_navigator", "odom_topic", "/ypspur_ros/odom")
         core.update_simulator_enabled("robot_navigator", self._config.simulator)
         self._pump_for(1.0)
         self._print_launch_selection()
@@ -329,6 +355,7 @@ class HeadlessRouteStackEvaluator:
             "Failed",
             "Traceback",
             "started",
+            "drive mode",
             "Using",
             "generated temporary yaml",
         )

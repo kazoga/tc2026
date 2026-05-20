@@ -39,10 +39,12 @@ class GuiRouteStackEvaluator:
         config: EvalConfig,
         verify_log_open_buttons: bool = False,
         log_open_profiles: Sequence[str] = DEFAULT_LAUNCH_ORDER,
+        show_drive_status_gui: bool = False,
     ) -> None:
         self._config = config
         self._verify_log_open_buttons = verify_log_open_buttons
         self._log_open_profiles = tuple(log_open_profiles)
+        self._show_drive_status_gui = show_drive_status_gui
         self._console = RobotConsoleNode(
             console_log_directory=config.console_log_directory
         )
@@ -83,6 +85,17 @@ class GuiRouteStackEvaluator:
             )
             self._ui.automation_set_launch_override(
                 "route_manager", "goal_label", self._config.goal_label
+            )
+            self._ui.automation_set_launch_override(
+                "drive_mode_manager",
+                "start_gui",
+                "true" if self._show_drive_status_gui else "false",
+            )
+            self._ui.automation_set_launch_override(
+                "robot_navigator", "cmd_vel_topic", "/cmd_vel/autonomous"
+            )
+            self._ui.automation_set_launch_override(
+                "robot_navigator", "odom_topic", "/ypspur_ros/odom"
             )
             self._ui.automation_set_simulator_enabled(
                 "robot_navigator", self._config.simulator
@@ -325,6 +338,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=DEFAULT_LAUNCH_ORDER,
         help="ログファイルボタンを検証する profile ID のカンマ区切り一覧",
     )
+    parser.add_argument(
+        "--show-drive-status-gui",
+        action="store_true",
+        help="drive_mode_manager の専用状態 GUI も起動して表示確認する",
+    )
     parser.add_argument("--no-simulator", action="store_true")
     parser.add_argument("--no-manual-start", action="store_true")
     return parser
@@ -350,6 +368,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             config,
             verify_log_open_buttons=args.verify_log_open_buttons,
             log_open_profiles=args.log_open_profiles,
+            show_drive_status_gui=args.show_drive_status_gui,
         )
         return evaluator.run()
     finally:

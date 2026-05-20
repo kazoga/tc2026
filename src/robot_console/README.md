@@ -17,8 +17,8 @@
 - **イベントバナー**：`road_blocked` → `manual_start` → `sig_recog` の優先順位で最新イベントを表示。60 秒経過で自動クリア。
 - **制御コマンドタブ**：各トピックの送信 UI を Notebook 形式でまとめ、Spinbox やラジオボタンで値を入力。`frame_image_path` タグでは静止画パスを入力して `/frame_image_path` トピックへ単発 publish できます。送信結果は最終送信値と時刻として即座に反映されます。
 - **画像パネル**：ルート地図（`/active_route` の付帯画像）、障害物ビュー（`/sensor_viewer`）、カメラ映像（`/perception/road_blockage/decision_image`・`/perception/traffic_signal/decision_image`）。レターボックス処理でアスペクト比を保持し、障害物ヒント値を左上にオーバレイ表示。
-- **ノード起動サイドバー**：主要ノードカードに加え `Road Blockage Detector` と
-  `Traffic Signal Recognizer` カードを配置。各カードは対応パッケージの統合 launch を起動し、
+- **ノード起動サイドバー**：主要ノードカードに加え `Drive Mode Manager`、
+  `Road Blockage Detector`、`Traffic Signal Recognizer` カードを配置。各カードは対応パッケージの統合 launch を起動し、
   下流判定ノードと用途別 `yolo_detector` インスタンスを同時に立ち上げます。
 
 ### Console Logs タブ
@@ -87,9 +87,10 @@ ros2 launch robot_console robot_console.launch.py \
 - `tools/tests/` 配下に pytest ベースのテストを収録しています。`pytest tools/tests` を実行してロジックの回帰を検出してください。
 - `tools/headless_route_stack_eval.py` は tkinter 画面を生成せず、`GuiCore` に
   GUI 操作相当の入力を与えて route stack の簡易回帰評価を行う補助ツールです。
-  `route_planner`、`route_manager`、`route_follower`、`robot_navigator`、
-  `robot_simulator` を起動し、`/route_state`、`/active_route`、`/follower_state`、
-  `/cmd_vel`、`/manual_start` を監視します。
+  `route_planner`、`route_manager`、`route_follower`、`drive_mode_manager`、
+  `robot_navigator`、`robot_simulator` を起動し、`/route_state`、`/active_route`、
+  `/follower_state`、`/cmd_vel`、`/cmd_vel/autonomous`、`/drive_mode_status`、
+  `/manual_start` を監視します。
 
   ```bash
   source install/setup.bash
@@ -103,9 +104,11 @@ ros2 launch robot_console robot_console.launch.py \
   ```
 
   既定では `route_planner` / `route_manager` に `tsukuba.yaml`、`route_follower` /
-  `robot_navigator` に `default.yaml` を使い、`robot_navigator` の simulator を有効にします。
+  `drive_mode_manager` は `start_gui=false` で manual teleop と mux を同時起動し、`robot_navigator` は
+  `cmd_vel_topic=/cmd_vel/autonomous` で起動し、`robot_navigator` の simulator を有効にします。
   評価終了時は `GuiCore.request_stop_all()` 相当の停止処理を行い、各 profile の
-  停止状態を出力します。異なる範囲を評価する場合は `--start-label`、`--goal-label`、
+  停止状態を出力します。GUI あり評価で専用状態 GUI も起動する場合は
+  `tools/gui_route_stack_eval.py --show-drive-status-gui` を指定します。異なる範囲を評価する場合は `--start-label`、`--goal-label`、
   `--timeout-sec`、`--post-goal-wait-sec`、`--no-simulator` などを指定してください。
 - `tools/gui_route_stack_eval.py` は `UiMain` を実際に生成し、座標クリックではなく
   automation hook 経由で Combobox、Entry、Checkbutton、Button 相当の操作を行います。

@@ -138,12 +138,14 @@ class NodeLaunchManager:
                 for key, value in overrides.items():
                     args.append(f"{key}:={value}")
 
+            env = self._build_subprocess_env()
             process = subprocess.Popen(
                 args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
+                env=env,
                 **self._build_popen_options(),
             )
             self._processes[profile.profile_id] = process
@@ -170,6 +172,7 @@ class NodeLaunchManager:
                 stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
+                env=self._build_subprocess_env(),
                 **self._build_popen_options(),
             )
             with self._lock:
@@ -246,6 +249,31 @@ class NodeLaunchManager:
         else:
             options['preexec_fn'] = os.setsid
         return options
+
+    def _build_subprocess_env(self) -> Dict[str, str]:
+        """ROS launch 子プロセス向けの環境変数を構築する。"""
+
+        env = os.environ.copy()
+        try:
+            from PyQt5 import QtCore  # type: ignore[import-not-found]
+        except ImportError:
+            return env
+
+        plugin_root = Path(QtCore.QLibraryInfo.location(QtCore.QLibraryInfo.PluginsPath))
+        platform_root = plugin_root / 'platforms'
+        qt_lib_root = plugin_root.parent / 'lib'
+        if platform_root.exists():
+            env['QT_QPA_PLATFORM_PLUGIN_PATH'] = str(platform_root)
+            env['QT_PLUGIN_PATH'] = str(plugin_root)
+        if 'QT_QPA_PLATFORM' not in env:
+            env['QT_QPA_PLATFORM'] = 'xcb'
+        if qt_lib_root.exists():
+            current_library_path = env.get('LD_LIBRARY_PATH')
+            if current_library_path:
+                env['LD_LIBRARY_PATH'] = f"{qt_lib_root}:{current_library_path}"
+            else:
+                env['LD_LIBRARY_PATH'] = str(qt_lib_root)
+        return env
 
     def _send_signal(self, process: subprocess.Popen[str], sig: signal.Signals) -> None:
         """プロセスグループにシグナルを送信し、失敗時は個別プロセスに送る。"""
@@ -627,6 +655,13 @@ class GuiCore:
             labels = self._parse_label_list(checkpoint_raw)
             if labels:
                 overrides['checkpoint_labels'] = ','.join(labels)
+
+        for key in state.user_arguments:
+            if key in overrides or (profile.profile_id == 'route_manager' and key == 'checkpoint_labels'):
+                continue
+            value = state.override_inputs.get(key, '').strip()
+            if value:
+                overrides[key] = value
         return overrides
 
     @staticmethod
@@ -1344,11 +1379,19 @@ def default_launch_profiles() -> List[NodeLaunchProfile]:
             launch_file='route_follower.launch.py',
         ),
         NodeLaunchProfile(
+            profile_id='drive_mode_manager',
+            display_name='Drive Mode Manager',
+            package='drive_mode_manager',
+            launch_file='drive_mode_manager.launch.py',
+            user_arguments=['start_gui'],
+        ),
+        NodeLaunchProfile(
             profile_id='robot_navigator',
             display_name='Robot Navigator',
             package='robot_navigator',
             launch_file='robot_navigator.launch.py',
             simulator_launch_file='robot_simulator.launch.py',
+            user_arguments=['cmd_vel_topic', 'odom_topic'],
         ),
         NodeLaunchProfile(
             profile_id='obstacle_monitor',
