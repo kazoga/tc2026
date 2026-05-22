@@ -201,10 +201,15 @@ tc2025 の `joystick_teleop.py` と同じ軸・ボタン・倍率を初期値と
 | パラメータ | 型 | 既定値 | 内容 |
 | --- | --- | --- | --- |
 | `main_display_ratio` | double | `0.70` | GUI 主表示帯の高さ比率。許容範囲は 0.60 から 0.80 |
-| `turn_preview_seconds` | double | `1.0` | 出力 cmd の角速度から進行方向矢印を描画する予測時間。`yaw = angular_z * turn_preview_seconds` として算出する |
+| `turn_preview_seconds` | double | `1.0` | 互換用。現行の復帰方向テキストと矢印角度判定では使用しない |
+| `direction_linear_scale` | double | `1.2` | 進行方向矢印用に `cmd_vel.linear.x` から stick 縦軸を逆算する scale |
+| `direction_angular_scale` | double | `1.5` | 進行方向矢印用に `cmd_vel.angular.z` から stick 横軸を逆算する scale |
+| `direction_deadzone` | double | `0.05` | 逆算した stick 座標へ適用する deadzone |
+| `direction_linear_axis_invert` | bool | `false` | 進行方向矢印用の並進軸符号反転 |
+| `direction_angular_axis_invert` | bool | `false` | 進行方向矢印用の角速度軸符号反転 |
 | `manual_to_auto_l1_released_s` | double | `1.0` | 手動中に L1 を離してから自律復帰条件成立までの表示用しきい値 |
-| `max_autonomous_resume_linear_x` | double | `0.8` | GUI 警告用の復帰予定直進速度閾値 |
-| `max_autonomous_resume_angular_z` | double | `1.2` | GUI 警告用の復帰予定角速度閾値 |
+| `max_autonomous_resume_linear_x` | double | `0.8` | 互換用。現行の復帰方向テキストでは角度判定を優先する |
+| `max_autonomous_resume_angular_z` | double | `1.2` | 互換用。現行の復帰方向テキストでは角度判定を優先する |
 
 ## 7. データモデル・内部状態
 
@@ -357,8 +362,8 @@ lock 付きで更新する。GUI スレッドは `QTimer` により 100ms 周期
 
 | ノード | 既定起動 | 備考 |
 | --- | --- | --- |
-| `manual_teleop_node` | true | `/joy` から `/cmd_vel/manual` を生成する |
-| `drive_cmd_mux_node` | true | `/cmd_vel` の唯一の publish 元 |
+| `joy_node` | `joy_input=joy_node` のとき起動 | 実 controller から `/joy` を publish する既定の入力源 |
+| `ps3_joy_sim_node` | `joy_input=ps3_joy_sim` のとき起動 | 開発用にキーボード入力から `/joy` を publish する。`joy_node` とは同時起動しない |
 | `manual_teleop_node` | 常時 | `/joy` から `/cmd_vel/manual` を生成する。mux と同時起動する |
 | `drive_cmd_mux_node` | 常時 | `/cmd_vel/autonomous` と `/cmd_vel/manual` を選択し、最終 `/cmd_vel` を publish する |
 | `drive_status_gui_node` | `start_gui` で制御 | 実機運用時は別画面表示を推奨。headless 評価では起動しない |
@@ -431,14 +436,16 @@ GUI 内部では `AUTONOMOUS` / `MANUAL` を状態名として扱うが、画面
 補助左スロットには、通常時は最終出力 `/cmd_vel` を表示する。自律復帰カウントダウン中は、
 現在出力がゼロであることは主表示帯右下と中央カウントダウンで示し、補助左スロットには
 復帰時に採用される予定の `/cmd_vel/autonomous` を `復帰時Cmd` として表示する。並進速度は
-`m/s` の数値で表示する。角速度 `angular.z` は数値より直感的な把握を優先し、左旋回・右旋回・直進を
+`m/s` の数値で表示する。角速度 `angular.z` は数値より直感的な把握を優先し、`manual_teleop_node` と同じ scale で `cmd_vel` から stick 座標を逆算して
 矢印で表示する。
 
-| `angular.z` | 表示 |
+| 値 | 表示 |
 | --- | --- |
-| `abs(angular.z) < angular_deadband` | 直進矢印 |
-| `angular.z > 0` | 左旋回矢印 |
-| `angular.z < 0` | 右旋回矢印 |
+| `stick_y = linear.x / direction_linear_scale` | 円チャート上の縦座標 |
+| `stick_x = angular.z / direction_angular_scale` | 円チャート上の横座標 |
+| `hypot(stick_x, stick_y) > 1.0` | ノルム 1.0 に正規化 |
+
+矢印は、GUI 上の円チャート中心から逆算 stick 座標へ向かう方向に描画する。描画時は方向ベクトルを単位化し、stick 座標と中心点との距離で矢印長が変化しないようにする。`linear.x=0` かつ `angular.z=0` の場合は角度が定義できないため、上方向を表示する。
 
 `output_source=ZERO` または `linear.x=0` かつ `angular.z=0` の場合は、並進速度 `0.00 m/s` と
 停止表示を出す。角速度の数値は通常表示しないが、debug 表示を有効にした場合のみ小さく併記する。
@@ -482,11 +489,13 @@ GNSS/RTK は走行モードに関係なく自律復帰可否や自己位置信�
 | 主表示帯の右下 | mux 状態 | 出力 cmd は `ZERO`、自律 cmd 入力有無、手動 cmd 入力有無を表示する |
 | 補助左スロット | 復帰時 cmd | 復帰時に採用予定の自律 cmd の並進速度を `m/s` 数値、角速度を旋回矢印で表示する |
 | 補助中央スロット | `auto_resume_remaining_s` | `自律走行開始まで` と残り秒数を大きく表示する |
-| 補助右スロット | 復帰方向 | 予定 cmd から `直進` / `左旋回` / `右旋回` を表示し、必要に応じて警告文を併記する |
+| 補助右スロット | 復帰方向 | 予定 cmd から `前進` / `左旋回` / `右旋回` / `後進` を表示し、必要に応じて警告文を併記する |
 
-復帰予定 cmd が `max_autonomous_resume_linear_x` を超える場合は `速度注意！`、
-`max_autonomous_resume_angular_z` を超える場合または `angular.z * turn_preview_seconds` が 90 度を
-超える場合は `急旋回注意！` を表示する。`linear.x < 0` の場合は `後退注意！` を表示する。
+復帰予定方向の文言は、進行方向矢印と同じ逆算 stick 座標から求めた角度で判定する。
+矢印の上方向を 0 度、右方向を正、左方向を負とし、`abs(angle) <= 15deg` は `前進`、
+`abs(angle) <= 90deg` は `右旋回` または `左旋回`、`abs(angle) > 90deg` は `後進` とする。
+`abs(angle) >= 45deg` かつ `abs(angle) <= 90deg` の場合は 2 行目に `急旋回注意！` を表示し、
+後進の場合は 2 行目に `後方注意！` を表示する。
 初期実装では GUI 警告に留め、mux 側での復帰保留は将来拡張とする。
 
 ### 13.4 自律走行画面（通常）
@@ -577,8 +586,8 @@ GUI 実装は、`PyQt5` の `Qt Widgets` と `QGraphicsView` / `QGraphicsScene` 
 | `test_axis_deadzone_and_invert` | `manual_teleop_core.py` | deadzone、反転、倍率 |
 | `test_regulation_state_label_mapping` | `gui_core.py` | `MODE_MANUAL` は `操縦 / Manual`、`MODE_AUTONOMOUS` はカウントダウン中も `自律 / Auto` と表示する |
 | `test_aspect_ratio_fit_rect` | `gui_core.py` | ウィンドウサイズ変更時に 16:9 全体表示を維持する |
-| `test_planned_direction_text_warns_for_resume_limits` | `gui_core.py` | 復帰予定 cmd が速度・角速度しきい値を超えた場合に警告文を表示する |
-| `test_planned_direction_text_warns_for_reverse_resume` | `gui_core.py` | 復帰予定 cmd が後退の場合に警告文を表示する |
+| `test_planned_direction_text_uses_arrow_angle_thresholds` | `gui_core.py` | 復帰予定方向を進行方向矢印と同じ角度しきい値で表示する |
+| `test_planned_direction_text_warns_for_sharp_turn_and_backward` | `gui_core.py` | 急旋回および後進時の 2 行目警告文を表示する |
 
 受け入れ条件は以下である。
 
@@ -625,3 +634,42 @@ timeout 停止、turbo 倍率である。自律 cmd passthrough と waypoint fla
 | 0.1 | 2026-05-19 | 初版。添付検討資料と tc2025 ROS 1 資産をもとに、`drive_mode_manager` の責務、topic、状態遷移、GUI、テスト計画を整理した |
 | 0.2 | 2026-05-20 | レギュレーションの状態表示に準拠し、マニュアル走行、自律復帰カウントダウン中、自律走行通常の 3 画面構成と、PyQt5/Qt Graphics View による 16:9 等比拡縮 UI 方針を追記した |
 | 0.3 | 2026-05-21 | 実装後の UI 仕様に合わせ、mux 状態表示、復帰時 cmd 表示、復帰方向警告、RTK/waypoint 表示、GUI パラメータ所属、GUI 非依存テスト項目を更新した |
+
+## 19. `ps3_joy_sim_node` 追補
+
+`ps3_joy_sim_node` は、PS3 controller が手元にない開発環境で `joy` topic を模擬する補助ノードである。正式設計は `docs/ps3_joy_sim_設計書.md` を正とし、本詳細設計書では `drive_mode_manager` 全体との接続境界を整理する。
+
+### 19.1 責務と接続
+
+`ps3_joy_sim_node` は相対 topic `joy` に `sensor_msgs/msg/Joy` を publish する。`manual_teleop_node` と `drive_cmd_mux_node` は実 controller の `joy_node` と同じ下流 interface として扱う。
+
+本ノードは `/cmd_vel`、`/cmd_vel/manual`、`/drive_mode_status` を publish しない。速度指令生成は `manual_teleop_node`、最終出力選択は `drive_cmd_mux_node` に集約する。
+
+### 19.2 追加ファイル
+
+| ファイル | 役割 |
+| --- | --- |
+| `drive_mode_manager/ps3_joy_sim_core.py` | 押下キー集合と stick 保持値から Joy 配列および予測 cmd_vel 表示値を生成する ROS 非依存ロジック |
+| `drive_mode_manager/ps3_joy_sim_node.py` | PyQt5 GUI と `rclpy` publisher を持つ ROS 2 ノード |
+| `launch/ps3_joy_sim.launch.py` | simulator 単独起動用 launch |
+| `tests/test_ps3_joy_sim_core.py` | index、符号、累積 stick、予測 cmd_vel、同時押し、reset 相当の単体テスト |
+
+### 19.3 パラメータ
+
+既定値は現行 `manual_teleop_node` と `drive_cmd_mux_node` に合わせ、`left_stick_x_axis=0`、`left_stick_y_axis=1`、`l1_button_index=4`、`ps_button_index=16`、`stick_step=0.1` とする。GUI の点を円内に保つため `normalize_diagonal_stick=true` とする。`cmd_vel_linear_scale=1.2`、`cmd_vel_angular_scale=1.5`、`cmd_vel_deadzone=0.05` により、現在の stick 保持値で `manual_teleop_node` が出す想定の `v` と `w` を GUI に表示する。`joy_topic` は相対 `joy`、`publish_rate_hz` は 20.0Hz とする。
+
+### 19.4 起動方針
+
+`ps3_joy_sim_node` は `drive_mode_manager.launch.py joy_input:=ps3_joy_sim` で、`joy_node` の代替入力源として同時起動できる。既定は `joy_input:=joy_node` とし、実 controller 用の `joy_node` を起動する。`ps3_joy_sim.launch.py` は simulator 単独確認用に残す。本物の `joy_node` と同じ `joy` topic へ同時 publish しない。
+
+### 19.5 テスト計画
+
+`test_ps3_joy_sim_core.py` で L1/PS index、`w/s/a/d` の累積軸更新、Y 軸反転、斜め入力正規化、予測 `cmd_vel`、reset 相当、index 範囲外時の配列長維持を確認する。GUI 目視確認と ROS 2 topic 結合確認は `AGENTS.local.md` に従い、実機 driver と `ypspur_ros2` を起動しない範囲で実施する。
+
+| 版 | 日付 | 変更概要 |
+| --- | --- | --- |
+| 0.8 | 2026-05-22 | 進行方向矢印の長さ一定化と復帰方向テキストの角度判定仕様を設計書へ反映した |
+| 0.7 | 2026-05-22 | 復帰方向テキストを進行方向矢印と同じ逆算 stick 角度ベースへ変更した |
+| 0.6 | 2026-05-22 | `drive_status_gui_node` の進行方向矢印を `cmd_vel` から逆算した stick 座標方向へ変更した |
+| 0.5 | 2026-05-22 | `ps3_joy_sim_node` の累積 stick 入力、予測 `cmd_vel` 表示、斜め正規化既定有効を反映した |
+| 0.4 | 2026-05-21 | 開発用 `ps3_joy_sim_node` の責務、interface、パラメータ、launch、単体テストを追補した |

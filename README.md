@@ -23,6 +23,7 @@ ROS 2 Jazzy ワークスペース。
 | パッケージ                                                  | 役割                                                                 |
 | ----------------------------------------------------------- | -------------------------------------------------------------------- |
 | [`src/robot_navigator`](src/robot_navigator/README.md)      | `/active_target` を追従して `/cmd_vel` を出力する時間最適制御ノード。試験用 `robot_simulator` も同梱 |
+| [`src/drive_mode_manager`](src/drive_mode_manager/README.md) | 自律走行指令と手動走行指令を切り替え、最終 `/cmd_vel` と走行モード状態を配信 |
 | [`src/obstacle_monitor`](src/obstacle_monitor/README.md)    | `/scan` を解析して `/obstacle_avoidance_hint` を配信。`/sensor_viewer` への可視化も提供 |
 
 ### 認識・監視
@@ -62,7 +63,8 @@ network_access = true
 Python パッケージ群で使用する pip 依存モジュールは、[`requirements.txt`](requirements.txt) にまとめている。
 対象は `obstacle_monitor`, `robot_console`, `robot_navigator`, `route_follower`,
 `route_manager`, `route_planner`, `yolo_detector` と、それらが利用する
-`route_msgs`。
+`route_msgs`。`drive_mode_manager` の GUI 依存である `python3-pyqt5` は
+pip ではなく apt / rosdep で導入する。
 
 ROS 2 の環境を読み込んだうえで、ワークスペース直下で以下を実行する。
 
@@ -107,7 +109,14 @@ ros2 launch rtk_gps_um982 rtk_gps_um982.launch.py
 
 # yp-spur ロボット制御 (別端末で ypspur-coordinator も起動)
 ypspur-coordinator -d /dev/ttyACM0 -p ~/spur/my_robot.param
-ros2 launch ypspur_ros2 ypspur_ros2.launch.py
+ros2 launch ypspur_ros2 ypspur_ros2.launch.py cmd_vel_topic:=/cmd_vel
+
+# coordinator も launch から起動する場合
+ros2 launch ypspur_ros2 ypspur_ros2.launch.py \
+  start_coordinator:=true \
+  coordinator_device:=/dev/ttyACM0 \
+  coordinator_param:=<robot_param_file> \
+  cmd_vel_topic:=/cmd_vel
 ```
 
 ### 経路計画・追従
@@ -133,10 +142,50 @@ ros2 launch route_follower route_follower.launch.py \
 ros2 launch robot_navigator robot_navigator.launch.py \
   obstacle_hint_topic:=/obstacle_avoidance_hint cmd_vel_topic:=/cmd_vel
 
+# 自律/手動の走行指令 mux と専用状態 GUI
+ros2 launch drive_mode_manager drive_mode_manager.launch.py
+
 # 障害物監視 (LiDAR 入力 → /obstacle_avoidance_hint)
 ros2 launch obstacle_monitor obstacle_monitor.launch.py \
   scan_topic:=/scan hint_topic:=/obstacle_avoidance_hint
 ```
+
+### 手動走行のみ
+
+手動走行だけを行う場合は、`drive_mode_manager` が Joy 入力から最終 `/cmd_vel` を publish し、
+`ypspur_ros2` が `/cmd_vel` を車体へ渡す構成にする。
+
+coordinator を別端末で手動起動する場合:
+
+```bash
+# 端末 1: yp-spur coordinator
+ypspur-coordinator -d /dev/ttyACM0 -p ~/spur/my_robot.param
+
+# 端末 2: /cmd_vel を購読して車体へ速度指令を渡す
+ros2 launch ypspur_ros2 ypspur_ros2.launch.py cmd_vel_topic:=/cmd_vel
+
+# 端末 3: joy_node を起動し、Joy 入力から最終 /cmd_vel を publish
+ros2 launch drive_mode_manager drive_mode_manager.launch.py
+```
+
+coordinator も `ypspur_ros2.launch.py` から起動する場合:
+
+```bash
+# 端末 1: coordinator と ypspur_node を起動
+ros2 launch ypspur_ros2 ypspur_ros2.launch.py \
+  start_coordinator:=true \
+  coordinator_device:=/dev/ttyACM0 \
+  coordinator_param:=<robot_param_file> \
+  cmd_vel_topic:=/cmd_vel
+
+# 端末 2: joy_node を起動し、Joy 入力から最終 /cmd_vel を publish
+ros2 launch drive_mode_manager drive_mode_manager.launch.py
+```
+
+起動直後は `drive_mode_manager` の既定モードが `autonomous` のため、Joy 入力で L1 と PS button
+を長押しして手動走行へ切り替える。GUI が不要な端末では
+`ros2 launch drive_mode_manager drive_mode_manager.launch.py start_gui:=false` を使う。
+開発用 Joy simulator を使う場合は `joy_input:=ps3_joy_sim` を追加する。
 
 ### 認識・GUI
 ```bash

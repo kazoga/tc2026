@@ -78,7 +78,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
   - 状態インジケータ（停止／起動中／エラー）。
   - パラメータファイル `Combobox`（既定は `params/default.yaml`。表示はファイル名のみで、内部では実パスへマッピングする）。
   - `drive_mode_manager` カードでは launch 引数 `start_gui` を任意指定できる。
-    `manual_teleop_node` と `drive_cmd_mux_node` は常に同時起動し、画面確認時だけ `start_gui=true` を指定する。
+    `joy_input` で `joy_node` または `ps3_joy_sim` を選択し、`manual_teleop_node` と `drive_cmd_mux_node` は常に同時起動する。画面確認時だけ `start_gui=true` を指定する。
   - `robot_navigator` カードでは launch 引数 `cmd_vel_topic` と `odom_topic` を任意指定できる。
     route stack 評価では `cmd_vel_topic=/cmd_vel/autonomous`、`odom_topic=/ypspur_ros/odom` を渡す。
   - `robot_navigator`、`obstacle_monitor`、認識系カードでは「Simulator 同時起動」
@@ -223,8 +223,8 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
   併せて取り込む。`param_package` が指定されている場合は、launch 所属パッケージとは別に
   パラメータ所有パッケージも探索対象に含める。
 - route stack 連携に関わる既定プロファイルは以下とする。
-  - `drive_mode_manager`: `drive_mode_manager.launch.py` を起動し、`start_gui` を user argument として受け付ける。
-    `manual_teleop_node` と `drive_cmd_mux_node` は個別停止せず、常に同時起動する。
+  - `drive_mode_manager`: `drive_mode_manager.launch.py` を起動し、`start_gui` と `joy_input` を user argument として受け付ける。
+    `joy_input` は `joy_node` または `ps3_joy_sim` を指定する。`manual_teleop_node` と `drive_cmd_mux_node` は個別停止せず、常に同時起動する。
   - `robot_navigator`: `robot_navigator.launch.py` を起動し、`cmd_vel_topic` と `odom_topic` を
     user argument として受け付ける。simulator 有効時は `robot_simulator.launch.py` を併起動する。
 - 認識系の既定プロファイルは以下とする。
@@ -254,7 +254,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 
 | Profile | 主な override | 理由 |
 | --- | --- | --- |
-| `drive_mode_manager` | `start_gui=false` | manual teleop と mux を同時起動し、自律 cmd と最終 `/cmd_vel` の mux を検証対象に含める。headless 評価では GUI を起動しない |
+| `drive_mode_manager` | `start_gui=false`, `joy_input=joy_node` | `joy_node`、manual teleop、mux を同時起動し、自律 cmd と最終 `/cmd_vel` の mux を検証対象に含める。headless 評価では GUI を起動しない |
 | `robot_navigator` | `cmd_vel_topic=/cmd_vel/autonomous`, `odom_topic=/ypspur_ros/odom` | `drive_cmd_mux_node` が最終 `/cmd_vel` を publish する構成に合わせる |
 
 headless monitor は `/cmd_vel` に加え、`/cmd_vel/autonomous` と `/drive_mode_status` を購読し、

@@ -39,6 +39,7 @@ setup(
             'manual_teleop_node = drive_mode_manager.manual_teleop_node:main',
             'drive_cmd_mux_node = drive_mode_manager.drive_cmd_mux_node:main',
             'drive_status_gui_node = drive_mode_manager.drive_status_gui_node:main',
+            'ps3_joy_sim_node = drive_mode_manager.ps3_joy_sim_node:main',
         ],
     },
 )

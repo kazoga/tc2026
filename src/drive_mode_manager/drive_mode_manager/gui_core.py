@@ -115,28 +115,141 @@ class DriveStatusGuiCore:
         turn_preview_seconds: float,
         max_linear_x: float,
         max_angular_z: float,
+        linear_scale: float = 1.2,
+        angular_scale: float = 1.5,
+        deadzone: float = 0.05,
+        linear_axis_invert: bool = False,
+        angular_axis_invert: bool = False,
     ) -> str:
         """復帰予定 cmd から進行予定方向と警告文を作る。"""
 
-        yaw = angular_z * max(0.0, turn_preview_seconds)
-        abs_yaw = abs(yaw)
-        if abs_yaw <= math.radians(45.0):
-            direction = '直進'
-        elif yaw > 0.0:
-            direction = '左旋回'
-        else:
-            direction = '右旋回'
+        _ = turn_preview_seconds
+        _ = max_linear_x
+        _ = max_angular_z
+        angle_deg = DriveStatusGuiCore.direction_angle_deg_from_cmd_vel(
+            linear_x=linear_x,
+            angular_z=angular_z,
+            linear_scale=linear_scale,
+            angular_scale=angular_scale,
+            deadzone=deadzone,
+            linear_axis_invert=linear_axis_invert,
+            angular_axis_invert=angular_axis_invert,
+        )
+        abs_angle = abs(angle_deg)
+        if abs_angle <= 15.0:
+            return '前進'
+        if abs_angle <= 90.0:
+            direction = '右旋回' if angle_deg > 0.0 else '左旋回'
+            if abs_angle >= 45.0:
+                return direction + '\n急旋回注意！'
+            return direction
+        return '後進\n後方注意！'
 
-        warnings = []
-        if abs(linear_x) > max(0.0, max_linear_x):
-            warnings.append('速度注意！')
-        if abs(angular_z) > max(0.0, max_angular_z) or abs_yaw > math.radians(90.0):
-            warnings.append('急旋回注意！')
-        if linear_x < 0.0:
-            warnings.append('後退注意！')
-        if warnings:
-            return direction + '\n' + '\n'.join(warnings)
-        return direction
+    @staticmethod
+    def cmd_vel_to_stick_point(
+        linear_x: float,
+        angular_z: float,
+        linear_scale: float = 1.2,
+        angular_scale: float = 1.5,
+        deadzone: float = 0.05,
+        linear_axis_invert: bool = False,
+        angular_axis_invert: bool = False,
+    ) -> tuple[float, float]:
+        """cmd_vel から ps3_joy_sim 相当の stick 座標を逆算する。"""
+
+        stick_y = DriveStatusGuiCore._inverse_scaled_axis(linear_x, linear_scale)
+        stick_x = DriveStatusGuiCore._inverse_scaled_axis(angular_z, angular_scale)
+        if linear_axis_invert:
+            stick_y *= -1.0
+        if angular_axis_invert:
+            stick_x *= -1.0
+        if abs(stick_y) < max(0.0, deadzone):
+            stick_y = 0.0
+        if abs(stick_x) < max(0.0, deadzone):
+            stick_x = 0.0
+
+        norm = math.hypot(stick_x, stick_y)
+        if norm > 1.0:
+            stick_x /= norm
+            stick_y /= norm
+        return stick_x, stick_y
+
+    @staticmethod
+    def direction_vector_from_cmd_vel(
+        linear_x: float,
+        angular_z: float,
+        linear_scale: float = 1.2,
+        angular_scale: float = 1.5,
+        deadzone: float = 0.05,
+        linear_axis_invert: bool = False,
+        angular_axis_invert: bool = False,
+    ) -> tuple[float, float]:
+        """cmd_vel から画面上の矢印方向ベクトルを算出する。"""
+
+        stick_x, stick_y = DriveStatusGuiCore.cmd_vel_to_stick_point(
+            linear_x=linear_x,
+            angular_z=angular_z,
+            linear_scale=linear_scale,
+            angular_scale=angular_scale,
+            deadzone=deadzone,
+            linear_axis_invert=linear_axis_invert,
+            angular_axis_invert=angular_axis_invert,
+        )
+        norm = math.hypot(stick_x, stick_y)
+        if norm <= 0.0:
+            return 0.0, -1.0
+        return stick_x / norm, -stick_y / norm
+
+    @staticmethod
+    def direction_angle_from_cmd_vel(
+        linear_x: float,
+        angular_z: float,
+        linear_scale: float = 1.2,
+        angular_scale: float = 1.5,
+        deadzone: float = 0.05,
+        linear_axis_invert: bool = False,
+        angular_axis_invert: bool = False,
+    ) -> float:
+        """cmd_vel に対応する画面上の矢印角度を rad で返す。"""
+
+        return math.radians(DriveStatusGuiCore.direction_angle_deg_from_cmd_vel(
+            linear_x=linear_x,
+            angular_z=angular_z,
+            linear_scale=linear_scale,
+            angular_scale=angular_scale,
+            deadzone=deadzone,
+            linear_axis_invert=linear_axis_invert,
+            angular_axis_invert=angular_axis_invert,
+        ))
+
+    @staticmethod
+    def direction_angle_deg_from_cmd_vel(
+        linear_x: float,
+        angular_z: float,
+        linear_scale: float = 1.2,
+        angular_scale: float = 1.5,
+        deadzone: float = 0.05,
+        linear_axis_invert: bool = False,
+        angular_axis_invert: bool = False,
+    ) -> float:
+        """上方向を 0 度、右方向を正として矢印角度を返す。"""
+
+        dx, dy = DriveStatusGuiCore.direction_vector_from_cmd_vel(
+            linear_x=linear_x,
+            angular_z=angular_z,
+            linear_scale=linear_scale,
+            angular_scale=angular_scale,
+            deadzone=deadzone,
+            linear_axis_invert=linear_axis_invert,
+            angular_axis_invert=angular_axis_invert,
+        )
+        return math.degrees(math.atan2(dx, -dy))
+
+    @staticmethod
+    def _inverse_scaled_axis(value: float, scale: float) -> float:
+        if not math.isfinite(value) or not math.isfinite(scale) or abs(scale) <= 0.0:
+            return 0.0
+        return max(-1.0, min(1.0, value / scale))
 
     @staticmethod
     def _source_label(source: int) -> str:

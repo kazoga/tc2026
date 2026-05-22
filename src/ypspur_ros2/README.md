@@ -5,10 +5,12 @@
 
 ## 主要トピック
 
-| Topic       | Type                          | 方向 | 説明                                  |
-| ----------- | ----------------------------- | ---- | ------------------------------------- |
-| `cmd_vel`   | `geometry_msgs/msg/Twist`     | sub  | `YPSpur_vel(linear.x, angular.z)` を呼ぶ |
-| `odom`      | `nav_msgs/msg/Odometry`       | pub  | `YPSpur_get_pos` / `YPSpur_get_vel` を 50Hz で配信 |
+| Topic | Type | 方向 | 説明 |
+| --- | --- | --- | --- |
+| `cmd_vel` | `geometry_msgs/msg/Twist` | sub | `YPSpur_vel(linear.x, angular.z)` を呼ぶ。既定では `drive_mode_manager` が publish する `/cmd_vel` と接続する |
+| `odom` | `nav_msgs/msg/Odometry` | pub | `YPSpur_get_pos` / `YPSpur_get_vel` を 50Hz で配信 |
+
+`ypspur_node` は相対 topic `cmd_vel` を購読し、相対 topic `odom` を publish します。namespace なしで `drive_mode_manager.launch.py` と同時起動した場合、`drive_cmd_mux_node` の最終出力 `/cmd_vel` がそのまま `ypspur_node` に入ります。topic 名を変える場合は launch 引数 `cmd_vel_topic` と `odom_topic` を指定します。
 
 ## Issue #245 への対処
 
@@ -60,8 +62,25 @@ ypspur-coordinator -d /dev/ttyACM0 -p ~/spur/my_robot.param
 
 ### 2. ROS ノードを起動
 
+coordinator を別端末で手動起動している場合は、従来通り `ypspur_node` だけを起動します。
+
 ```bash
 ros2 launch ypspur_ros2 ypspur_ros2.launch.py
+```
+
+`ypspur-coordinator` も launch から同時起動する場合は、`start_coordinator:=true` と robot parameter file を指定します。この場合、`ypspur_node` は coordinator 初期化待ちとして 2 秒遅延起動します。
+
+```bash
+ros2 launch ypspur_ros2 ypspur_ros2.launch.py \
+  start_coordinator:=true \
+  coordinator_device:=/dev/ttyACM0 \
+  coordinator_param:=<robot_param_file>
+```
+
+`drive_mode_manager` と組み合わせる場合、既定では `drive_mode_manager` の `/cmd_vel` と `ypspur_node` の `cmd_vel` が接続されます。明示する場合は以下のようにします。
+
+```bash
+ros2 launch ypspur_ros2 ypspur_ros2.launch.py cmd_vel_topic:=/cmd_vel odom_topic:=/odom
 ```
 
 ### 3. 動作確認
@@ -90,6 +109,11 @@ cmd_vel が `cmd_vel_timeout_s` (既定 0.5 秒) 入らないとロボットは�
 | `ipc.port`              | int     | `54321`     | socket モード時のポート                             |
 | `velocity_max.linear`   | double  | `1.0`       | 受信 linear.x のクリップ閾値 (m/s, ±対称)           |
 | `velocity_max.angular`  | double  | `1.5`       | 受信 angular.z のクリップ閾値 (rad/s, ±対称)        |
+| launch `cmd_vel_topic` | string | `cmd_vel` | `cmd_vel` の remap 先。`drive_mode_manager` と接続する場合は既定または `/cmd_vel` |
+| launch `odom_topic` | string | `odom` | `odom` の remap 先 |
+| launch `start_coordinator` | bool | `false` | true の場合、launch から `ypspur-coordinator` を同時起動 |
+| launch `coordinator_device` | string | `/dev/ttyACM0` | `ypspur-coordinator -d` に渡す device path |
+| launch `coordinator_param` | string | `""` | `ypspur-coordinator -p` に渡す robot parameter file path |
 
 ## トラブルシューティング
 

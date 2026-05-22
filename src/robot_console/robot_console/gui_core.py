@@ -1383,7 +1383,7 @@ def default_launch_profiles() -> List[NodeLaunchProfile]:
             display_name='Drive Mode Manager',
             package='drive_mode_manager',
             launch_file='drive_mode_manager.launch.py',
-            user_arguments=['start_gui'],
+            user_arguments=['start_gui', 'joy_input'],
         ),
         NodeLaunchProfile(
             profile_id='robot_navigator',

@@ -241,6 +241,7 @@ class HeadlessRouteStackEvaluator:
         core.update_launch_override("route_manager", "start_label", self._config.start_label)
         core.update_launch_override("route_manager", "goal_label", self._config.goal_label)
         core.update_launch_override("drive_mode_manager", "start_gui", "false")
+        core.update_launch_override("drive_mode_manager", "joy_input", "joy_node")
         core.update_launch_override("robot_navigator", "cmd_vel_topic", "/cmd_vel/autonomous")
         core.update_launch_override("robot_navigator", "odom_topic", "/ypspur_ros/odom")
         core.update_simulator_enabled("robot_navigator", self._config.simulator)

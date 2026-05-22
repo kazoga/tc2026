@@ -119,6 +119,11 @@ class DriveStatusWindow:  # pragma: no cover - GUI は手動/統合確認で扱�
         manual_to_auto_l1_released_s: float,
         max_autonomous_resume_linear_x: float,
         max_autonomous_resume_angular_z: float,
+        direction_linear_scale: float,
+        direction_angular_scale: float,
+        direction_deadzone: float,
+        direction_linear_axis_invert: bool,
+        direction_angular_axis_invert: bool,
     ) -> None:
         from PyQt5 import QtCore, QtGui, QtWidgets
 
@@ -129,6 +134,11 @@ class DriveStatusWindow:  # pragma: no cover - GUI は手動/統合確認で扱�
         self._manual_to_auto_l1_released_s = max(0.0, manual_to_auto_l1_released_s)
         self._max_autonomous_resume_linear_x = max(0.0, max_autonomous_resume_linear_x)
         self._max_autonomous_resume_angular_z = max(0.0, max_autonomous_resume_angular_z)
+        self._direction_linear_scale = max(0.0, direction_linear_scale)
+        self._direction_angular_scale = max(0.0, direction_angular_scale)
+        self._direction_deadzone = max(0.0, direction_deadzone)
+        self._direction_linear_axis_invert = direction_linear_axis_invert
+        self._direction_angular_axis_invert = direction_angular_axis_invert
         self._app = QtWidgets.QApplication(sys.argv)
         self._window = QtWidgets.QMainWindow()
         self._window.setWindowTitle('Drive Mode Status')
@@ -293,7 +303,7 @@ class DriveStatusWindow:  # pragma: no cover - GUI は手動/統合確認で扱�
         """速度値と進行方向矢印を同じレイアウトで描画する。"""
 
         self._add_text(title, x, y0 + 38, 32, '#d8dee9', bold=True, max_width=width)
-        self._add_direction_arrow(x + 72, y0 + 158, 44, angular_z, '#ffffff')
+        self._add_direction_arrow(x + 72, y0 + 158, 44, linear_x, angular_z, '#ffffff')
         self._add_text(
             f'{linear_x:+.1f} m/s',
             x + 145,
@@ -313,6 +323,11 @@ class DriveStatusWindow:  # pragma: no cover - GUI は手動/統合確認で扱�
             turn_preview_seconds=self._turn_preview_seconds,
             max_linear_x=self._max_autonomous_resume_linear_x,
             max_angular_z=self._max_autonomous_resume_angular_z,
+            linear_scale=self._direction_linear_scale,
+            angular_scale=self._direction_angular_scale,
+            deadzone=self._direction_deadzone,
+            linear_axis_invert=self._direction_linear_axis_invert,
+            angular_axis_invert=self._direction_angular_axis_invert,
         )
 
     def _add_direction_arrow(
@@ -320,15 +335,22 @@ class DriveStatusWindow:  # pragma: no cover - GUI は手動/統合確認で扱�
         center_x: float,
         center_y: float,
         length: float,
+        linear_x: float,
         angular_z: float,
         color: str,
     ) -> None:
-        """角速度から preview 秒後の yaw を求め、進行方向矢印を描画する。"""
+        """cmd_vel を stick 座標へ逆変換し、その方向へ矢印を描画する。"""
 
         QtCore, QtGui, _qtwidgets = self._qt
-        yaw = angular_z * self._turn_preview_seconds
-        dx = -math.sin(yaw)
-        dy = -math.cos(yaw)
+        dx, dy = DriveStatusGuiCore.direction_vector_from_cmd_vel(
+            linear_x=linear_x,
+            angular_z=angular_z,
+            linear_scale=self._direction_linear_scale,
+            angular_scale=self._direction_angular_scale,
+            deadzone=self._direction_deadzone,
+            linear_axis_invert=self._direction_linear_axis_invert,
+            angular_axis_invert=self._direction_angular_axis_invert,
+        )
         nx = -dy
         ny = dx
         tip_x = center_x + dx * length
@@ -462,6 +484,11 @@ def main() -> None:
     node.declare_parameter('manual_to_auto_l1_released_s', 1.0)
     node.declare_parameter('max_autonomous_resume_linear_x', 0.8)
     node.declare_parameter('max_autonomous_resume_angular_z', 1.2)
+    node.declare_parameter('direction_linear_scale', 1.2)
+    node.declare_parameter('direction_angular_scale', 1.5)
+    node.declare_parameter('direction_deadzone', 0.05)
+    node.declare_parameter('direction_linear_axis_invert', False)
+    node.declare_parameter('direction_angular_axis_invert', False)
     main_display_ratio = float(node.get_parameter('main_display_ratio').value)
     turn_preview_seconds = float(node.get_parameter('turn_preview_seconds').value)
     manual_to_auto_l1_released_s = float(node.get_parameter('manual_to_auto_l1_released_s').value)
@@ -471,6 +498,11 @@ def main() -> None:
     max_autonomous_resume_angular_z = float(
         node.get_parameter('max_autonomous_resume_angular_z').value
     )
+    direction_linear_scale = float(node.get_parameter('direction_linear_scale').value)
+    direction_angular_scale = float(node.get_parameter('direction_angular_scale').value)
+    direction_deadzone = float(node.get_parameter('direction_deadzone').value)
+    direction_linear_axis_invert = bool(node.get_parameter('direction_linear_axis_invert').value)
+    direction_angular_axis_invert = bool(node.get_parameter('direction_angular_axis_invert').value)
     executor = MultiThreadedExecutor()
     executor.add_node(node)
     thread = threading.Thread(target=executor.spin, daemon=True)
@@ -482,6 +514,11 @@ def main() -> None:
         manual_to_auto_l1_released_s,
         max_autonomous_resume_linear_x,
         max_autonomous_resume_angular_z,
+        direction_linear_scale,
+        direction_angular_scale,
+        direction_deadzone,
+        direction_linear_axis_invert,
+        direction_angular_axis_invert,
     )
     previous_sigint = signal.getsignal(signal.SIGINT)
     signal.signal(signal.SIGINT, lambda _sig, _frame: window.quit())

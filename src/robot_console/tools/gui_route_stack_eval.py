@@ -92,6 +92,9 @@ class GuiRouteStackEvaluator:
                 "true" if self._show_drive_status_gui else "false",
             )
             self._ui.automation_set_launch_override(
+                "drive_mode_manager", "joy_input", "joy_node"
+            )
+            self._ui.automation_set_launch_override(
                 "robot_navigator", "cmd_vel_topic", "/cmd_vel/autonomous"
             )
             self._ui.automation_set_launch_override(

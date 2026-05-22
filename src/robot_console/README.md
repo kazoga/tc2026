@@ -70,6 +70,7 @@ ros2 launch robot_console robot_console.launch.py \
 ## ノード起動管理
 - プロファイル定義は `config/node_launch_profiles.yaml`（必要に応じて作成）にまとめられ、起動対象・既定パラメータ・シミュレータ有無を記述します。
 - GUI で選択した YAML は `ros2 launch <package> <file> param_file:=<path>` として渡され、`NodeLaunchManager` が `SIGINT → SIGTERM → SIGKILL` の順に安全に停止処理を行います。
+- `Drive Mode Manager` カードでは `start_gui` に加えて `joy_input` を指定できます。既定は `joy_node` で、開発用入力源にする場合は `ps3_joy_sim` を指定します。
 - `Road Blockage Detector` は既定で NCNN 版 YOLO を使い、カードの「PyTorch版YOLOを使用」を
   有効にした場合のみ PyTorch 版 launch へ切り替えます。
 - `Traffic Signal Recognizer` は信号用 PyTorch モデルのみを起動候補とし、NCNN 版への切替は
@@ -104,7 +105,7 @@ ros2 launch robot_console robot_console.launch.py \
   ```
 
   既定では `route_planner` / `route_manager` に `tsukuba.yaml`、`route_follower` /
-  `drive_mode_manager` は `start_gui=false` で manual teleop と mux を同時起動し、`robot_navigator` は
+  `drive_mode_manager` は `start_gui=false` で `joy_node`、manual teleop、mux を同時起動し、`robot_navigator` は
   `cmd_vel_topic=/cmd_vel/autonomous` で起動し、`robot_navigator` の simulator を有効にします。
   評価終了時は `GuiCore.request_stop_all()` 相当の停止処理を行い、各 profile の
   停止状態を出力します。GUI あり評価で専用状態 GUI も起動する場合は
