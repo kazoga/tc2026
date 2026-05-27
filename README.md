@@ -107,57 +107,15 @@ colcon build --symlink-install --packages-select ypspur_ros2
 
 ## 起動例
 
-各パッケージごとに代表的な launch を抜粋。詳細な引数・トピック名は各パッケージ README を参照。
+代表的な運用単位の起動手順を示す。各ノードの詳細な引数、topic、GUI 操作、
+route 設定は各パッケージ README を参照する。
 
-### センサ / アクチュエータドライバ
-```bash
-# RTK GPS ドライバ
-ros2 launch rtk_gps_um982 rtk_gps_um982.launch.py
+### 実機
 
-# yp-spur ロボット制御 (別端末で ypspur-coordinator も起動)
-ypspur-coordinator -d /dev/ttyACM0 -p ~/spur/my_robot.param
-ros2 launch ypspur_ros2 ypspur_ros2.launch.py cmd_vel_topic:=/cmd_vel
+実機では `ypspur-coordinator` と `ypspur_ros2` が `/cmd_vel` を車体へ渡す。
+`drive_mode_manager` または `robot_console` から起動した走行 stack が最終 `/cmd_vel` を publish する。
 
-# coordinator も launch から起動する場合
-ros2 launch ypspur_ros2 ypspur_ros2.launch.py \
-  start_coordinator:=true \
-  coordinator_device:=/dev/ttyACM0 \
-  coordinator_param:=<robot_param_file> \
-  cmd_vel_topic:=/cmd_vel
-```
-
-### 経路計画・追従
-```bash
-# 経路生成サービス (route_planner)
-ros2 launch route_planner route_planner.launch.py
-
-# 経路管理 FSM (route_manager)
-ros2 launch route_manager route_manager.launch.py \
-  start_label:=START goal_label:=GOAL \
-  checkpoint_labels:="P1,P2"
-
-# 経路追従 (route_follower)
-ros2 launch route_follower route_follower.launch.py \
-  arrival_threshold:=0.6 \
-  control_rate_hz:=20.0 \
-  start_immediately:=true
-```
-
-### 走行制御・障害物
-```bash
-# /active_target を追従して /cmd_vel を出力
-ros2 launch robot_navigator robot_navigator.launch.py \
-  obstacle_hint_topic:=/obstacle_avoidance_hint cmd_vel_topic:=/cmd_vel
-
-# 自律/手動の走行指令 mux と専用状態 GUI
-ros2 launch drive_mode_manager drive_mode_manager.launch.py
-
-# 障害物監視 (LiDAR 入力 → /obstacle_avoidance_hint)
-ros2 launch obstacle_monitor obstacle_monitor.launch.py \
-  scan_topic:=/scan hint_topic:=/obstacle_avoidance_hint
-```
-
-### 手動走行のみ
+#### 手動走行のみ
 
 手動走行だけを行う場合は、`drive_mode_manager` が Joy 入力から最終 `/cmd_vel` を publish し、
 `ypspur_ros2` が `/cmd_vel` を車体へ渡す構成にする。
@@ -194,25 +152,67 @@ ros2 launch drive_mode_manager drive_mode_manager.launch.py
 `ros2 launch drive_mode_manager drive_mode_manager.launch.py start_gui:=false` を使う。
 開発用 Joy simulator を使う場合は `joy_input:=ps3_joy_sim` を追加する。
 
-### 認識・GUI
-```bash
-# YOLO 物体検出 (NCNN 版を推奨)
-ros2 launch yolo_detector yolo_ncnn_node.launch.py
+#### 自律走行 / 手動走行
 
-# 運用 GUI ダッシュボード
+自律走行と手動走行を切り替えて運用する場合は、先に実機 driver 側を起動し、
+別端末で `robot_console` を起動する。`robot_console` から route stack と
+`drive_mode_manager` を起動し、必要に応じて Joy 入力で手動介入する。
+
+coordinator を別端末で手動起動する場合:
+
+```bash
+# 端末 1: yp-spur coordinator
+ypspur-coordinator -d /dev/ttyACM0 -p ~/spur/my_robot.param
+
+# 端末 2: /cmd_vel を購読して車体へ速度指令を渡す
+ros2 launch ypspur_ros2 ypspur_ros2.launch.py cmd_vel_topic:=/cmd_vel
+
+# 端末 3: 運用 GUI ダッシュボード
 ros2 launch robot_console robot_console.launch.py
 ```
 
-### シミュレーション
+coordinator も `ypspur_ros2.launch.py` から起動する場合:
+
 ```bash
-# Gazebo GUI 付きで道路 world、robot、bridge、fake AMCL、TF を起動
+# 端末 1: coordinator と ypspur_node を起動
+ros2 launch ypspur_ros2 ypspur_ros2.launch.py \
+  start_coordinator:=true \
+  coordinator_device:=/dev/ttyACM0 \
+  coordinator_param:=<robot_param_file> \
+  cmd_vel_topic:=/cmd_vel
+
+# 端末 2: 運用 GUI ダッシュボード
+ros2 launch robot_console robot_console.launch.py
+```
+
+`robot_console` からは、`route_planner`、`route_manager`、`route_follower`、
+`obstacle_monitor`、`drive_mode_manager`、`robot_navigator` などを起動する。
+`robot_navigator` は自律走行指令を `/cmd_vel/autonomous` へ publish し、
+`drive_mode_manager` が自律走行指令と Joy 由来の手動走行指令を切り替えて最終 `/cmd_vel` を publish する。
+実機運用時の起動カード、パラメータ、操作手順の詳細は
+[`src/robot_console/README.md`](src/robot_console/README.md) を参照する。
+
+### シミュレーション
+
+#### 障害物回避シミュレーション
+
+Gazebo GUI 付きで道路 world、robot、bridge、fake AMCL、TF を起動する。
+`obstacle_route_sim` は Gazebo 上の真値 pose から `/amcl_pose` を配信するため、経路追従側は
+自己位置推定誤差なしの前提で結合確認できる。
+
+```bash
+# 端末 1: Gazebo world と robot を起動
 ros2 launch obstacle_route_sim sim_obstacle_route.launch.py \
   road_type:=straight \
   road_width:=5.0 \
   enable_pylons:=false \
   start_gazebo_gui:=true
+```
 
-# pylon 障害物ありで起動
+pylon 障害物ありで起動する場合:
+
+```bash
+# 端末 1: pylon 障害物ありで Gazebo world と robot を起動
 ros2 launch obstacle_route_sim sim_obstacle_route.launch.py \
   road_type:=crank \
   road_width:=5.0 \
@@ -221,10 +221,19 @@ ros2 launch obstacle_route_sim sim_obstacle_route.launch.py \
   start_gazebo_gui:=true
 ```
 
-`obstacle_route_sim` は Gazebo 上の真値 pose から `/amcl_pose` を配信するため、経路追従側は
-自己位置推定誤差なしの前提で結合確認できる。pylon ありで障害物回避を確認する場合は、
-route stack 側で `obstacle_monitor` も起動する。詳細な route id、goal label、robot_console
-からの確認手順は [`src/obstacle_route_sim/README.md`](src/obstacle_route_sim/README.md) を参照。
+Gazebo 起動後、別端末で `robot_console` を起動する。
+
+```bash
+# 端末 2: 運用 GUI ダッシュボード
+ros2 launch robot_console robot_console.launch.py
+```
+
+`robot_console` からは、`route_planner`、`route_manager`、`route_follower`、
+`obstacle_monitor`、`drive_mode_manager`、`robot_navigator` を起動する。
+pylon ありで障害物回避を確認する場合は、`obstacle_monitor` も起動し、LiDAR 入力から
+`/obstacle_avoidance_hint` を publish する構成にする。route id、goal label、
+起動カードの選択、GUI 自動操作による確認手順の詳細は
+[`src/obstacle_route_sim/README.md`](src/obstacle_route_sim/README.md) を参照する。
 
 ## 外部依存 (submodule)
 
