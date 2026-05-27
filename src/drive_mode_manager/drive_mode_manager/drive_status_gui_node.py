@@ -488,7 +488,7 @@ def main() -> None:
     node.declare_parameter('direction_angular_scale', 1.5)
     node.declare_parameter('direction_deadzone', 0.05)
     node.declare_parameter('direction_linear_axis_invert', False)
-    node.declare_parameter('direction_angular_axis_invert', False)
+    node.declare_parameter('direction_angular_axis_invert', True)
     main_display_ratio = float(node.get_parameter('main_display_ratio').value)
     turn_preview_seconds = float(node.get_parameter('turn_preview_seconds').value)
     manual_to_auto_l1_released_s = float(node.get_parameter('manual_to_auto_l1_released_s').value)

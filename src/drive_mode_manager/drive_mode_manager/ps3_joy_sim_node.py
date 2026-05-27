@@ -107,6 +107,7 @@ class Ps3JoySimRosNode(Node):
         self.declare_parameter('num_buttons', 17)
         self.declare_parameter('left_stick_x_axis', 0)
         self.declare_parameter('left_stick_y_axis', 1)
+        self.declare_parameter('invert_left_stick_x', True)
         self.declare_parameter('invert_left_stick_y', False)
         self.declare_parameter('stick_step', 0.1)
         self.declare_parameter('l1_button_index', 4)
@@ -129,6 +130,7 @@ class Ps3JoySimRosNode(Node):
             num_buttons=int(self.get_parameter('num_buttons').value),
             left_stick_x_axis=int(self.get_parameter('left_stick_x_axis').value),
             left_stick_y_axis=int(self.get_parameter('left_stick_y_axis').value),
+            invert_left_stick_x=bool(self.get_parameter('invert_left_stick_x').value),
             invert_left_stick_y=bool(self.get_parameter('invert_left_stick_y').value),
             stick_step=float(self.get_parameter('stick_step').value),
             l1_button_index=int(self.get_parameter('l1_button_index').value),

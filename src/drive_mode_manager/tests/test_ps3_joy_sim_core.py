@@ -27,10 +27,27 @@ def test_stick_keys_accumulate_axis_values() -> None:
     stick_x, stick_y = core.update_stick_for_key(stick_x, stick_y, 'w')
     state = core.compute(set(), stick_x, stick_y)
 
-    assert math.isclose(state.axes[0], 0.4)
+    assert math.isclose(state.axes[0], -0.4)
     assert math.isclose(state.axes[1], 0.2)
     assert math.isclose(state.left_stick_x, 0.4)
     assert math.isclose(state.left_stick_y, 0.2)
+
+
+def test_left_stick_x_invert_can_be_disabled() -> None:
+    core = Ps3JoySimCore(
+        Ps3JoySimConfig(
+            invert_left_stick_x=False,
+            stick_step=0.2,
+            normalize_diagonal_stick=False,
+        )
+    )
+
+    stick_x, stick_y = core.update_stick_for_key(0.0, 0.0, 'd')
+    state = core.compute(set(), stick_x, stick_y)
+
+    assert math.isclose(state.axes[0], 0.2)
+    assert math.isclose(state.left_stick_x, 0.2)
+    assert math.isclose(state.preview_angular_z, 0.3)
 
 
 def test_stick_values_can_move_back_toward_neutral() -> None:
@@ -44,7 +61,7 @@ def test_stick_values_can_move_back_toward_neutral() -> None:
     stick_x, stick_y = core.update_stick_for_key(stick_x, stick_y, 's')
     state = core.compute(set(), stick_x, stick_y)
 
-    assert math.isclose(state.axes[0], 0.25)
+    assert math.isclose(state.axes[0], -0.25)
     assert math.isclose(state.axes[1], 0.0)
 
 
@@ -57,7 +74,7 @@ def test_stick_values_are_clamped() -> None:
         stick_x, stick_y = core.update_stick_for_key(stick_x, stick_y, 'w')
     state = core.compute(set(), stick_x, stick_y)
 
-    assert math.isclose(state.axes[0], 1.0)
+    assert math.isclose(state.axes[0], -1.0)
     assert math.isclose(state.axes[1], 1.0)
 
 
@@ -68,7 +85,7 @@ def test_left_stick_y_can_be_inverted() -> None:
     state = core.compute(set(), stick_x, stick_y)
 
     assert math.isclose(state.axes[1], -0.1)
-    assert math.isclose(state.left_stick_y, -0.1)
+    assert math.isclose(state.left_stick_y, 0.1)
 
 
 def test_normalize_diagonal_stick_limits_norm_to_one() -> None:
@@ -124,7 +141,7 @@ def test_l1_ps_right_combination_is_represented_in_core() -> None:
 
     assert state.buttons[4] == 1
     assert state.buttons[16] == 1
-    assert math.isclose(state.axes[0], 0.1)
+    assert math.isclose(state.axes[0], -0.1)
     assert math.isclose(state.left_stick_x, 0.1)
 
 
@@ -137,7 +154,7 @@ def test_preview_cmd_vel_matches_manual_teleop_defaults() -> None:
     state = core.compute({'l'}, stick_x, stick_y)
 
     assert math.isclose(state.preview_linear_x, 0.24)
-    assert math.isclose(state.preview_angular_z, 0.3)
+    assert math.isclose(state.preview_angular_z, -0.3)
 
 
 def test_empty_qt_text_falls_back_to_key_code_for_right_input() -> None:

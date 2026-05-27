@@ -42,9 +42,17 @@ import matplotlib
 if hasattr(matplotlib, "use"):
     matplotlib.use("Agg", force=True)
 import matplotlib.pyplot as plt
-import japanize_matplotlib
-import networkx as nx
 import numpy as np
+
+try:
+    import networkx as nx
+except ImportError:
+    nx = None
+
+try:
+    import japanize_matplotlib  # type: ignore  # noqa: F401
+except ImportError:
+    japanize_matplotlib = None
 
 try:
     from .latlon_to_pixel_mapper import latlon_to_pixel
@@ -319,6 +327,8 @@ def solve_variable_route(
     - Graph オブジェクトや tupleキー版の dist_matrix/path_table は戻り値に含めない。
     - 地図への重畳描画は :func:`render_route_on_map` など別関数で必要に応じて実行する。
     """
+    if nx is None:
+        raise ImportError("networkx is required for variable route solving")
     if len(checkpoints) < 1:
         raise ValueError("checkpoints must contain at least one node")
 

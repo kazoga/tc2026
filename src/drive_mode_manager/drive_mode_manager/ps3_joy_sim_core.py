@@ -38,6 +38,7 @@ class Ps3JoySimConfig:
     num_buttons: int = 17
     left_stick_x_axis: int = 0
     left_stick_y_axis: int = 1
+    invert_left_stick_x: bool = True
     invert_left_stick_y: bool = False
     stick_step: float = 0.1
     l1_button_index: int = 4
@@ -104,28 +105,34 @@ class Ps3JoySimCore:
         axes = [0.0] * max(0, self._config.num_axes)
         buttons = [0] * max(0, self._config.num_buttons)
 
-        stick_x = self._clamp_axis(stick_x)
-        stick_y = self._clamp_axis(stick_y)
+        display_stick_x = self._clamp_axis(stick_x)
+        display_stick_y = self._clamp_axis(stick_y)
+        joy_stick_x = -display_stick_x if self._config.invert_left_stick_x else display_stick_x
+        joy_stick_y = display_stick_y
         if self._config.invert_left_stick_y:
-            stick_y *= -1.0
+            joy_stick_y *= -1.0
         if self._config.normalize_diagonal_stick:
-            stick_x, stick_y = self._normalize_diagonal(stick_x, stick_y)
+            joy_stick_x, joy_stick_y = self._normalize_diagonal(joy_stick_x, joy_stick_y)
+            display_stick_x, display_stick_y = self._normalize_diagonal(
+                display_stick_x,
+                display_stick_y,
+            )
 
-        self._write_axis(axes, self._config.left_stick_x_axis, stick_x)
-        self._write_axis(axes, self._config.left_stick_y_axis, stick_y)
+        self._write_axis(axes, self._config.left_stick_x_axis, joy_stick_x)
+        self._write_axis(axes, self._config.left_stick_y_axis, joy_stick_y)
 
         l1_pressed = self._config.key_l1.lower() in keys
         ps_pressed = self._config.key_ps.lower() in keys
         self._write_button(buttons, self._config.l1_button_index, l1_pressed)
         self._write_button(buttons, self._config.ps_button_index, ps_pressed)
 
-        preview_linear_x, preview_angular_z = self._preview_cmd_vel(stick_x, stick_y)
+        preview_linear_x, preview_angular_z = self._preview_cmd_vel(joy_stick_x, joy_stick_y)
 
         return Ps3JoyState(
             axes=tuple(axes),
             buttons=tuple(buttons),
-            left_stick_x=stick_x,
-            left_stick_y=stick_y,
+            left_stick_x=display_stick_x,
+            left_stick_y=display_stick_y,
             l1_pressed=l1_pressed,
             ps_pressed=ps_pressed,
             preview_linear_x=preview_linear_x,

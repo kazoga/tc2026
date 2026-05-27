@@ -147,7 +147,7 @@ ros2 launch drive_mode_manager ps3_joy_sim.launch.py
 | `manual_teleop_node` | `linear_axis`, `angular_axis`, `linear_scale`, `angular_scale`, `enable_button`, `joy_timeout_s`, `publish_rate_hz` |
 | `drive_cmd_mux_node` | `initial_mode`, `manual_transition_trigger`, `manual_transition_hold_s`, `manual_to_auto_l1_released_s`, `auto_resume_delay_s`, `autonomous_cmd_timeout_s`, `manual_cmd_timeout_s`, `l1_button_index`, `ps_button_index` |
 | `drive_status_gui_node` | `main_display_ratio`, `direction_linear_scale`, `direction_angular_scale`, `direction_deadzone`, `direction_linear_axis_invert`, `direction_angular_axis_invert`, `turn_preview_seconds` |
-| `ps3_joy_sim_node` | `joy_topic`, `publish_rate_hz`, `num_axes`, `num_buttons`, key bind 関連パラメータ |
+| `ps3_joy_sim_node` | `joy_topic`, `publish_rate_hz`, `num_axes`, `num_buttons`, `invert_left_stick_x`, key bind 関連パラメータ |
 
 ## 依存関係
 

@@ -26,6 +26,11 @@ ROS 2 Jazzy ワークスペース。
 | [`src/drive_mode_manager`](src/drive_mode_manager/README.md) | 自律走行指令と手動走行指令を切り替え、最終 `/cmd_vel` と走行モード状態を配信 |
 | [`src/obstacle_monitor`](src/obstacle_monitor/README.md)    | `/scan` を解析して `/obstacle_avoidance_hint` を配信。`/sensor_viewer` への可視化も提供 |
 
+### シミュレーション
+| パッケージ                                                  | 役割                                                                 |
+| ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| [`src/obstacle_route_sim`](src/obstacle_route_sim/README.md) | Gazebo Harmonic 上で道路 world、差動二輪ロボット、LiDAR、pylon 障害物を起動し、route stack の結合動作確認を行う |
+
 ### 認識・監視
 | パッケージ                                                  | 役割                                                                 |
 | ----------------------------------------------------------- | -------------------------------------------------------------------- |
@@ -39,6 +44,8 @@ ROS 2 Jazzy ワークスペース。
 
 - Ubuntu 24.04
 - ROS 2 Jazzy
+- Gazebo Harmonic
+- `ros_gz_sim`, `ros_gz_bridge`, `ros_gz_interfaces`
 - Python 3
 - (パッケージごとの追加要件は各 README を参照)
 
@@ -62,9 +69,9 @@ network_access = true
 
 Python パッケージ群で使用する pip 依存モジュールは、[`requirements.txt`](requirements.txt) にまとめている。
 対象は `obstacle_monitor`, `robot_console`, `robot_navigator`, `route_follower`,
-`route_manager`, `route_planner`, `yolo_detector` と、それらが利用する
-`route_msgs`。`drive_mode_manager` の GUI 依存である `python3-pyqt5` は
-pip ではなく apt / rosdep で導入する。
+`route_manager`, `route_planner`, `obstacle_route_sim`, `yolo_detector` と、それらが利用する
+`route_msgs`。`drive_mode_manager` の GUI 依存である `python3-pyqt5` と、
+`obstacle_route_sim` の Gazebo / ros_gz 依存は pip ではなく apt / rosdep で導入する。
 
 ROS 2 の環境を読み込んだうえで、ワークスペース直下で以下を実行する。
 
@@ -195,6 +202,29 @@ ros2 launch yolo_detector yolo_ncnn_node.launch.py
 # 運用 GUI ダッシュボード
 ros2 launch robot_console robot_console.launch.py
 ```
+
+### シミュレーション
+```bash
+# Gazebo GUI 付きで道路 world、robot、bridge、fake AMCL、TF を起動
+ros2 launch obstacle_route_sim sim_obstacle_route.launch.py \
+  road_type:=straight \
+  road_width:=5.0 \
+  enable_pylons:=false \
+  start_gazebo_gui:=true
+
+# pylon 障害物ありで起動
+ros2 launch obstacle_route_sim sim_obstacle_route.launch.py \
+  road_type:=crank \
+  road_width:=5.0 \
+  enable_pylons:=true \
+  pylon_seed:=0 \
+  start_gazebo_gui:=true
+```
+
+`obstacle_route_sim` は Gazebo 上の真値 pose から `/amcl_pose` を配信するため、経路追従側は
+自己位置推定誤差なしの前提で結合確認できる。pylon ありで障害物回避を確認する場合は、
+route stack 側で `obstacle_monitor` も起動する。詳細な route id、goal label、robot_console
+からの確認手順は [`src/obstacle_route_sim/README.md`](src/obstacle_route_sim/README.md) を参照。
 
 ## 外部依存 (submodule)
 

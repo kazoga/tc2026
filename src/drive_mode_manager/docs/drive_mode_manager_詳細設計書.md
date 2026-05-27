@@ -206,7 +206,7 @@ tc2025 の `joystick_teleop.py` と同じ軸・ボタン・倍率を初期値と
 | `direction_angular_scale` | double | `1.5` | 進行方向矢印用に `cmd_vel.angular.z` から stick 横軸を逆算する scale |
 | `direction_deadzone` | double | `0.05` | 逆算した stick 座標へ適用する deadzone |
 | `direction_linear_axis_invert` | bool | `false` | 進行方向矢印用の並進軸符号反転 |
-| `direction_angular_axis_invert` | bool | `false` | 進行方向矢印用の角速度軸符号反転 |
+| `direction_angular_axis_invert` | bool | `true` | 進行方向矢印用の角速度軸符号反転。`angular.z > 0` を tc2025 実機・ypspur_ros2 の左旋回表示へ合わせる |
 | `manual_to_auto_l1_released_s` | double | `1.0` | 手動中に L1 を離してから自律復帰条件成立までの表示用しきい値 |
 | `max_autonomous_resume_linear_x` | double | `0.8` | 互換用。現行の復帰方向テキストでは角度判定を優先する |
 | `max_autonomous_resume_angular_z` | double | `1.2` | 互換用。現行の復帰方向テキストでは角度判定を優先する |
@@ -442,7 +442,7 @@ GUI 内部では `AUTONOMOUS` / `MANUAL` を状態名として扱うが、画面
 | 値 | 表示 |
 | --- | --- |
 | `stick_y = linear.x / direction_linear_scale` | 円チャート上の縦座標 |
-| `stick_x = angular.z / direction_angular_scale` | 円チャート上の横座標 |
+| `stick_x = -angular.z / direction_angular_scale` | 円チャート上の横座標。既定の `direction_angular_axis_invert=true` により実ロボット旋回方向を表示する |
 | `hypot(stick_x, stick_y) > 1.0` | ノルム 1.0 に正規化 |
 
 矢印は、GUI 上の円チャート中心から逆算 stick 座標へ向かう方向に描画する。描画時は方向ベクトルを単位化し、stick 座標と中心点との距離で矢印長が変化しないようにする。`linear.x=0` かつ `angular.z=0` の場合は角度が定義できないため、上方向を表示する。
@@ -656,7 +656,7 @@ timeout 停止、turbo 倍率である。自律 cmd passthrough と waypoint fla
 
 ### 19.3 パラメータ
 
-既定値は現行 `manual_teleop_node` と `drive_cmd_mux_node` に合わせ、`left_stick_x_axis=0`、`left_stick_y_axis=1`、`l1_button_index=4`、`ps_button_index=16`、`stick_step=0.1` とする。GUI の点を円内に保つため `normalize_diagonal_stick=true` とする。`cmd_vel_linear_scale=1.2`、`cmd_vel_angular_scale=1.5`、`cmd_vel_deadzone=0.05` により、現在の stick 保持値で `manual_teleop_node` が出す想定の `v` と `w` を GUI に表示する。`joy_topic` は相対 `joy`、`publish_rate_hz` は 20.0Hz とする。
+既定値は現行 `manual_teleop_node` と `drive_cmd_mux_node` に合わせ、`left_stick_x_axis=0`、`left_stick_y_axis=1`、`l1_button_index=4`、`ps_button_index=16`、`stick_step=0.1` とする。GUI の点を円内に保つため `normalize_diagonal_stick=true` とする。キーボード左右入力から publish する Joy 横軸は tc2025 実機 Joy 互換のため `invert_left_stick_x=true` を既定とし、画面上の stick 点はキー入力方向のまま表示する。`cmd_vel_linear_scale=1.2`、`cmd_vel_angular_scale=1.5`、`cmd_vel_deadzone=0.05` により、publish する Joy 軸で `manual_teleop_node` が出す想定の `v` と `w` を GUI に表示する。`joy_topic` は相対 `joy`、`publish_rate_hz` は 20.0Hz とする。
 
 ### 19.4 起動方針
 

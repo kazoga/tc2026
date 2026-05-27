@@ -56,7 +56,8 @@ def test_planned_direction_text_uses_arrow_angle_thresholds() -> None:
         turn_preview_seconds=1.0,
         max_linear_x=0.8,
         max_angular_z=1.2,
-    ) == '右旋回'
+        angular_axis_invert=True,
+    ) == '左旋回'
 
     assert DriveStatusGuiCore.planned_direction_text(
         linear_x=1.2,
@@ -64,7 +65,8 @@ def test_planned_direction_text_uses_arrow_angle_thresholds() -> None:
         turn_preview_seconds=1.0,
         max_linear_x=0.8,
         max_angular_z=1.2,
-    ) == '左旋回'
+        angular_axis_invert=True,
+    ) == '右旋回'
 
 
 def test_planned_direction_text_warns_for_sharp_turn_and_backward() -> None:
@@ -74,7 +76,8 @@ def test_planned_direction_text_warns_for_sharp_turn_and_backward() -> None:
         turn_preview_seconds=1.0,
         max_linear_x=0.8,
         max_angular_z=1.2,
-    ) == '右旋回\n急旋回注意！'
+        angular_axis_invert=True,
+    ) == '左旋回\n急旋回注意！'
 
     assert DriveStatusGuiCore.planned_direction_text(
         linear_x=-0.2,
@@ -92,9 +95,10 @@ def test_cmd_vel_to_stick_point_uses_manual_teleop_scale() -> None:
         linear_scale=1.2,
         angular_scale=1.5,
         deadzone=0.05,
+        angular_axis_invert=True,
     )
 
-    assert stick_x == 0.5
+    assert stick_x == -0.5
     assert stick_y == 0.5
 
 
@@ -110,16 +114,19 @@ def test_direction_vector_from_cmd_vel_points_to_chart_dot() -> None:
     dx, dy = DriveStatusGuiCore.direction_vector_from_cmd_vel(
         linear_x=0.0,
         angular_z=1.5,
+        angular_axis_invert=True,
     )
 
-    assert dx == 1.0
+    assert dx == -1.0
     assert dy == -0.0
 
     dx, dy = DriveStatusGuiCore.direction_vector_from_cmd_vel(
         linear_x=0.6,
         angular_z=0.75,
+        angular_axis_invert=True,
     )
 
+    assert dx < 0.0
     assert round((dx ** 2 + dy ** 2) ** 0.5, 6) == 1.0
 
 
@@ -127,8 +134,10 @@ def test_cmd_vel_to_stick_point_clamps_to_chart_circle() -> None:
     stick_x, stick_y = DriveStatusGuiCore.cmd_vel_to_stick_point(
         linear_x=1.2,
         angular_z=1.5,
+        angular_axis_invert=True,
     )
 
+    assert stick_x < 0.0
     assert round((stick_x ** 2 + stick_y ** 2) ** 0.5, 6) == 1.0
 
 
@@ -136,6 +145,7 @@ def test_direction_angle_from_cmd_vel_matches_chart_coordinates() -> None:
     angle = DriveStatusGuiCore.direction_angle_from_cmd_vel(
         linear_x=0.0,
         angular_z=1.5,
+        angular_axis_invert=True,
     )
 
-    assert angle == math.radians(90.0)
+    assert angle == math.radians(-90.0)

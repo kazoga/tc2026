@@ -31,6 +31,7 @@ import rclpy
 from builtin_interfaces.msg import Duration
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
+from rclpy.exceptions import ParameterUninitializedException
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
@@ -371,7 +372,10 @@ class RouteManagerNode(Node):
     def _resolve_checkpoint_labels(self) -> List[str]:
         """チェックポイントパラメータを配列へ正規化する。"""
 
-        param = self.get_parameter("checkpoint_labels")
+        try:
+            param = self.get_parameter("checkpoint_labels")
+        except ParameterUninitializedException:
+            return []
         if param.type_ == Parameter.Type.STRING_ARRAY:
             raw_values = list(param.get_parameter_value().string_array_value)
             return [label.strip() for label in raw_values if label.strip()]
@@ -783,7 +787,8 @@ def main(args: Optional[List[str]] = None) -> None:
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,2 @@
+blocks:
+  - { type: fixed, name: scurve_w3, segment_id: "fixed/waypoints.csv" }

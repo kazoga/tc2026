@@ -70,7 +70,8 @@ Subscribe、Service、Action は持たない。
 | `num_buttons` | int | `17` | `Joy.buttons` 配列長 |
 | `left_stick_x_axis` | int | `0` | 左 stick 横軸 index |
 | `left_stick_y_axis` | int | `1` | 左 stick 縦軸 index |
-| `invert_left_stick_y` | bool | `false` | 左 stick 縦軸の符号反転 |
+| `invert_left_stick_x` | bool | `true` | キーボード左右入力から publish する左 stick 横軸符号を反転する。tc2025 実機 Joy 互換を既定とする |
+| `invert_left_stick_y` | bool | `false` | キーボード前後入力から publish する左 stick 縦軸符号を反転する |
 | `stick_step` | double | `0.1` | `w`/`s`/`a`/`d` 1 回押下あたりの stick 加算量 |
 | `l1_button_index` | int | `4` | L1 button index |
 | `ps_button_index` | int | `16` | PS button index |
@@ -86,7 +87,7 @@ Subscribe、Service、Action は持たない。
 | `cmd_vel_angular_scale` | double | `1.5` | GUI に表示する予測 `cmd_vel` 角速度 scale |
 | `cmd_vel_deadzone` | double | `0.05` | GUI に表示する予測 `cmd_vel` の deadzone |
 | `cmd_vel_linear_axis_invert` | bool | `false` | GUI 予測並進速度の符号反転 |
-| `cmd_vel_angular_axis_invert` | bool | `false` | GUI 予測角速度の符号反転 |
+| `cmd_vel_angular_axis_invert` | bool | `false` | GUI 予測角速度の符号反転。通常は `invert_left_stick_x` で Joy 軸を合わせるため変更しない |
 
 既定 index は現行 `manual_teleop_node` と `drive_cmd_mux_node` の設定に合わせる。
 
