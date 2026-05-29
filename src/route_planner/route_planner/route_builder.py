@@ -84,6 +84,8 @@ class WaypointRecord:
     segment_is_fixed: bool = False
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    altitude: Optional[float] = None
+    heading_deg: Optional[float] = None
 
     def clone(self) -> "WaypointRecord":
         """ディープコピーを生成する."""
@@ -446,6 +448,24 @@ def parse_waypoint_csv(csv_path: str) -> List[WaypointRecord]:
             except (TypeError, ValueError):
                 wp.longitude = None
 
+            alt_raw = row.get("alt")
+            if alt_raw in (None, ""):
+                alt_raw = row.get("altitude")
+            try:
+                if alt_raw not in (None, ""):
+                    wp.altitude = float(alt_raw)
+            except (TypeError, ValueError):
+                wp.altitude = None
+
+            heading_raw = row.get("heading_deg")
+            if heading_raw in (None, ""):
+                heading_raw = row.get("heading")
+            try:
+                if heading_raw not in (None, ""):
+                    wp.heading_deg = float(heading_raw)
+            except (TypeError, ValueError):
+                wp.heading_deg = None
+
             waypoints.append(wp)
     return waypoints
 
@@ -502,6 +522,10 @@ def _merge_endpoint_records(
         base_wp.latitude = new_wp.latitude
     if new_wp.longitude is not None:
         base_wp.longitude = new_wp.longitude
+    if new_wp.altitude is not None:
+        base_wp.altitude = new_wp.altitude
+    if new_wp.heading_deg is not None:
+        base_wp.heading_deg = new_wp.heading_deg
 
 
 def concat_records_with_dedup(
@@ -1335,6 +1359,10 @@ def write_waypoints_to_csv(path: str, waypoints: List[WaypointRecord]) -> None:
         "signal_stop",
         "not_skip",
         "segment_is_fixed",
+        "latitude",
+        "longitude",
+        "altitude",
+        "heading_deg",
     ]
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=header)
@@ -1357,6 +1385,10 @@ def write_waypoints_to_csv(path: str, waypoints: List[WaypointRecord]) -> None:
                     "signal_stop": int(bool(wp.signal_stop)),
                     "not_skip": int(bool(wp.not_skip)),
                     "segment_is_fixed": int(bool(wp.segment_is_fixed)),
+                    "latitude": "" if wp.latitude is None else wp.latitude,
+                    "longitude": "" if wp.longitude is None else wp.longitude,
+                    "altitude": "" if wp.altitude is None else wp.altitude,
+                    "heading_deg": "" if wp.heading_deg is None else wp.heading_deg,
                 }
             )
 

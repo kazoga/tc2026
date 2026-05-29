@@ -79,7 +79,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
   - パラメータファイル `Combobox`（既定は `params/default.yaml`。表示はファイル名のみで、内部では実パスへマッピングする）。
   - `drive_mode_manager` カードでは launch 引数 `start_gui` を任意指定できる。
     `joy_input` で `joy_node` または `ps3_joy_sim` を選択し、`manual_teleop_node` と `drive_cmd_mux_node` は常に同時起動する。画面確認時だけ `start_gui=true` を指定する。
-  - `robot_navigator` カードでは launch 引数 `cmd_vel_topic` と `odom_topic` を任意指定できる。
+  - `robot_navigator` カードでは launch 引数 `cmd_vel_topic`、`odom_topic`、`amcl_pose_topic` を任意指定できる。
     route stack 評価では `cmd_vel_topic=/cmd_vel/autonomous`、`odom_topic=/ypspur_ros/odom` を渡す。
   - `robot_navigator`、`obstacle_monitor`、認識系カードでは「Simulator 同時起動」
     チェックボックスを表示する。認識系カードの simulator は `yolo_detector` の
@@ -225,8 +225,8 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 - route stack 連携に関わる既定プロファイルは以下とする。
   - `drive_mode_manager`: `drive_mode_manager.launch.py` を起動し、`start_gui` と `joy_input` を user argument として受け付ける。
     `joy_input` は `joy_node` または `ps3_joy_sim` を指定する。`manual_teleop_node` と `drive_cmd_mux_node` は個別停止せず、常に同時起動する。
-  - `robot_navigator`: `robot_navigator.launch.py` を起動し、`cmd_vel_topic` と `odom_topic` を
-    user argument として受け付ける。simulator 有効時は `robot_simulator.launch.py` を併起動する。
+  - `robot_navigator`: `robot_navigator.launch.py` を起動し、`cmd_vel_topic`、`odom_topic`、`amcl_pose_topic` を
+    user argument として受け付ける。simulator 有効時は `robot_simulator.launch.py` を併起動し、`amcl_pose_topic` の指定値を simulator 側の `pose_topic` に渡す。
 - 認識系の既定プロファイルは以下とする。
   - `road_blockage_detector`: `road_blockage_perception.launch.py` を起動し、選択 YAML は
     `detector_param_file:=<path>` として渡す。toggle 有効時は
@@ -255,7 +255,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 | Profile | 主な override | 理由 |
 | --- | --- | --- |
 | `drive_mode_manager` | `start_gui=false`, `joy_input=joy_node` | `joy_node`、manual teleop、mux を同時起動し、自律 cmd と最終 `/cmd_vel` の mux を検証対象に含める。headless 評価では GUI を起動しない |
-| `robot_navigator` | `cmd_vel_topic=/cmd_vel/autonomous`, `odom_topic=/ypspur_ros/odom` | `drive_cmd_mux_node` が最終 `/cmd_vel` を publish する構成に合わせる |
+| `robot_navigator` | `cmd_vel_topic=/cmd_vel/autonomous`, `odom_topic=/ypspur_ros/odom`, 必要に応じて `amcl_pose_topic=/localization/pose_enu` | `drive_cmd_mux_node` が最終 `/cmd_vel` を publish する構成に合わせる。自己位置 topic を変更する場合は simulator の `pose_topic` も同値で起動する |
 
 headless monitor は `/cmd_vel` に加え、`/cmd_vel/autonomous` と `/drive_mode_status` を購読し、
 自律 cmd の発行有無、mux の出力元、復帰カウントダウン状態をログへ出す。GUI あり評価では

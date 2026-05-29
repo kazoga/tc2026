@@ -53,11 +53,11 @@ ros2 run robot_navigator robot_navigator
 | 名称 | 型 | 説明 | QoS |
 |------|----|------|-----|
 | `/odom` | `nav_msgs/Odometry` | 現在速度を取得し加速度制限に利用。 | RELIABLE / VOLATILE / depth=10 |
-| `/amcl_pose` | `geometry_msgs/PoseWithCovarianceStamped` | 現在姿勢（位置・ヨー角）を取得。 | RELIABLE / VOLATILE / depth=10 |
+| `/amcl_pose` | `geometry_msgs/PoseWithCovarianceStamped` | 現在姿勢（位置・ヨー角）を取得。launch の `amcl_pose_topic` で `/localization/pose_enu` などへ変更可能。 | RELIABLE / VOLATILE / depth=10 |
 | `/active_target` | `geometry_msgs/PoseStamped` | 追従対象の目標姿勢。 | RELIABLE / VOLATILE / depth=10 |
 | `/obstacle_avoidance_hint` | `route_msgs/ObstacleAvoidanceHint` | `obstacle_distance_mode=hint` のとき使用。 | BEST_EFFORT / VOLATILE / depth=1 |
 | `/scan` | `sensor_msgs/LaserScan` | `obstacle_distance_mode=scan` のとき使用（SensorDataQoS）。 | BEST_EFFORT / VOLATILE / depth=1 |
-| `/amcl_glitch_trigger` | `std_msgs/Bool` | `robot_simulator` が停止中に受信すると `/amcl_pose` へ単発オフセットを加算。 | RELIABLE / VOLATILE / depth=10 |
+| `/amcl_glitch_trigger` | `std_msgs/Bool` | `robot_simulator` が停止中に受信すると `pose_topic` へ単発オフセットを加算。 | RELIABLE / VOLATILE / depth=10 |
 
 ### Publisher
 | 名称 | 型 | 説明 | QoS |
@@ -96,7 +96,7 @@ ros2 run robot_navigator robot_navigator
 6. CSV ログが有効な場合は制御ループの各種値（速度、誤差、障害物距離）を逐次書き出す。
 
 ## 動作確認手順
-1. `robot_simulator`（当パッケージ内）を起動し、最終 `/cmd_vel` を受け取って `/amcl_pose`・`/odom` を配信させる。
+1. `robot_simulator`（当パッケージ内）を起動し、最終 `/cmd_vel` を受け取って `pose_topic`（既定 `/amcl_pose`）・`/odom` を配信させる。`/localization/pose_enu` 移行時は `pose_topic:=/localization/pose_enu` を指定する。
 2. `route_follower` もしくは手動で `/active_target` を Publish し、目標指令を入力する。
 3. `obstacle_monitor` を起動して `/obstacle_avoidance_hint` を供給するか、`obstacle_distance_mode:=scan`
    として `/scan` を直接購読させる。
@@ -108,7 +108,7 @@ ros2 run robot_navigator robot_navigator
 - `obstacle_distance_mode` が `scan` で距離が常に `None` となる場合は `/scan` の FOV がロボット幅帯を
   カバーしているか確認します。
 - WARN ログのスロットルが頻発する場合は、入力トピックの QoS やリマップ設定を再確認してください。
-- `/amcl_pose` に付与されるノイズはガウス分布（位置 `pose_noise_std_m`、ヨー角 `yaw_noise_std_deg`）を
+- `robot_simulator` の `pose_topic` に付与されるノイズはガウス分布（位置 `pose_noise_std_m`、ヨー角 `yaw_noise_std_deg`）を
   各 publish ごとにサンプリングして加算する実装です。標準偏差を 1.0 に設定すれば平均的には 1m 規模の
   ばらつきが常時発生しますが、「停止中にごくまれに 1m だけジャンプする」ような突発外れ値を再現する
   仕組みは現状ありません。単発のステップ状誤差を模擬する場合は、別途一時的にオフセットを加える
@@ -121,7 +121,7 @@ ros2 run robot_navigator robot_navigator
 
 - **トリガトピック**: `/amcl_glitch_trigger`（`std_msgs/Bool`）。`data=true` を受信した瞬間に 1 回
   だけオフセットを予約し、停止状態で `glitch_wait_after_stop_sec`（既定 5 秒）の待機後に
-  `/amcl_pose` へ反映します。一度適用されたオフセットは `data=false` を受信するまで同じ値のまま
+  `pose_topic` へ反映します。一度適用されたオフセットは `data=false` を受信するまで同じ値のまま
   付与され続けます。走行中にトリガを受けた場合は「停止するまで予約」を保持し、停止と
   クールダウンを満たしたタイミングから待機を開始します。連続発火を防ぐため、
   `glitch_cooldown_sec` 経過まで後続トリガは無視します。false を送れば予約・適用中の外れ値を

@@ -20,6 +20,7 @@ Phase2 準拠・正式版（4段階 replan/shift/skip/failed を統合）。
 from __future__ import annotations
 
 import sys
+import copy
 from array import array
 from pathlib import Path
 import asyncio
@@ -128,10 +129,15 @@ def ros_route_to_core(route: Route) -> RouteModel:
     frame_id = getattr(getattr(route, "header", None), "frame_id", "map") or "map"
     route_image = _image_msg_to_route_image_data(getattr(route, "route_image", None))
     has_image = route_image is not None
+    route_id = str(getattr(route, "route_id", ""))
+    map_frame_id = str(getattr(route, "map_frame_id", frame_id) or frame_id)
+    earth_frame_id = str(getattr(route, "earth_frame_id", "earth") or "earth")
+    projection = copy.deepcopy(getattr(route, "projection", None))
     for wp in getattr(route, "waypoints", []):
         orientation = getattr(getattr(wp, "pose", None), "orientation", None)
         w = WaypointLite(
             label=str(getattr(wp, "label", "")),
+            index=int(getattr(wp, "index", len(rm_wps))),
             pose=Pose2D(
                 x=float(getattr(getattr(wp, "pose", None).position, "x", 0.0)),
                 y=float(getattr(getattr(wp, "pose", None).position, "y", 0.0)),
@@ -140,6 +146,10 @@ def ros_route_to_core(route: Route) -> RouteModel:
                 orientation_z=float(getattr(orientation, "z", 0.0)),
                 orientation_w=float(getattr(orientation, "w", 1.0)),
             ),
+            has_pose_enu=bool(getattr(wp, "has_pose_enu", True)),
+            geo_pose=copy.deepcopy(getattr(wp, "geo_pose", None)),
+            has_geo_pose=bool(getattr(wp, "has_geo_pose", False)),
+            geo_pose_source=int(getattr(wp, "geo_pose_source", 0)),
             line_stop=bool(getattr(wp, "line_stop", False)),
             signal_stop=bool(getattr(wp, "signal_stop", False)),
             not_skip=bool(getattr(wp, "not_skip", False)),
@@ -164,6 +174,10 @@ def ros_route_to_core(route: Route) -> RouteModel:
         waypoints=rm_wps,
         version=VersionMM(major=version_int, minor=0),
         frame_id=frame_id,
+        route_id=route_id,
+        map_frame_id=map_frame_id,
+        earth_frame_id=earth_frame_id,
+        projection=projection,
         has_image=has_image,
         current_index=current_index,
         current_label=current_label,
@@ -175,14 +189,19 @@ def core_route_to_ros(route: RouteModel) -> Route:
     """Core RouteLite -> ROS Route へ変換する。"""
     msg = Route()
     msg.header = Header()
-    msg.header.frame_id = route.frame_id or "map"
+    msg.header.frame_id = route.frame_id or route.map_frame_id or "map"
     msg.version = int(route.version.to_int())
+    msg.route_id = route.route_id
+    msg.map_frame_id = route.map_frame_id or route.frame_id or "map"
+    msg.earth_frame_id = route.earth_frame_id or "earth"
+    if route.projection is not None:
+        msg.projection = copy.deepcopy(route.projection)
     msg.start_index = route.current_index
     msg.start_waypoint_label = route.current_label
     if route.route_image is not None and route.route_image.is_valid():
         img = Image()
         img.header = Header()
-        img.header.frame_id = route.frame_id or "map"
+        img.header.frame_id = route.frame_id or route.map_frame_id or "map"
         img.height = int(route.route_image.height)
         img.width = int(route.route_image.width)
         img.encoding = route.route_image.encoding
@@ -194,13 +213,15 @@ def core_route_to_ros(route: RouteModel) -> Route:
         # has_image が真だが実体が無い場合は後段で空画像とならないように空メッセージを置く。
         msg.route_image = Image()
     msg.waypoints = []
-    for w in route.waypoints:
+    for fallback_index, w in enumerate(route.waypoints):
         # Waypoint の詳細フィールドはユーザ環境の定義に依存、代表的なもののみ移送
         wp = Waypoint()
         # ただし上記は型情報が不透明になり得るため、実際の環境定義に合わせて必要に応じて置き換えること
         # 最低限の位置・ラベル・フラグを反映
         try:
             # 位置
+            wp.index = int(getattr(w, "index", fallback_index))
+            wp.has_pose_enu = bool(getattr(w, "has_pose_enu", True))
             wp.pose.position.x = float(w.pose.x)
             wp.pose.position.y = float(w.pose.y)
             # ラベル/フラグ
@@ -217,6 +238,10 @@ def core_route_to_ros(route: RouteModel) -> Route:
             wp.pose.orientation.y = float(getattr(w.pose, "orientation_y", 0.0))
             wp.pose.orientation.z = float(getattr(w.pose, "orientation_z", 0.0))
             wp.pose.orientation.w = float(getattr(w.pose, "orientation_w", 1.0))
+            if getattr(w, "geo_pose", None) is not None:
+                wp.geo_pose = copy.deepcopy(w.geo_pose)
+            wp.has_geo_pose = bool(getattr(w, "has_geo_pose", False))
+            wp.geo_pose_source = int(getattr(w, "geo_pose_source", 0))
         except Exception:
             pass
         msg.waypoints.append(wp)

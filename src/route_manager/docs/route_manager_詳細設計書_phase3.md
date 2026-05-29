@@ -143,6 +143,15 @@ followerから滞留検知を受けた場合、`ReportStuck.Request.reason_code`
 
 ---
 
+
+### LLHメタデータ保持
+
+`route_msgs/Route` は LLH 拡張により `route_id`、`map_frame_id`、`earth_frame_id`、`projection` を持つ。`route_manager` はこれらを `RouteModel` に保持し、`/active_route` 再配信時に失わずに再設定する。
+
+`WaypointLite` は `index`、`has_pose_enu`、`geo_pose`、`has_geo_pose`、`geo_pose_source` を保持する。SHIFT / SKIP / 固定ブロック再配信など、manager 内部で local route を作る処理でもこれらの field は `copy.deepcopy()` で継承する。走行判断は従来どおり ENU の `pose` を使い、LLH field は GUI、HTML UI、ログ、`route_geo_projector` 用の参照情報として扱う。
+
+---
+
 ## 第7章　メッセージ仕様
 
 ### ReportStuck.srv (再掲)

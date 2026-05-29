@@ -108,6 +108,7 @@ def generate_launch_description() -> LaunchDescription:
                 'publish_tf': True,
                 'pose_noise_std_m': 0.0,
                 'yaw_noise_std_deg': 0.0,
+                'pose_topic': amcl_pose_topic,
                 'enable_glitch_trigger': True,
                 'glitch_trigger_topic': '/amcl_glitch_trigger',
                 'glitch_cooldown_sec': 5.0,
