@@ -210,7 +210,7 @@ def _setup_stack(context: LaunchContext, *args: Any, **kwargs: Any) -> list:
             ],
             remappings=[
                 ("active_route", "/active_route"),
-                ("amcl_pose", "/amcl_pose"),
+                ("localization/pose_enu", "/localization/pose_enu"),
                 ("obstacle_avoidance_hint", "/obstacle_avoidance_hint"),
                 ("manual_start", "/manual_start"),
                 ("sig_recog", "/sig_recog"),
@@ -230,7 +230,7 @@ def _setup_stack(context: LaunchContext, *args: Any, **kwargs: Any) -> list:
                 ("scan", "/scan"),
                 ("obstacle_avoidance_hint", "/obstacle_avoidance_hint"),
                 ("sensor_viewer", "/sensor_viewer"),
-                ("amcl_pose", "/amcl_pose"),
+                ("localization/pose_enu", "/localization/pose_enu"),
                 ("active_target", "/active_target"),
             ],
         ),
@@ -244,7 +244,7 @@ def _setup_stack(context: LaunchContext, *args: Any, **kwargs: Any) -> list:
             remappings=[
                 ("scan", "/scan"),
                 ("odom", "/ypspur_ros/odom"),
-                ("amcl_pose", "/amcl_pose"),
+                ("localization/pose_enu", "/localization/pose_enu"),
                 ("active_target", "/active_target"),
                 ("cmd_vel", "/cmd_vel/autonomous"),
                 ("direction_marker", "/direction_marker"),

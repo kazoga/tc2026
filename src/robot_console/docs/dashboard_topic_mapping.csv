@@ -12,7 +12,7 @@
 ロボット速度,並進速度,cmd_vel,geometry_msgs/msg/Twist.msg,linear.x,m/sに変換して小数第2位まで表示
 ロボット速度,角速度,cmd_vel,geometry_msgs/msg/Twist.msg,angular.z,rad/sをdeg/sへ換算し小数第1位表示
 目標までの距離,目標ウェイポイントまでの距離,follower_state,route_msgs/msg/FollowerState.msg,active_target_distance_m,active_target_distance_mを表示
-目標までの距離,進捗,amcl_pose,geometry_msgs/msg/PoseWithCovarianceStamped.msg,"current_distance_m,baseline_distance_m",baseline_distance_m>0のときcurrent_distance_m/baseline_distance_m×100を進捗バーに反映。follower_state.segment_length_mで更新
+目標までの距離,進捗,pose_enu,geometry_msgs/msg/PoseWithCovarianceStamped.msg,"current_distance_m,baseline_distance_m",baseline_distance_m>0のときcurrent_distance_m/baseline_distance_m×100を進捗バーに反映。follower_state.segment_length_mで更新
 手動・信号・封鎖イベント,バナーテキスト,manual_start / sig_recog / road_blocked / follower_state / active_route,std_msgs/msg/Bool.msg; std_msgs/msg/Int32.msg; route_msgs/msg/FollowerState.msg; route_msgs/msg/Route.msg,data / state / signal_stop_active / line_stop_active,manual_startで手動開始、road_blockedで道路封鎖、WAITING_STOP時は信号・停止線フラグで文言を決定
 手動・信号・封鎖イベント,詳細行,ー,ー,updated_at,JSTの更新時刻のみを表示
 制御コマンド(manual_start),送信状況,manual_start,std_msgs/msg/Bool.msg,"data,manual_timestamp",現在値と最終送信時刻を表示（GUI送信時は即時反映）

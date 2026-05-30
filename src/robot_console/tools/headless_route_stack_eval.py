@@ -244,6 +244,7 @@ class HeadlessRouteStackEvaluator:
         core.update_launch_override("drive_mode_manager", "joy_input", "joy_node")
         core.update_launch_override("robot_navigator", "cmd_vel_topic", "/cmd_vel/autonomous")
         core.update_launch_override("robot_navigator", "odom_topic", "/ypspur_ros/odom")
+        core.update_launch_override("robot_navigator", "pose_enu_topic", "/localization/pose_enu")
         core.update_simulator_enabled("robot_navigator", self._config.simulator)
         self._pump_for(1.0)
         self._print_launch_selection()

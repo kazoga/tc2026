@@ -101,7 +101,7 @@ class ObstacleMonitorNode(Node):
         scan_topic = 'scan'
         hint_topic = 'obstacle_avoidance_hint'
         viewer_topic = 'sensor_viewer'
-        amcl_pose_topic = 'amcl_pose'
+        pose_enu_topic = 'localization/pose_enu'
         active_target_topic = 'active_target'
 
         self.sub_scan = self.create_subscription(
@@ -123,10 +123,10 @@ class ObstacleMonitorNode(Node):
             qos_rel_volatile_shallow,
         )
 
-        self.sub_amcl = self.create_subscription(
+        self.sub_pose_enu = self.create_subscription(
             PoseWithCovarianceStamped,
-            amcl_pose_topic,
-            self._on_amcl_pose,
+            pose_enu_topic,
+            self._on_pose_enu,
             qos_rel_volatile,
         )
 
@@ -141,7 +141,7 @@ class ObstacleMonitorNode(Node):
         self.scan_topic: str = self._resolve_topic_name(scan_topic)
         self.hint_topic: str = self._resolve_topic_name(hint_topic)
         self.viewer_topic: str = self._resolve_topic_name(viewer_topic)
-        self.amcl_pose_topic: str = self._resolve_topic_name(amcl_pose_topic)
+        self.pose_enu_topic: str = self._resolve_topic_name(pose_enu_topic)
         self.active_target_topic: str = self._resolve_topic_name(active_target_topic)
 
         # ---- Misc ----
@@ -152,7 +152,7 @@ class ObstacleMonitorNode(Node):
         self._latest_front_clearance: float = float('inf')
         self._hint_range_m: float = max_obstacle_distance
         self._hint_range_last_warned: Optional[float] = None
-        self._amcl_pose_xyyaw: Optional[Tuple[float, float, float]] = None
+        self._pose_enu_xyyaw: Optional[Tuple[float, float, float]] = None
         self._active_target_xy: Optional[Tuple[float, float]] = None
 
         # 初期化時に距離範囲の制約を適用
@@ -405,10 +405,10 @@ class ObstacleMonitorNode(Node):
     # -------------------------------
     # Pose callbacks / helpers
     # -------------------------------
-    def _on_amcl_pose(self, msg: PoseWithCovarianceStamped) -> None:
+    def _on_pose_enu(self, msg: PoseWithCovarianceStamped) -> None:
         pose = msg.pose.pose
         yaw = self._yaw_from_quaternion(pose.orientation)
-        self._amcl_pose_xyyaw = (
+        self._pose_enu_xyyaw = (
             float(pose.position.x),
             float(pose.position.y),
             float(yaw),
@@ -525,8 +525,8 @@ class ObstacleMonitorNode(Node):
 
         # active_target の描画
         target_px: Optional[Tuple[int, int]] = None
-        if self._amcl_pose_xyyaw is not None and self._active_target_xy is not None:
-            ax, ay, yaw = self._amcl_pose_xyyaw
+        if self._pose_enu_xyyaw is not None and self._active_target_xy is not None:
+            ax, ay, yaw = self._pose_enu_xyyaw
             tx, ty = self._active_target_xy
             dx = float(tx) - float(ax)
             dy = float(ty) - float(ay)

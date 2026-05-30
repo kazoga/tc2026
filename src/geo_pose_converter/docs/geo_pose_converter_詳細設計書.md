@@ -8,7 +8,7 @@
 
 `localization_fusion` 実装後の本来的な構成では、`geo_pose_converter_node` は GNSS のセンサ系 topic を購読して `localization_fusion` への入力となる `/gnss/pose_enu` を publish する。`route_geo_projector_node` は ENU 座標系の topic を購読し、LLH 座標系の表示用 topic へ変換して publish する。具体的には、`localization_fusion` が publish する `/localization/pose_enu` を `/localization/pose_llh` に変換し、GUI 表示に活用する。
 
-`/amcl_pose` は、現在の走行系互換のために一時的に使う topic 名である。`localization_fusion` 実装前までに、走行系が `/localization/pose_enu` をもとに動作できるよう移行する方針とする。
+Phase 2 では旧 `/amcl_pose` topic 名を廃止し、走行系自己位置 topic を `/localization/pose_enu` に統一する。`localization_fusion` 実装前の当面は、GNSS ENU 変換または simulation が `/localization/pose_enu` を publish し、走行系と表示用 projector が同じ ENU 自己位置を購読する。
 
 ## 2. 背景・要求・スコープ
 
@@ -20,21 +20,19 @@ GUI と HTML 遠隔観測 UI では、GPS 受信状態、自己位置 LLH、rout
 
 | 用途 | topic | 型 | 座標系 | 位置づけ |
 | --- | --- | --- | --- | --- |
-| 暫定走行制御用自己位置 | `/amcl_pose` | `geometry_msgs/PoseWithCovarianceStamped` | `map` ENU | 現時点の既存走行系互換 topic。`/localization/pose_enu` 移行までの暫定名 |
-| 走行制御用自己位置 | `/localization/pose_enu` | `geometry_msgs/PoseWithCovarianceStamped` | `map` ENU | 走行系が最終的に購読する ENU 自己位置 topic。`localization_fusion` 実装前に移行完了する目標 |
+| 走行制御用自己位置 | `/localization/pose_enu` | `geometry_msgs/PoseWithCovarianceStamped` | `map` ENU | 走行系が購読する ENU 自己位置 topic。Phase 2 で旧 `/amcl_pose` から移行済み |
 | 表示用 LLH 自己位置 | `/localization/pose_llh` | `tc_geo_msgs/GeoPoseWithQuality` | WGS84 LLH | GUI、HTML UI、OSM 表示、ログ用。走行制御入力ではない |
 | GNSS 単独 LLH | `/gnss/pose_llh` | `tc_geo_msgs/GeoPoseWithQuality` | WGS84 LLH | GNSS 単独解、GPS 受信状態、診断、fallback 用 |
 | GNSS 単独 ENU | `/gnss/pose_enu` | `geometry_msgs/PoseWithCovarianceStamped` | `map` ENU | `localization_fusion` への GNSS absolute pose 入力 |
 
-`/amcl_pose` は topic 名としては AMCL 由来であるが、本システムでは既存走行系互換の ENU 自己位置 topic として扱う。これは永続的な正本名ではなく、`/localization/pose_enu` への移行前に限る暫定名である。
+`/localization/pose_enu` は AMCL 由来名を含まない正式な ENU 自己位置 topic である。走行制御はこの topic を正とし、LLH 表示は `/localization/pose_llh` などの表示系 topic へ分離する。
 
 ### 2.2 phase ごとの位置づけ
 
 | フェーズ | GNSS センサ系入力あり | GNSS センサ系入力なし | `route_geo_projector_node` の自己位置 ENU 入力 | 備考 |
 | --- | --- | --- | --- | --- |
-| localization_fusion 実装前、`/amcl_pose` 暫定運用中 | `geo_pose_converter_node` は GNSS を ENU に変換し、出力 topic 名を暫定的に `/amcl_pose` とする | `geo_pose_converter_node` は起動しない | 暫定的に `/amcl_pose` を購読し、表示用 LLH へ逆変換する | 現時点の互換運用。走行系も `/amcl_pose` を使う |
-| localization_fusion 実装前、`/amcl_pose` 廃止後 | `geo_pose_converter_node` は GNSS を ENU に変換し、出力 topic 名を `/localization/pose_enu` とする | `geo_pose_converter_node` は起動しない | 本来名の `/localization/pose_enu` を購読し、表示用 LLH へ逆変換する | localization_fusion 実装前に走行系を `/localization/pose_enu` へ移行する |
-| localization_fusion 実装後 | `geo_pose_converter_node` は GNSS を ENU に変換し、`/gnss/pose_enu` として publish する。`localization_fusion` が `/localization/pose_enu` を publish する | simulation / replay / localization_fusion が `/localization/pose_enu` を publish する | 本来名の `/localization/pose_enu` を購読し、`/localization/pose_llh` を publish する | GNSS 単独値は fusion 入力または診断用。走行系は `/localization/pose_enu` を使う |
+| localization_fusion 実装前（Phase 2 以降） | `geo_pose_converter_node` は GNSS を ENU に変換し、必要に応じて `/localization/pose_enu` として publish する | `geo_pose_converter_node` は起動しない。simulation または別 localizer が `/localization/pose_enu` を publish する | `/localization/pose_enu` を購読し、表示用 LLH へ逆変換する | 旧 `/amcl_pose` は使用しない。走行系も `/localization/pose_enu` を使う |
+| localization_fusion 実装後 | `geo_pose_converter_node` は GNSS を ENU に変換し、`/gnss/pose_enu` として publish する。`localization_fusion` が `/localization/pose_enu` を publish する | simulation / replay / localization_fusion が `/localization/pose_enu` を publish する | `/localization/pose_enu` を購読し、`/localization/pose_llh` を publish する | GNSS 単独値は fusion 入力または診断用。走行系は `/localization/pose_enu` を使う |
 
 したがって、`geo_pose_converter_node` が直接走行系自己位置を publish するのは `localization_fusion` 実装前の暫定構成である。`localization_fusion` 実装後は、`geo_pose_converter_node` は `/gnss/pose_enu` を publish し、融合後の `/localization/pose_enu` は `localization_fusion` が publish する。
 
@@ -86,7 +84,7 @@ src/geo_pose_converter/
 
 `geo_pose_converter_node` は GNSS 観測を地理系共通表現へ変換する adapter である。入力は GNSS driver topic に限定し、GNSS 単独の LLH pose と ENU pose を生成する。`localization_fusion` 実装後の本来的な出力は `/gnss/pose_llh` と `/gnss/pose_enu` であり、`/gnss/pose_enu` は `localization_fusion` の入力となる。
 
-`localization_fusion` 実装前は、GNSS ENU pose を走行系へ直接渡す暫定構成を許容する。この場合、topic 名は phase に応じて `/amcl_pose` または `/localization/pose_enu` へ remap する。
+`localization_fusion` 実装前は、GNSS ENU pose を走行系へ直接渡す暫定構成を許容する。この場合の出力 topic は `/localization/pose_enu` とし、旧 `/amcl_pose` への remap は行わない。
 
 `route_geo_projector_node` は ENU pose を LLH pose へ変換する projector である。本来的には `/localization/pose_enu` を購読して `/localization/pose_llh` を publish する。また、`/active_route` の `Waypoint.geo_pose` と `/active_target` の ENU pose から `/route/active_target_llh` を生成する。自己位置は距離・方位表示のためだけに使い、走行制御や route 更新判断には使わない。
 
@@ -116,7 +114,7 @@ src/geo_pose_converter/
 | Publish | `/gnss/pose_enu` | `geometry_msgs/PoseWithCovarianceStamped` | `RELIABLE / depth=10` | GNSS LLH を map ENU に投影した pose。`localization_fusion` 入力 |
 | Publish | `/geo/map_projection` | `tc_geo_msgs/MapProjection` | `RELIABLE / depth=10` | 投影条件 |
 
-`localization_fusion` 実装前の暫定運用では、`/gnss/pose_enu` 相当の出力を launch remap により `/amcl_pose` または `/localization/pose_enu` として publish してよい。ただし、これは `localization_fusion` なしで統合動作確認を進めるための暫定構成であり、本来的な topic 名は `/gnss/pose_enu` である。
+`localization_fusion` 実装前の暫定運用では、`/gnss/pose_enu` 相当の出力を launch remap により `/localization/pose_enu` として publish してよい。ただし、これは `localization_fusion` なしで統合動作確認を進めるための暫定構成であり、本来的な GNSS 単独 ENU topic 名は `/gnss/pose_enu` である。
 
 ### 5.2 `route_geo_projector_node`
 
@@ -124,7 +122,7 @@ src/geo_pose_converter/
 
 | 種別 | 論理名 | 型 | QoS | 意味 |
 | --- | --- | --- | --- | --- |
-| Subscribe | `/localization/pose_enu` | `geometry_msgs/PoseWithCovarianceStamped` | `RELIABLE / depth=10` | 表示用 LLH へ変換する ENU 自己位置。暫定運用では `/amcl_pose` へ remap 可能 |
+| Subscribe | `/localization/pose_enu` | `geometry_msgs/PoseWithCovarianceStamped` | `RELIABLE / depth=10` | 表示用 LLH へ変換する ENU 自己位置 |
 | Publish | `/localization/pose_llh` | `tc_geo_msgs/GeoPoseWithQuality` | `RELIABLE / depth=10` | GUI / HTML UI / OSM 表示用の LLH 自己位置 |
 | Subscribe | `/active_route` | `route_msgs/Route` | `RELIABLE / TRANSIENT_LOCAL / depth=1` | route 正本。ENU pose と LLH pose を含む |
 | Subscribe | `/active_target` | `geometry_msgs/PoseStamped` | `RELIABLE / depth=10` | 走行制御用 active target ENU |
@@ -137,11 +135,10 @@ src/geo_pose_converter/
 
 | フェーズ | `geo_pose_converter_node` の ENU 出力 | `route_geo_projector_node` の ENU 入力 | 走行系自己位置入力 |
 | --- | --- | --- | --- |
-| localization_fusion 実装前、`/amcl_pose` 暫定運用中 | `/amcl_pose` | `/amcl_pose` | `/amcl_pose` |
-| localization_fusion 実装前、`/amcl_pose` 廃止後 | `/localization/pose_enu` | `/localization/pose_enu` | `/localization/pose_enu` |
+| localization_fusion 実装前（Phase 2 以降） | `/localization/pose_enu` | `/localization/pose_enu` | `/localization/pose_enu` |
 | localization_fusion 実装後 | `/gnss/pose_enu` | `/localization/pose_enu` | `/localization/pose_enu` |
 
-GNSS センサ系 topic の入力がない simulation 統合動作確認では、`geo_pose_converter_node` は起動しない。simulation または別の localizer が `/amcl_pose` または `/localization/pose_enu` を publish し、`route_geo_projector_node` は該当 topic を購読して LLH 表示 topic を生成する。
+GNSS センサ系 topic の入力がない simulation 統合動作確認では、`geo_pose_converter_node` は起動しない。simulation または別の localizer が `/localization/pose_enu` を publish し、`route_geo_projector_node` は同 topic を購読して LLH 表示 topic を生成する。
 
 ## 6. パラメータ・設定仕様
 
@@ -156,7 +153,7 @@ GNSS センサ系 topic の入力がない simulation 統合動作確認では�
 | `origin_longitude` | double | `139.766084` | LLH/ENU 変換原点の経度。既定値は東京駅 |
 | `origin_altitude` | double | `3.86` | LLH/ENU 変換原点の高さ [m]。既定値は東京駅付近の標高 |
 | `map_yaw_offset_rad` | double | `0.0` | ENU 軸から map 軸への回転 |
-| `pose_enu_topic` | string | `/localization/pose_enu` | `route_geo_projector_node` が LLH へ変換する ENU 自己位置 topic。暫定運用では `/amcl_pose` へ remap する |
+| `pose_enu_topic` | string | `/localization/pose_enu` | `route_geo_projector_node` が LLH へ変換する ENU 自己位置 topic |
 | `pose_llh_topic` | string | `/localization/pose_llh` | `route_geo_projector_node` が publish する LLH 自己位置 topic |
 
 `origin_latitude`、`origin_longitude`、`origin_altitude` は ENU 座標と LLH 座標を相互変換するための投影原点である。`geo_pose_converter_node` と `route_geo_projector_node` は同じ map frame 上の ENU 座標を扱うため、同一の `ProjectionConfig` を使わなければならない。`params/default.yaml` では `/**` の ROS 2 wildcard parameter に投影条件を定義し、両 node が同じ値を受け取る構成にする。node 別の `origin_*` 定義は持たせない。`route_geo_projector` には ROS 2 parameter file の target node として認識させるために空の `ros__parameters` のみを置く。launch や運用用 YAML で上書きする場合も、投影条件は共通定義として 1 箇所で管理する。
@@ -167,7 +164,7 @@ GNSS センサ系 topic の入力がない simulation 統合動作確認では�
 
 `geo_pose_converter_node` は最新の `RtkStatus` と `Imu` を保持する。heading は `RtkStatus` を受信していれば有効とし、`heading_deg=0.0` を真北として有効扱いする。
 
-`route_geo_projector_node` は最新の ENU 自己位置、route、active target、follower state を保持する。ENU 自己位置は `/localization/pose_enu` を本来名とし、暫定運用では `/amcl_pose` へ remap する。LLH 自己位置は保持した ENU 自己位置を `ProjectionConfig` で逆変換して生成する。
+`route_geo_projector_node` は最新の ENU 自己位置、route、active target、follower state を保持する。ENU 自己位置は `/localization/pose_enu` を購読する。LLH 自己位置は保持した ENU 自己位置を `ProjectionConfig` で逆変換して生成する。
 
 ## 8. 処理フロー・状態遷移
 
@@ -178,7 +175,7 @@ GNSS センサ系 topic の入力がない simulation 統合動作確認では�
 3. GNSS 単独値として `/gnss/pose_llh` を publish する。
 4. 同じ LLH を `ProjectionConfig` で map ENU へ変換し、GNSS ENU pose を publish する。
 5. `localization_fusion` 実装後は GNSS ENU pose を `/gnss/pose_enu` として publish し、`localization_fusion` の入力とする。
-6. `localization_fusion` 実装前は暫定的に、GNSS ENU pose を `/amcl_pose` または `/localization/pose_enu` として publish し、走行系や projector の入力とする。
+6. `localization_fusion` 実装前は暫定的に、GNSS ENU pose を `/localization/pose_enu` として publish し、走行系や projector の入力とする。
 
 ### 8.2 自己位置 LLH 生成
 
@@ -207,9 +204,9 @@ heading は真北 0 度・時計回り正、ENU yaw は東 0 rad・反時計回�
 
 ## 11. 起動・終了・launch 設計
 
-`geo_pose_converter.launch.py` は `geo_pose_converter_node` と `route_geo_projector_node` を起動し、`params/default.yaml` を読み込む。topic remap は launch 側で phase ごとに明示する。現行暫定運用の launch 既定値は `gnss_pose_enu_topic=/amcl_pose`、`pose_enu_topic=/amcl_pose` とし、`/amcl_pose` 廃止後は両者を `/localization/pose_enu` へ変更する。`localization_fusion` 実装後は `gnss_pose_enu_topic=/gnss/pose_enu`、`pose_enu_topic=/localization/pose_enu` とする。
+`geo_pose_converter.launch.py` は `geo_pose_converter_node` と `route_geo_projector_node` を起動し、`params/default.yaml` を読み込む。Phase 2 以降の launch 既定値は `gnss_pose_enu_topic=/localization/pose_enu`、`pose_enu_topic=/localization/pose_enu` とし、`localization_fusion` 実装前の統合確認で走行系と projector が同じ ENU 自己位置を使える構成にする。`localization_fusion` 実装後は `gnss_pose_enu_topic=/gnss/pose_enu`、`pose_enu_topic=/localization/pose_enu` とする。
 
-GNSS センサ系 topic の入力がない simulation 統合動作確認では、`enable_geo_pose_converter=false` として `geo_pose_converter_node` を起動しない。simulation または別 localizer が ENU 自己位置 topic を publish し、`route_geo_projector_node` の入力 topic を `/amcl_pose` または `/localization/pose_enu` に合わせる。
+GNSS センサ系 topic の入力がない simulation 統合動作確認では、`enable_geo_pose_converter=false` として `geo_pose_converter_node` を起動しない。simulation または別 localizer が `/localization/pose_enu` を publish し、`route_geo_projector_node` も同 topic を購読する。
 
 `localization_fusion` 実装後は、実機・シミュレーションの統合 launch で `geo_pose_converter_node`、`localization_fusion`、`route_geo_projector_node` の接続を明示する。走行系は `/localization/pose_enu` を購読する。
 
@@ -223,7 +220,7 @@ ENU 自己位置 topic が未受信の場合、`route_geo_projector_node` は `/
 
 GUI は通常、自己位置表示には `/localization/pose_llh` を使用する。GPS 受信状況の詳細表示には `/gnss/pose_llh` または `/rtk_gps/rtk_status` を併用する。HTML UI は `/active_route` と `/route/active_target_llh` を利用して route と active target を地図上に描画する。
 
-走行系の `/amcl_pose` と `/localization/pose_enu` は GUI 上では ENU 自己位置のデバッグ表示には使えるが、OSM 上の通常表示では `/localization/pose_llh` を使う。
+走行系の `/localization/pose_enu` は GUI 上では ENU 自己位置のデバッグ表示には使えるが、OSM 上の通常表示では `/localization/pose_llh` を使う。
 
 ## 14. 依存関係・ビルド設定
 
@@ -233,8 +230,7 @@ GUI は通常、自己位置表示には `/localization/pose_llh` を使用す�
 
 - `geo_core.py` の LLH/ENU 往復変換、heading/yaw 変換、bearing 計算の pytest が成功する。
 - `colcon build --packages-select geo_pose_converter` が成功する。
-- GNSS 入力あり、`/amcl_pose` 暫定運用では、`geo_pose_converter_node` の ENU 出力を `/amcl_pose` として publish し、走行系と `route_geo_projector_node` が同じ ENU pose を購読できることを確認する。
-- GNSS 入力あり、`/amcl_pose` 廃止後の localization_fusion 前運用では、`geo_pose_converter_node` の ENU 出力を `/localization/pose_enu` として publish し、走行系と `route_geo_projector_node` が同じ ENU pose を購読できることを確認する。
+- GNSS 入力あり、localization_fusion 実装前の暫定運用では、`geo_pose_converter_node` の ENU 出力を `/localization/pose_enu` として publish し、走行系と `route_geo_projector_node` が同じ ENU pose を購読できることを確認する。
 - GNSS 入力なし simulation では、`geo_pose_converter_node` を起動せず、simulation または別 localizer が publish する ENU 自己位置 topic から `route_geo_projector_node` が `/localization/pose_llh` を生成できることを確認する。
 - `localization_fusion` 実装後は、`geo_pose_converter_node` が `/gnss/pose_enu` を publish し、`localization_fusion` が `/localization/pose_enu` を publish し、`route_geo_projector_node` が `/localization/pose_llh` を publish できることを確認する。
 - `params/default.yaml` で投影条件が `/**` の共通 parameter として 1 箇所に定義され、node 別に異なる `origin_*` を設定できる構造になっていないことを確認する。
@@ -243,31 +239,30 @@ GUI は通常、自己位置表示には `/localization/pose_llh` を使用す�
 
 ## 16. 互換性・移行・影響範囲
 
-既存制御 topic はただちに変更しない。現時点では走行系の現在自己位置入力は暫定的に `/amcl_pose` を使用する。ただし、`localization_fusion` 実装前までに走行系を `/localization/pose_enu` へ移行する方針とする。
+Phase 2 で走行系の現在自己位置入力は `/localization/pose_enu` へ移行済みであり、旧 `/amcl_pose` topic 名は使用しない。`/localization/pose_enu` は ENU 走行制御用 topic として維持し、LLH 表示 topic とは分離する。
 
 `/localization/pose_llh` は GUI / HTML UI / OSM 表示用 topic であり、走行系の ENU 自己位置 topic を置き換えない。`/gnss/pose_llh` は GPS 受信状態、GNSS 単独解、fusion 入力の妥当性確認に使う。
 
 移行は以下の順で行う。
 
-1. 現時点では、GNSS 入力がある場合に `geo_pose_converter_node` の ENU 出力を暫定的に `/amcl_pose` として使う。GNSS 入力がない simulation では `geo_pose_converter_node` を起動せず、simulation 側の `/amcl_pose` を使う。
-2. `localization_fusion` 実装前に、走行系、simulation、`route_geo_projector_node` の ENU 自己位置 topic を `/localization/pose_enu` へ移行する。
-3. `/amcl_pose` topic 名を廃止する。
-4. `localization_fusion` 実装後は、`geo_pose_converter_node` が `/gnss/pose_enu` を publish し、`localization_fusion` が `/localization/pose_enu` を publish する。
-5. `route_geo_projector_node` は `/localization/pose_enu` を `/localization/pose_llh` へ変換し、GUI / HTML UI / OSM 表示へ提供する。
+1. Phase 2 で、走行系、simulation、`route_geo_projector_node` の ENU 自己位置 topic を `/localization/pose_enu` へ統一する。
+2. localization_fusion 実装前は、GNSS 入力がある場合に `geo_pose_converter_node` の ENU 出力を暫定的に `/localization/pose_enu` として使う。GNSS 入力がない simulation では `geo_pose_converter_node` を起動せず、simulation 側の `/localization/pose_enu` を使う。
+3. `localization_fusion` 実装後は、`geo_pose_converter_node` が `/gnss/pose_enu` を publish し、`localization_fusion` が `/localization/pose_enu` を publish する。
+4. `route_geo_projector_node` は `/localization/pose_enu` を `/localization/pose_llh` へ変換し、GUI / HTML UI / OSM 表示へ提供する。
 
 ## 17. 未決事項・今後の拡張
 
 - `localization_fusion` の `/localization/pose_enu`、`/localization/pose_llh` の publish 責務と同期条件を詳細設計で確定する。
 - `RtkStatus` と `NavSatFix` の timestamp 差分許容値を parameter 化する。
 - HTML UI backend の topic bridge 仕様を別途定義する。
-- `/amcl_pose` 廃止時期と、走行系を `/localization/pose_enu` へ移行する launch / parameter 設計を別途決める。
 
 ## 18. 改版履歴
 
 | 日付 | 版 | 変更概要 |
 | --- | --- | --- |
+| 2026-05-29 | 1.5 | Phase 2 として旧 `/amcl_pose` を廃止し、走行系自己位置 topic を `/localization/pose_enu` へ統一 |
 | 2026-05-29 | 1.4 | LLH/ENU 変換原点を `/**` の共通 parameter として一本化し、東京駅原点の既定値を定義 |
-| 2026-05-29 | 1.3 | `geo_pose_converter_node` と `route_geo_projector_node` の本来的役割、localization_fusion 前後の topic remap、`/amcl_pose` 廃止前提の移行手順を整理 |
-| 2026-05-29 | 1.2 | 走行系 ENU と表示系 LLH の自己位置 topic を分離し、`/amcl_pose` 互換 alias と `/localization/pose_enu` 移行方針を明記 |
+| 2026-05-29 | 1.3 | `geo_pose_converter_node` と `route_geo_projector_node` の本来的役割、localization_fusion 前後の topic remap、旧 `/amcl_pose` 廃止前提の移行手順を整理 |
+| 2026-05-29 | 1.2 | 走行系 ENU と表示系 LLH の自己位置 topic を分離し、旧 `/amcl_pose` 互換 alias と `/localization/pose_enu` 移行方針を明記 |
 | 2026-05-29 | 1.1 | `localization_fusion` 実装後の正本関係、他パッケージとの役割分担、2 ノードの責務境界を追記 |
 | 2026-05-28 | 1.0 | 初版。GNSS pose 変換と active target LLH 生成の詳細設計を定義 |

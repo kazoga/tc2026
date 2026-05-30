@@ -6,6 +6,7 @@
 
 | 版 | 日付 | 変更概要 |
 | --- | --- | --- |
+| 0.4 | 2026-05-29 | Phase 2 の `/localization/pose_enu` 移行に合わせ、旧 `/amcl_pose` 前提を廃止した |
 | 0.3 | 2026-05-28 | 実装phaseでは `route_msgs` を維持してLLH fieldを追加し、`tc_route_msgs` 改名は次phaseへ送る方針を追記した |
 | 0.2 | 2026-05-28 | route正本はENUとLLHの両方を持つべきという方針へ更新し、LLH route別topicを原則不要に見直した |
 | 0.1 | 2026-05-28 | 全体アーキテクチャ検討レポートと現状実装を踏まえ、LLH系topic/msg仕様案を整理した |
@@ -14,7 +15,7 @@
 
 本レポートは、次期 `robot_console`、将来の `localization_fusion`、地図表示、経路観測、ログ解析で使用するLLH系topicとメッセージ仕様を検討するものである。
 
-本版では、現行 `route_msgs` を `tc_route_msgs` へ改名したうえで関連実装を修正できる前提に立ち、routeのあるべき姿を再整理する。結論として、route全体の正本である `/active_route` は、走行制御用のENU poseと地理表示・編集用のLLH poseを同時に保持するべきである。一方、走行制御中に逐次変わる `/active_target` と自己位置互換topic `/amcl_pose` は、既存どおりENUを正本として維持する。
+本版では、現行 `route_msgs` を `tc_route_msgs` へ改名したうえで関連実装を修正できる前提に立ち、routeのあるべき姿を再整理する。結論として、route全体の正本である `/active_route` は、走行制御用のENU poseと地理表示・編集用のLLH poseを同時に保持するべきである。一方、走行制御中に逐次変わる `/active_target` と自己位置 topic `/localization/pose_enu` は、ENUを正本として維持する。
 
 ただし、今回の実装phaseでは影響範囲を抑えるため package 改名は行わず、現行 `route_msgs` に LLH field と `ActiveTargetLlh` を追加する。`tc_route_msgs` への改名は、依存パッケージの import / launch / README を一括移行する次phaseで実施する。
 
@@ -40,8 +41,8 @@
 | route msg | `src/route_msgs/msg/Route.msg`, `Waypoint.msg` | 現行routeは `header.frame_id="map"` のENU座標を前提とする。Waypoint msgにはLLH fieldがない |
 | route生成 | `src/route_planner/route_planner/route_builder.py`, `route_planner.py` | CSVから `latitude` / `longitude` を読み込むが、現行 `WaypointRecord -> route_msgs/Waypoint` 変換時にLLHはmsgへ渡らない |
 | route管理 | `src/route_manager/route_manager/route_manager_node.py`, `manager_core.py` | `/active_route` は `route_msgs/Route` をTRANSIENT_LOCALでpublishする。内部 `WaypointLite` はindexやLLH metadataを保持しない |
-| 追従・制御 | `src/route_follower`, `src/robot_navigator` | `/active_route`、`/active_target`、`/amcl_pose` は `map` frameのENU poseとして扱われる。走行判断はENU poseを使う |
-| GUI設計 | `src/robot_console/docs/robot_console_gui_architecture_design.md` | 初期互換は `/amcl_pose`、将来正本は `pose_llh` とLLH route/targetへ切り替える方針 |
+| 追従・制御 | `src/route_follower`, `src/robot_navigator` | `/active_route`、`/active_target`、`/localization/pose_enu` は `map` frameのENU poseとして扱われる。走行判断はENU poseを使う |
+| GUI設計 | `src/robot_console/docs/robot_console_gui_architecture_design.md` | 走行系自己位置は `/localization/pose_enu`、表示系自己位置は `pose_llh` とLLH route/targetへ切り替える方針 |
 
 ## 3. 現状実装の整理
 
@@ -53,7 +54,7 @@
 | --- | --- | --- | --- |
 | `/active_route` | `route_msgs/msg/Route` | `map` frame local ENU | `route_follower`, `route_manager` marker, GUI |
 | `/active_target` | `geometry_msgs/msg/PoseStamped` | `map` frame local ENU | `robot_navigator`, `obstacle_monitor`, GUI |
-| `/amcl_pose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | `map` frame local ENU | `route_follower`, `robot_navigator`, `obstacle_monitor`, GUI |
+| `/localization/pose_enu` | `geometry_msgs/msg/PoseWithCovarianceStamped` | `map` frame local ENU | `route_follower`, `robot_navigator`, `obstacle_monitor`, GUI |
 
 `route_follower` と `robot_navigator` は、到達判定、障害物回避、速度指令生成を平面距離・yawに基づいて行う。ここへLLHを直接入れると、距離計算、方位計算、許容誤差、障害物回避subgoal生成の全てを再設計する必要がある。したがって、走行制御の正本をLLHへ置き換えるべきではない。
 
@@ -82,7 +83,7 @@
 | waypointの地理位置 | `Waypoint.geo_pose` | OSM表示、route editor、ログ、外部連携で使うLLH pose |
 | active targetの走行位置 | `/active_target` (`geometry_msgs/PoseStamped`) | 制御周期で使う現在目標。ENUのみでよい |
 | active targetの地理表示 | `/route/active_target_llh` またはGUI内View | `/active_target` と `/active_route` の現在index/labelから導出する派生情報 |
-| 自己位置の走行互換 | `/amcl_pose` | 既存ノード互換のENU pose |
+| 自己位置の走行互換 | `/localization/pose_enu` | 既存ノード互換のENU pose |
 | 自己位置の地理表示 | `/localization/pose_llh` | 融合後自己位置のLLH正本 |
 
 この方針では、route全体を表す `/route/active_route_llh` は原則不要になる。`/active_route` の中にLLHが含まれるためである。必要なら、古いGUIや外部ツール向けの互換・抽出topicとして提供するに留める。
@@ -402,7 +403,7 @@ string target_kind
 | --- | --- | --- | --- | --- | --- |
 | `/localization/pose_llh` | `tc_geo_msgs/msg/GeoPoseWithQuality` | `localization_fusion` | `robot_console`, HTML UI backend, logger | `RELIABLE / VOLATILE / depth=10` | 融合後自己位置のLLH正本 |
 | `/gnss/pose_llh` | `tc_geo_msgs/msg/GeoPoseWithQuality` | `geo_pose_converter` または `rtk_gps_adapter` | `localization_fusion`, debug GUI, logger | `RELIABLE / VOLATILE / depth=10` | GNSS単独pose。融合前の観測値 |
-| `/amcl_pose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | `localization_fusion` または simulator | 既存走行系 | `RELIABLE / VOLATILE / depth=10` | 既存互換のENU自己位置 |
+| `/localization/pose_enu` | `geometry_msgs/msg/PoseWithCovarianceStamped` | `localization_fusion` または simulator | 走行系 | `RELIABLE / VOLATILE / depth=10` | ENU自己位置 |
 
 ### 8.3 raw GPS topicとの関係
 
@@ -463,7 +464,7 @@ raw GPS topicは廃止しない。`GeoPoseWithQuality` はraw topicを置き換�
 `localization_fusion` は以下を担当する。
 
 - GNSS由来ENU pose、LiDAR odometry、wheel odometryを融合する。
-- 既存互換として `/amcl_pose` をpublishする。
+- 融合後 ENU 自己位置として `/localization/pose_enu` をpublishする。
 - 正本自己位置として `/localization/pose_llh` をpublishする。
 - 必要に応じて `/localization/pose_enu` と `/localization/status` をpublishする。
 
@@ -473,12 +474,12 @@ raw GPS topicは廃止しない。`GeoPoseWithQuality` はraw topicを置き換�
 
 | GUI表示 | 正本topic | fallback |
 | --- | --- | --- |
-| 現在地マーカー | `/localization/pose_llh` | `/amcl_pose` を逆投影した暫定LLH、または `/rtk_gps/fix` |
+| 現在地マーカー | `/localization/pose_llh` | `/localization/pose_enu` を逆投影した暫定LLH、または `/rtk_gps/fix` |
 | GPS受信状態 | `/rtk_gps/rtk_status`, `/rtk_gps/fix` | なし。未受信として表示 |
 | route overlay | `/active_route.waypoints[].geo_pose` | `/active_route.route_image` または `/active_route.waypoints[].pose` のENU簡易表示 |
 | active target | `/route/active_target_llh` または `/active_route` + `/follower_state` から生成したView | `/active_target` を逆投影した暫定LLH |
-| 自己位置品質 | `/localization/pose_llh` のquality + `/rtk_gps/rtk_status` | `/amcl_pose` freshnessのみ |
-| raw GNSSとの差分 | `/localization/pose_llh` と `/gnss/pose_llh` | `/rtk_gps/fix` と `/amcl_pose` 逆投影 |
+| 自己位置品質 | `/localization/pose_llh` のquality + `/rtk_gps/rtk_status` | `/localization/pose_enu` freshnessのみ |
+| raw GNSSとの差分 | `/localization/pose_llh` と `/gnss/pose_llh` | `/rtk_gps/fix` と `/localization/pose_enu` 逆投影 |
 
 これにより、自己位置・センサ情報タブとHTML遠隔観測UIは、以下を具体表示できる。
 
@@ -513,7 +514,7 @@ raw GPS topicは廃止しない。`GeoPoseWithQuality` はraw topicを置き換�
 ### Phase C: localization / projection実装
 
 - `geo_pose_converter` または暫定adapterで `/gnss/pose_llh` と `/gnss/pose_enu` をpublishする。
-- `/amcl_pose` とprojectionがある場合は、暫定 `/localization/pose_llh` をpublishする。
+- `/localization/pose_enu` とprojectionがある場合は、暫定 `/localization/pose_llh` をpublishする。
 - `localization_fusion` 実装後は `/localization/pose_llh` を正本publishする。
 
 ### Phase D: GUI / HTML UI切替
@@ -572,7 +573,7 @@ LLH系topic/msg仕様の実装完了条件は以下とする。
 | ENU/LLH不整合 | 同一waypointに対するENUとLLHが異なる原点・回転で生成される | `Route.projection` を付与し、route生成時に整合検査を行う |
 | heading二重変換 | `/rtk_gps/heading` のENU quaternionと `RtkStatus.heading_deg` を混在させる | raw headingからENU yawへ変換する場所を `geo_pose_converter` に限定する |
 | route metadata欠落 | `route_manager` の内部モデルでLLHやindexが失われる | `WaypointLite` / `RouteModel` を正本情報を落とさない形へ拡張する |
-| GUI fallback固定化 | 初期互換の `/amcl_pose` 表示が正式仕様として残る | 画面仕様ではLLH topicを正本とし、fallbackは明示的に暫定扱いにする |
+| GUI fallback固定化 | ENU `/localization/pose_enu` 表示が通常地図表示の正本として残る | 画面仕様ではLLH topicを表示正本とし、ENU表示はデバッグ・fallback扱いにする |
 
 ### 14.3 テスト観点
 
@@ -598,11 +599,11 @@ LLH系topic/msg仕様の実装完了条件は以下とする。
 | `route_manager.core_route_to_ros()` | `Waypoint.index` を明示設定していない | 配列順だけに頼らず、msg fieldとしてindexを維持する |
 | `route_follower` 内部Waypoint | indexを保持せず、coreの配列indexで進捗を扱う | 制御上は配列indexでよいが、表示・target LLH生成ではmsg indexとの対応を保持できるようにする |
 | route画像 `route_image` | route msg内に埋め込まれており、地理routeとは別表現になっている | route overlayの正本はwaypoint LLHとし、画像は補助表示・互換表示に限定する |
-| GUIの地図変換責務 | 初期互換では `/amcl_pose` と `/active_route` からGUI側で推測しがち | GUIは公開LLH fieldを表示し、測地変換ロジックを持たない |
+| GUIの地図変換責務 | `/localization/pose_enu` と `/active_route` からGUI側でLLHを推測しがち | GUIは公開LLH fieldを表示し、測地変換ロジックを持たない |
 | package命名 | `route_msgs` は汎用名 | LLH対応と同じphaseで `tc_route_msgs` へ改名し、新規地理系も `tc_geo_msgs` として接頭辞をそろえる |
 
 ## 16. 結論
 
 `tc_route_msgs` への改名を含めて実装を変更できるなら、route全体のあるべき姿は「ENU走行poseとLLH地理poseを同じ `/active_route` に保持する正本route」である。これにより、routeのversion、waypoint順序、停止属性、ENU pose、LLH pose、projection条件が一体で管理され、GUI・HTML UI・ログ・route editorが同じroute正本を参照できる。
 
-一方、走行中の `/active_target` と `/amcl_pose` は、既存制御系の入力としてENUのまま維持する。LLH targetは必要に応じて `/route/active_target_llh` として派生生成する。raw GPS topicは品質監視とadapter入力として維持し、融合後自己位置 `/localization/pose_llh` とは明確に分離する。
+一方、走行中の `/active_target` と `/localization/pose_enu` は、既存制御系の入力としてENUのまま維持する。LLH targetは必要に応じて `/route/active_target_llh` として派生生成する。raw GPS topicは品質監視とadapter入力として維持し、融合後自己位置 `/localization/pose_llh` とは明確に分離する。

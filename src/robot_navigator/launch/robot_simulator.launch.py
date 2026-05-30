@@ -12,7 +12,7 @@ def generate_launch_description() -> LaunchDescription:
     )
     pose_topic_arg = DeclareLaunchArgument(
         'pose_topic',
-        default_value='/amcl_pose',
+        default_value='/localization/pose_enu',
         description='シミュレータが配信し、原点更新にも使用する ENU 自己位置トピック',
     )
 
@@ -32,7 +32,7 @@ def generate_launch_description() -> LaunchDescription:
                 'yaw_noise_std_deg': 0.0,
                 'pose_topic': pose_topic,
                 'enable_glitch_trigger': True,
-                'glitch_trigger_topic': '/amcl_glitch_trigger',
+                'glitch_trigger_topic': '/localization/pose_enu_glitch_trigger',
                 'glitch_cooldown_sec': 5.0,
                 'glitch_wait_after_stop_sec': 5.0,
                 'glitch_radius_min_m': 2.0,

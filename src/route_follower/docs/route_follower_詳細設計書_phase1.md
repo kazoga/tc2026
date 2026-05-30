@@ -44,7 +44,7 @@ signal_stop や rerouting 遷移は、次フェーズ以降に実装予定であ
 | 入出力 | トピック名 | 型 | 説明 |
 |--------|-------------|----|------|
 | 入力 | /active_route | custom_msgs/ActiveRoute | 経路情報の受信 |
-| 入力 | /amcl_pose | geometry_msgs/PoseWithCovarianceStamped | 現在位置 |
+| 入力 | /localization/pose_enu | geometry_msgs/PoseWithCovarianceStamped | 現在位置 |
 | 入力 | /manual_start | std_msgs/Bool | 停止後の再開指令 |
 | 出力 | /active_target | geometry_msgs/PoseStamped | 現在の追従目標 |
 | 出力 | /follower_state | custom_msgs/FollowerState | 走行状態通知 |
@@ -74,7 +74,7 @@ signal_stop や rerouting 遷移は、次フェーズ以降に実装予定であ
 | トピック名 | 型 | 説明 | QoS |
 |-------------|----|------|-----|
 | `/active_route` | `route_msgs/Route` | 経路入力。frame_id が target_frame と異なる場合は ERROR に遷移。 | RELIABLE / TRANSIENT_LOCAL |
-| `/amcl_pose` | `geometry_msgs/PoseStamped` | 現在姿勢を購読し到達判定に使用。 | RELIABLE / VOLATILE |
+| `/localization/pose_enu` | `geometry_msgs/PoseStamped` | 現在姿勢を購読し到達判定に使用。 | RELIABLE / VOLATILE |
 | `/manual_start` | `std_msgs/Bool` | True 受信時に WAITING_STOP を解除し RUNNING に復帰。 | RELIABLE / VOLATILE |
 
 ### 発行トピック
@@ -163,7 +163,7 @@ signal_stop や rerouting 遷移は、次フェーズ以降に実装予定であ
 | トピック | reliability | durability | depth |
 |-----------|--------------|-------------|--------|
 | `/active_route` | RELIABLE | TRANSIENT_LOCAL | 1 |
-| `/amcl_pose` | RELIABLE | VOLATILE | 10 |
+| `/localization/pose_enu` | RELIABLE | VOLATILE | 10 |
 | `/manual_start` | RELIABLE | VOLATILE | 10 |
 | `/active_target` | RELIABLE | TRANSIENT_LOCAL | 1 |
 | `/follower_state` | RELIABLE | VOLATILE | 10 |

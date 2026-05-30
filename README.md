@@ -196,8 +196,8 @@ ros2 launch robot_console robot_console.launch.py
 
 #### 障害物回避シミュレーション
 
-Gazebo GUI 付きで道路 world、robot、bridge、fake AMCL、TF を起動する。
-`obstacle_route_sim` は Gazebo 上の真値 pose から `/amcl_pose` を配信するため、経路追従側は
+Gazebo GUI 付きで道路 world、robot、bridge、fake localization pose、TF を起動する。
+`obstacle_route_sim` は Gazebo 上の真値 pose から `/localization/pose_enu` を配信するため、経路追従側は
 自己位置推定誤差なしの前提で結合確認できる。
 
 ```bash

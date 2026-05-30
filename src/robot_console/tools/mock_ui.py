@@ -85,7 +85,7 @@ class ManualSignalSnapshot:
 
 @dataclass
 class ActiveTargetSnapshot:
-    """active_targetとamcl_poseの距離メトリクス."""
+    """active_targetとpose_enuの距離メトリクス."""
 
     current_distance_m: float
     reference_distance_m: float

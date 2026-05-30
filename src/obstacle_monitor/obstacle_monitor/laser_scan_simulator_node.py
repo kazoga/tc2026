@@ -74,7 +74,7 @@ class LaserScanSimulatorNode(Node):
         self.last_scan_angles = np.array([], dtype=np.float32)
         self.last_scan_ranges = np.array([], dtype=np.float32)
 
-        self.create_subscription(PoseWithCovarianceStamped, '/amcl_pose', self.pose_callback, 10)
+        self.create_subscription(PoseWithCovarianceStamped, '/localization/pose_enu', self.pose_callback, 10)
         self.pub_scan = self.create_publisher(LaserScan, '/scan', 10)
 
         self.create_timer(1.0 / self.publish_rate_hz, self.on_timer_scan)

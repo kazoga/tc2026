@@ -131,7 +131,7 @@ class RobotNavigator(Node):
         # --- 通信に用いるトピック名（リマップ前の既定値） ---
         scan_topic = 'scan'
         odom_topic = 'odom'
-        amcl_pose_topic = 'amcl_pose'
+        pose_enu_topic = 'localization/pose_enu'
         goal_topic = 'active_target'
         road_block_topic = 'road_blocked'
         active_route_topic = 'active_route'
@@ -188,9 +188,9 @@ class RobotNavigator(Node):
         )
         self.marker_pub = self.create_publisher(Marker, marker_topic, marker_qos)
 
-        # 購読（amcl, odom, goal は RELIABLE、scan は SensorDataQoS）
+        # 購読（pose_enu, odom, goal は RELIABLE、scan は SensorDataQoS）
         self.create_subscription(Odometry, odom_topic, self.on_odom, 10)
-        self.create_subscription(PoseWithCovarianceStamped, amcl_pose_topic, self.on_amcl_pose, 10)
+        self.create_subscription(PoseWithCovarianceStamped, pose_enu_topic, self.on_pose_enu, 10)
         self.create_subscription(PoseStamped, goal_topic, self.on_goal, 10)
         self.create_subscription(Bool, road_block_topic, self.on_road_blocked, 10)
         route_qos = QoSProfile(
@@ -215,7 +215,7 @@ class RobotNavigator(Node):
         # --- リマップ後の名称を保持（ログや診断用） ---
         self.scan_topic_name = self._resolve_topic_name(scan_topic)
         self.odom_topic_name = self._resolve_topic_name(odom_topic)
-        self.amcl_pose_topic_name = self._resolve_topic_name(amcl_pose_topic)
+        self.pose_enu_topic_name = self._resolve_topic_name(pose_enu_topic)
         self.goal_topic_name = self._resolve_topic_name(goal_topic)
         self.road_block_topic_name = self._resolve_topic_name(road_block_topic)
         self.active_route_topic_name = self._resolve_topic_name(active_route_topic)
@@ -265,8 +265,8 @@ class RobotNavigator(Node):
         """/odom から現在速度を保持する。"""
         self.current_velocity = msg.twist.twist
 
-    def on_amcl_pose(self, msg: PoseWithCovarianceStamped) -> None:
-        """/amcl_pose から現在姿勢（Pose）を保持する。"""
+    def on_pose_enu(self, msg: PoseWithCovarianceStamped) -> None:
+        """/localization/pose_enu から現在姿勢（Pose）を保持する。"""
         self.current_pose = msg.pose.pose
 
     def on_goal(self, msg: PoseStamped) -> None:
@@ -443,7 +443,7 @@ class RobotNavigator(Node):
     def _publish_stop_with_throttle(self) -> None:
         """入力未揃い時の安全停止（5秒スロットルの WARN ログ付き）。"""
         self.get_logger().warn(
-            f"データ待ち（{self.amcl_pose_topic_name}, {self.odom_topic_name}, {self.goal_topic_name})",
+            f"データ待ち（{self.pose_enu_topic_name}, {self.odom_topic_name}, {self.goal_topic_name})",
             throttle_duration_sec=5.0,
         )
         self.cmd_pub.publish(Twist())

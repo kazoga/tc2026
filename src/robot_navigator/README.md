@@ -10,7 +10,7 @@
 配信する `robot_simulator` ノード（同パッケージ内）も併載しています。
 
 ## 主な機能
-- `/odom`・`/amcl_pose`・`/active_target` を監視し、線速度・角速度の時間最適解を近似計算。
+- `/odom`・`/localization/pose_enu`・`/active_target` を監視し、線速度・角速度の時間最適解を近似計算。
 - `obstacle_distance_mode` に応じて `/scan` もしくは `/obstacle_avoidance_hint` から前方距離を取得し、
   `safety_distance`・`min_obstacle_distance` に基づき減速／停止を制御する。
 - 角速度は PID（`kp=0.65`, `ki=0.001`, `kd=0.02`）で生成し、角度誤差に応じて線速度をスケール。
@@ -53,11 +53,11 @@ ros2 run robot_navigator robot_navigator
 | 名称 | 型 | 説明 | QoS |
 |------|----|------|-----|
 | `/odom` | `nav_msgs/Odometry` | 現在速度を取得し加速度制限に利用。 | RELIABLE / VOLATILE / depth=10 |
-| `/amcl_pose` | `geometry_msgs/PoseWithCovarianceStamped` | 現在姿勢（位置・ヨー角）を取得。launch の `amcl_pose_topic` で `/localization/pose_enu` などへ変更可能。 | RELIABLE / VOLATILE / depth=10 |
+| `/localization/pose_enu` | `geometry_msgs/PoseWithCovarianceStamped` | 現在姿勢（位置・ヨー角）を取得。launch の `pose_enu_topic` で `/localization/pose_enu` などへ変更可能。 | RELIABLE / VOLATILE / depth=10 |
 | `/active_target` | `geometry_msgs/PoseStamped` | 追従対象の目標姿勢。 | RELIABLE / VOLATILE / depth=10 |
 | `/obstacle_avoidance_hint` | `route_msgs/ObstacleAvoidanceHint` | `obstacle_distance_mode=hint` のとき使用。 | BEST_EFFORT / VOLATILE / depth=1 |
 | `/scan` | `sensor_msgs/LaserScan` | `obstacle_distance_mode=scan` のとき使用（SensorDataQoS）。 | BEST_EFFORT / VOLATILE / depth=1 |
-| `/amcl_glitch_trigger` | `std_msgs/Bool` | `robot_simulator` が停止中に受信すると `pose_topic` へ単発オフセットを加算。 | RELIABLE / VOLATILE / depth=10 |
+| `/localization/pose_enu_glitch_trigger` | `std_msgs/Bool` | `robot_simulator` が停止中に受信すると `pose_topic` へ単発オフセットを加算。 | RELIABLE / VOLATILE / depth=10 |
 
 ### Publisher
 | 名称 | 型 | 説明 | QoS |
@@ -86,7 +86,7 @@ ros2 run robot_navigator robot_navigator
 | `log_csv_path` | string | `~/control_log.csv` | CSV ログ出力先パス。
 
 ## 状態管理・処理フロー
-1. `/odom`・`/amcl_pose`・`/active_target` の受信状況を監視し、欠損時は `cmd_vel_topic` にゼロを出力して
+1. `/odom`・`/localization/pose_enu`・`/active_target` の受信状況を監視し、欠損時は `cmd_vel_topic` にゼロを出力して
    WARN を 5 秒周期で報告する。
 2. 入力が揃うと `compute_time_optimal_cmd_vel()` を呼び出し、角度誤差の PID 制御で角速度を算出。
 3. 線速度は角度誤差および障害物距離に基づくスケールを適用し、`max_acc_v` に従って加速度を制限。
@@ -96,7 +96,7 @@ ros2 run robot_navigator robot_navigator
 6. CSV ログが有効な場合は制御ループの各種値（速度、誤差、障害物距離）を逐次書き出す。
 
 ## 動作確認手順
-1. `robot_simulator`（当パッケージ内）を起動し、最終 `/cmd_vel` を受け取って `pose_topic`（既定 `/amcl_pose`）・`/odom` を配信させる。`/localization/pose_enu` 移行時は `pose_topic:=/localization/pose_enu` を指定する。
+1. `robot_simulator`（当パッケージ内）を起動し、最終 `/cmd_vel` を受け取って `pose_topic`（既定 `/localization/pose_enu`）・`/odom` を配信させる。`/localization/pose_enu` 移行時は `pose_topic:=/localization/pose_enu` を指定する。
 2. `route_follower` もしくは手動で `/active_target` を Publish し、目標指令を入力する。
 3. `obstacle_monitor` を起動して `/obstacle_avoidance_hint` を供給するか、`obstacle_distance_mode:=scan`
    として `/scan` を直接購読させる。
@@ -119,7 +119,7 @@ ros2 run robot_navigator robot_navigator
 に外部トリガ入力で単発オフセットを付与する機能を実装しました。確率分布による自動発火は行わず、
 テストスクリプトや人間操作で明示的に発火させることで再現性を確保します。
 
-- **トリガトピック**: `/amcl_glitch_trigger`（`std_msgs/Bool`）。`data=true` を受信した瞬間に 1 回
+- **トリガトピック**: `/localization/pose_enu_glitch_trigger`（`std_msgs/Bool`）。`data=true` を受信した瞬間に 1 回
   だけオフセットを予約し、停止状態で `glitch_wait_after_stop_sec`（既定 5 秒）の待機後に
   `pose_topic` へ反映します。一度適用されたオフセットは `data=false` を受信するまで同じ値のまま
   付与され続けます。走行中にトリガを受けた場合は「停止するまで予約」を保持し、停止と

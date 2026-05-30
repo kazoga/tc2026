@@ -134,7 +134,7 @@ class RouteFollowerNode(Node):
 
         # Pub/Sub設定
         active_route_topic = 'active_route'
-        amcl_pose_topic = 'amcl_pose'
+        pose_enu_topic = 'localization/pose_enu'
         obstacle_hint_topic = 'obstacle_avoidance_hint'
         manual_start_topic = 'manual_start'
         signal_recognition_topic = 'sig_recog'
@@ -146,7 +146,7 @@ class RouteFollowerNode(Node):
 
         self.sub_route = self.create_subscription(Route, active_route_topic, self._on_route, self.qos_tl)
         self.sub_pose = self.create_subscription(
-            PoseWithCovarianceStamped, amcl_pose_topic, self._on_pose, self.qos_vol
+            PoseWithCovarianceStamped, pose_enu_topic, self._on_pose, self.qos_vol
         )
         self.sub_hint = self.create_subscription(
             ObstacleAvoidanceHint, obstacle_hint_topic, self._on_hint, self.qos_be
@@ -170,7 +170,7 @@ class RouteFollowerNode(Node):
 
         # リマップ適用後の名称をログ用に保存
         self.active_route_topic = self._resolve_topic_name(active_route_topic)
-        self.amcl_pose_topic = self._resolve_topic_name(amcl_pose_topic)
+        self.pose_enu_topic = self._resolve_topic_name(pose_enu_topic)
         self.obstacle_hint_topic = self._resolve_topic_name(obstacle_hint_topic)
         self.manual_start_topic = self._resolve_topic_name(manual_start_topic)
         self.signal_recognition_topic = self._resolve_topic_name(signal_recognition_topic)

@@ -12,7 +12,7 @@ Phase2 では legacy の避障ロジックを ROS2 へ移植し、`/sensor_viewe
 - `front_cone_half_deg`・`stop_dist_m` を用いた前方くさび判定で閉塞状況を検知。
 - `/obstacle_avoidance_hint` に front_blocked・front_clearance_m・左右オフセットを配信。
 - `/sensor_viewer` に LaserScanViewer 互換の bgr8 画像を配信し、
-  `/amcl_pose`・`/active_target` を重畳して目標方向を可視化。
+  `/localization/pose_enu`・`/active_target` を重畳して目標方向を可視化。
 - `hint_range_m` が `max_obstacle_distance_m` 未満の場合は警告しつつ自動で補正。
 
 ## 起動方法
@@ -29,14 +29,14 @@ ros2 launch obstacle_monitor obstacle_monitor.launch.py \
 ros2 run obstacle_monitor obstacle_monitor
 ```
 - `laser_scan_simulator` を併用する場合は別ターミナルで
-  `ros2 run obstacle_monitor laser_scan_simulator` を起動し、`/amcl_pose` を供給してください。
+  `ros2 run obstacle_monitor laser_scan_simulator` を起動し、`/localization/pose_enu` を供給してください。
 
 ## 外部インタフェース
 ### Subscriber
 | 名称 | 型 | 説明 | QoS |
 |------|----|------|-----|
 | `/scan` | `sensor_msgs/LaserScan` | LiDAR 入力。SensorDataQoS（BEST_EFFORT / VOLATILE / depth=1）。 |
-| `/amcl_pose` | `geometry_msgs/PoseWithCovarianceStamped` | 現在姿勢。viewer で目標線を描画するために利用。 | RELIABLE / VOLATILE / depth=10 |
+| `/localization/pose_enu` | `geometry_msgs/PoseWithCovarianceStamped` | 現在姿勢。viewer で目標線を描画するために利用。 | RELIABLE / VOLATILE / depth=10 |
 | `/active_target` | `geometry_msgs/PoseStamped` | 現在の目標位置。viewer の矢印描画に利用。 | RELIABLE / VOLATILE / depth=10 |
 
 ### Publisher
@@ -70,10 +70,10 @@ ros2 run obstacle_monitor obstacle_monitor
    `avoid_offset_min_m` の下限を適用する。
 4. `front_cone_half_deg` 内での距離分位点を計算し、`stop_dist_m` 以下で閉塞と判定する。
 5. 算出結果を `ObstacleAvoidanceHint` に格納し、`/sensor_viewer` へ可視化画像を出力する。
-6. `/amcl_pose`・`/active_target` を利用して viewer 上に目標矢印を描画し、状況把握を補助する。
+6. `/localization/pose_enu`・`/active_target` を利用して viewer 上に目標矢印を描画し、状況把握を補助する。
 
 ## 動作確認手順
-1. `robot_simulator` などから `/amcl_pose`・`/active_target` を配信する。
+1. `robot_simulator` などから `/localization/pose_enu`・`/active_target` を配信する。
 2. `laser_scan_simulator` を起動し、LiDAR の疑似データを `/scan` に配信する。
 3. `obstacle_monitor` を launch し、`/obstacle_avoidance_hint` の `front_blocked` や
    `left_offset_m` が障害物に応じて変化することを確認する。

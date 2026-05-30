@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Gazebo 真値 pose から /amcl_pose 互換 PoseWithCovarianceStamped を生成する."""
+"""Gazebo 真値 pose から /localization/pose_enu 互換 PoseWithCovarianceStamped を生成する."""
 
 from __future__ import annotations
 
@@ -10,28 +10,28 @@ from rclpy.node import Node
 from tf2_msgs.msg import TFMessage
 
 
-class GazeboTrueAmclPose(Node):
-    """Gazebo 上の robot モデル真値を AMCL pose として publish するノード."""
+class GazeboTrueLocalizationPose(Node):
+    """Gazebo 上の robot モデル真値を localization pose ENU として publish するノード."""
 
     def __init__(self) -> None:
         """通信設定を初期化する."""
 
-        super().__init__("fake_amcl_pose")
+        super().__init__("fake_localization_pose")
         self.declare_parameter("pose_topic", "/gazebo/dynamic_pose_info")
-        self.declare_parameter("amcl_topic", "/amcl_pose")
+        self.declare_parameter("pose_enu_topic", "/localization/pose_enu")
         self.declare_parameter("frame_id", "map")
         self.declare_parameter("target_pose_index", 0)
 
         pose_topic = str(self.get_parameter("pose_topic").value)
-        amcl_topic = str(self.get_parameter("amcl_topic").value)
+        pose_enu_topic = str(self.get_parameter("pose_enu_topic").value)
         self.frame_id = str(self.get_parameter("frame_id").value)
         self.target_pose_index = int(self.get_parameter("target_pose_index").value)
         self._missing_pose_count = 0
 
         self.create_subscription(TFMessage, pose_topic, self._on_pose_info, 10)
-        self.publisher = self.create_publisher(PoseWithCovarianceStamped, amcl_topic, 10)
+        self.publisher = self.create_publisher(PoseWithCovarianceStamped, pose_enu_topic, 10)
         self.get_logger().info(
-            f"fake_amcl_pose started: {pose_topic} -> {amcl_topic}, "
+            f"fake_localization_pose started: {pose_topic} -> {pose_enu_topic}, "
             f"frame={self.frame_id}, target_pose_index={self.target_pose_index}"
         )
 
@@ -65,7 +65,7 @@ def main(args=None) -> None:
     """エントリーポイント."""
 
     rclpy.init(args=args)
-    node = GazeboTrueAmclPose()
+    node = GazeboTrueLocalizationPose()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

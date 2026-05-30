@@ -63,7 +63,7 @@ ros2 launch robot_console robot_console.launch.py \
 | `/active_route` | `route_msgs/msg/Route` | ルート地図画像とウェイポイント一覧。|
 | `/sensor_viewer` | `sensor_msgs/msg/Image` | 障害物ビュー画像パネル。|
 | `/perception/road_blockage/decision_image` / `/perception/traffic_signal/decision_image` | `sensor_msgs/msg/Image` | 走行カメラ・信号監視パネル。|
-| `/active_target` / `/amcl_pose` | `geometry_msgs/msg/PoseStamped` / `PoseWithCovarianceStamped` | 目標距離計算。|
+| `/active_target` / `/localization/pose_enu` | `geometry_msgs/msg/PoseStamped` / `PoseWithCovarianceStamped` | 目標距離計算。|
 | `/cmd_vel` | `geometry_msgs/msg/Twist` | 速度カード。|
 | `/manual_start` / `/sig_recog` / `/road_blocked` | `std_msgs/msg/Bool` / `Int32` / `Bool` | イベントバナー、タブ表示の現在値。|
 

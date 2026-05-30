@@ -8,7 +8,7 @@
 
 ## 主な機能
 - `/active_route` 受信時に `FollowerCore` へ適用し、`start_immediately` 設定に応じて自動開始。
-- `/amcl_pose`・`/obstacle_avoidance_hint`・`/sig_recog`・`/manual_start` を購読し、追従状態や滞留判定に利用。
+- `/localization/pose_enu`・`/obstacle_avoidance_hint`・`/sig_recog`・`/manual_start` を購読し、追従状態や滞留判定に利用。
 - `FollowerCore.tick()` の結果を `/active_target` と `/follower_state` へ出力し、滞留統計も Publish。
 - 滞留検知時に `/report_stuck` を呼び出し、`decision_code` や `offset_hint` を反映して走行継続・スキップ・失敗を判定。
 - 1/`resend_interval_sec` [Hz] でターゲット Pose を再送し、制御系へ冪等な指示を提供。
@@ -31,7 +31,7 @@ ros2 launch route_follower route_follower.launch.py \
 | 名称 | 型 | 説明 | QoS |
 |------|----|------|-----|
 | `/active_route` | `route_msgs/Route` | 追従対象ルート。`Route.version` と `start_index` を `FollowerCore` に転送。 | RELIABLE / TRANSIENT_LOCAL |
-| `/amcl_pose` | `geometry_msgs/PoseWithCovarianceStamped` | 現在姿勢。2D yaw を算出して `FollowerCore` へ投入。 | RELIABLE / VOLATILE |
+| `/localization/pose_enu` | `geometry_msgs/PoseWithCovarianceStamped` | 現在姿勢。2D yaw を算出して `FollowerCore` へ投入。 | RELIABLE / VOLATILE |
 | `/obstacle_avoidance_hint` | `route_msgs/ObstacleAvoidanceHint` | 障害物回避ヒント。最新値を統計化し滞留判定に利用。 | BEST_EFFORT / VOLATILE |
 | `/manual_start` | `std_msgs/Bool` | TRUE 受信で手動再開。 | RELIABLE / VOLATILE |
 | `/sig_recog` | `std_msgs/Int32` | 信号認識結果（1=GO, 2=NOGO 等）。 | RELIABLE / VOLATILE |

@@ -36,19 +36,19 @@ def generate_launch_description():
     )
     gnss_pose_enu_topic_arg = DeclareLaunchArgument(
         'gnss_pose_enu_topic',
-        default_value='/amcl_pose',
+        default_value='/localization/pose_enu',
         description=(
             'geo_pose_converter_node が publish する GNSS 単独 ENU pose topic。'
-            '現行暫定運用では /amcl_pose、/amcl_pose 廃止後は /localization/pose_enu、'
+            'localization_fusion 実装前は /localization/pose_enu、'
             'localization_fusion 実装後は /gnss/pose_enu を指定する'
         ),
     )
     pose_enu_topic_arg = DeclareLaunchArgument(
         'pose_enu_topic',
-        default_value='/amcl_pose',
+        default_value='/localization/pose_enu',
         description=(
             'route_geo_projector_node が購読する ENU 自己位置 topic。'
-            '現行暫定運用では /amcl_pose、移行後は /localization/pose_enu を指定する'
+            '既定では /localization/pose_enu を指定する'
         ),
     )
     pose_llh_topic_arg = DeclareLaunchArgument(

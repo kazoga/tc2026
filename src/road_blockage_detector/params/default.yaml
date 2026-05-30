@@ -2,7 +2,7 @@ road_blockage_detector:
   ros__parameters:
     detections_topic: /perception/road_blockage/detections
     image_topic: /usb_cam/image_raw
-    amcl_pose_topic: /amcl_pose
+    pose_enu_topic: /localization/pose_enu
     road_blocked_topic: /road_blocked
     decision_image_topic: /perception/road_blockage/decision_image
     publish_decision_image: true

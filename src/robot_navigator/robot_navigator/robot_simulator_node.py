@@ -78,7 +78,7 @@ class RobotSimulatorNode(Node):
         self.declare_parameter('pose_noise_std_m', 0.0)
         self.declare_parameter('yaw_noise_std_deg', 0.0)
         self.declare_parameter('enable_glitch_trigger', True)
-        self.declare_parameter('glitch_trigger_topic', '/amcl_glitch_trigger')
+        self.declare_parameter('glitch_trigger_topic', '/localization/pose_enu_glitch_trigger')
         self.declare_parameter('glitch_cooldown_sec', 5.0)
         self.declare_parameter('glitch_wait_after_stop_sec', 5.0)
         self.declare_parameter('glitch_radius_min_m', 2.0)
@@ -98,7 +98,7 @@ class RobotSimulatorNode(Node):
         self.declare_parameter('yaw0_deg', 0.0)
         self.declare_parameter('timer_publish_odom_ms', 100)
         self.declare_parameter('cmd_timeout_sec', 2.0)
-        self.declare_parameter('pose_topic', '/amcl_pose')
+        self.declare_parameter('pose_topic', '/localization/pose_enu')
 
         self._cycle_hz: float = float(self.get_parameter('cycle_hz').value)
         self._dt: float = 1.0 / self._cycle_hz if self._cycle_hz > 0.0 else 0.1
