@@ -353,13 +353,13 @@ class RoutePlannerNode(Node):
         self.declare_parameter("map_image_path", None)
         self.declare_parameter("map_worldfile_path", None)
         self.declare_parameter("route_id", "default_route")
-        self.declare_parameter("projection_id", "default")
+        self.declare_parameter("projection_id", "tokyo_station")
         self.declare_parameter("datum", "WGS84")
         self.declare_parameter("map_frame_id", "map")
         self.declare_parameter("earth_frame_id", "earth")
-        self.declare_parameter("origin_latitude", 0.0)
-        self.declare_parameter("origin_longitude", 0.0)
-        self.declare_parameter("origin_altitude", 0.0)
+        self.declare_parameter("origin_latitude", 35.681382)
+        self.declare_parameter("origin_longitude", 139.766084)
+        self.declare_parameter("origin_altitude", 3.86)
         self.declare_parameter("map_yaw_offset_rad", 0.0)
 
         try:

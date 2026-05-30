@@ -25,6 +25,7 @@ setup(
         'console_scripts': [
             'geo_pose_converter_node = geo_pose_converter.geo_pose_converter_node:main',
             'route_geo_projector_node = geo_pose_converter.route_geo_projector_node:main',
+            'llh_osm_viewer_node = geo_pose_converter.llh_osm_viewer_node:main',
         ],
     },
 )
