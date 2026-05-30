@@ -17,7 +17,7 @@ ROS 2 Jazzy ワークスペース。
 | [`src/route_planner`](src/route_planner/README.md)          | YAML / CSV から経路を生成し `/get_route`・`/update_route` を提供。可変ブロックの再計画にも対応 |
 | [`src/route_manager`](src/route_manager/README.md)          | `route_planner` のサービスを呼び出し `/active_route` を配信、滞留報告から再計画を統括する FSM |
 | [`src/route_follower`](src/route_follower/README.md)        | `/active_route` を追従し、現在の目標 Pose を `/active_target` として配信。滞留検知で `/report_stuck` を発行 |
-| [`src/route_msgs`](src/route_msgs/README.md)                | 経路・走行系で共有する msg / srv 定義 (`Route`, `RouteState`, `ReportStuck` ほか) |
+| [`src/tc_route_msgs`](src/tc_route_msgs/README.md)                | 経路・走行系で共有する msg / srv 定義 (`Route`, `RouteState`, `ReportStuck` ほか) |
 
 ### 走行制御・障害物
 | パッケージ                                                  | 役割                                                                 |
@@ -70,7 +70,7 @@ network_access = true
 Python パッケージ群で使用する pip 依存モジュールは、[`requirements.txt`](requirements.txt) にまとめている。
 対象は `obstacle_monitor`, `robot_console`, `robot_navigator`, `route_follower`,
 `route_manager`, `route_planner`, `obstacle_route_sim`, `yolo_detector` と、それらが利用する
-`route_msgs`。`drive_mode_manager` の GUI 依存である `python3-pyqt5` と、
+`tc_route_msgs`。`drive_mode_manager` の GUI 依存である `python3-pyqt5` と、
 `obstacle_route_sim` の Gazebo / ros_gz 依存は pip ではなく apt / rosdep で導入する。
 
 ROS 2 の環境を読み込んだうえで、ワークスペース直下で以下を実行する。

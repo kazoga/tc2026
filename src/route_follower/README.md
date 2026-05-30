@@ -30,9 +30,9 @@ ros2 launch route_follower route_follower.launch.py \
 ### 購読トピック
 | 名称 | 型 | 説明 | QoS |
 |------|----|------|-----|
-| `/active_route` | `route_msgs/Route` | 追従対象ルート。`Route.version` と `start_index` を `FollowerCore` に転送。 | RELIABLE / TRANSIENT_LOCAL |
+| `/active_route` | `tc_route_msgs/Route` | 追従対象ルート。`Route.version` と `start_index` を `FollowerCore` に転送。 | RELIABLE / TRANSIENT_LOCAL |
 | `/localization/pose_enu` | `geometry_msgs/PoseWithCovarianceStamped` | 現在姿勢。2D yaw を算出して `FollowerCore` へ投入。 | RELIABLE / VOLATILE |
-| `/obstacle_avoidance_hint` | `route_msgs/ObstacleAvoidanceHint` | 障害物回避ヒント。最新値を統計化し滞留判定に利用。 | BEST_EFFORT / VOLATILE |
+| `/obstacle_avoidance_hint` | `tc_route_msgs/ObstacleAvoidanceHint` | 障害物回避ヒント。最新値を統計化し滞留判定に利用。 | BEST_EFFORT / VOLATILE |
 | `/manual_start` | `std_msgs/Bool` | TRUE 受信で手動再開。 | RELIABLE / VOLATILE |
 | `/sig_recog` | `std_msgs/Int32` | 信号認識結果（1=GO, 2=NOGO 等）。 | RELIABLE / VOLATILE |
 
@@ -40,12 +40,12 @@ ros2 launch route_follower route_follower.launch.py \
 | 名称 | 型 | 説明 | QoS |
 |------|----|------|-----|
 | `/active_target` | `geometry_msgs/PoseStamped` | 現在向かうべきターゲット Pose。`target_frame` を frame_id に設定。 | RELIABLE / VOLATILE |
-| `/follower_state` | `route_msgs/FollowerState` | 状態・route_version・滞留統計を Publish。 | RELIABLE / VOLATILE |
+| `/follower_state` | `tc_route_msgs/FollowerState` | 状態・route_version・滞留統計を Publish。 | RELIABLE / VOLATILE |
 
 ### サービスクライアント
 | 名称 | 型 | 説明 |
 |------|----|------|
-| `/report_stuck` | `route_msgs/srv/ReportStuck` | 滞留判定時に呼び出し。現在 index やオフセット履歴を送信し、再計画方針を受け取る。 |
+| `/report_stuck` | `tc_route_msgs/srv/ReportStuck` | 滞留判定時に呼び出し。現在 index やオフセット履歴を送信し、再計画方針を受け取る。 |
 
 ## パラメータ
 | 名称 | 型 | 既定値 | 概要 |

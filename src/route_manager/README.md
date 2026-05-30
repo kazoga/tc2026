@@ -31,21 +31,21 @@ ros2 launch route_manager route_manager.launch.py \
 ### Publisher
 | 名称 | 型 | 説明 | QoS |
 |------|----|------|-----|
-| `/active_route` | `route_msgs/Route` | 現在有効なルート。`Route.version` は major*100 + minor で管理。 | RELIABLE / TRANSIENT_LOCAL / depth=1 |
-| `/route_state` | `route_msgs/RouteState` | 現在 index・ラベル・ステータスを通知。 | RELIABLE / VOLATILE / depth=10 |
-| `/mission_info` | `route_msgs/MissionInfo` | 現在の start / goal / checkpoint を配信。 | RELIABLE / TRANSIENT_LOCAL / depth=1 |
-| `/manager_status` | `route_msgs/ManagerStatus` | FSM 状態と再計画判断結果を通知。 | RELIABLE / VOLATILE / depth=10 |
+| `/active_route` | `tc_route_msgs/Route` | 現在有効なルート。`Route.version` は major*100 + minor で管理。 | RELIABLE / TRANSIENT_LOCAL / depth=1 |
+| `/route_state` | `tc_route_msgs/RouteState` | 現在 index・ラベル・ステータスを通知。 | RELIABLE / VOLATILE / depth=10 |
+| `/mission_info` | `tc_route_msgs/MissionInfo` | 現在の start / goal / checkpoint を配信。 | RELIABLE / TRANSIENT_LOCAL / depth=1 |
+| `/manager_status` | `tc_route_msgs/ManagerStatus` | FSM 状態と再計画判断結果を通知。 | RELIABLE / VOLATILE / depth=10 |
 
 ### Service Client
 | 名称 | 型 | 説明 |
 |------|----|------|
-| `/get_route` | `route_msgs/srv/GetRoute` | 初期ルート取得。成功時は `Route.version=1` で保存。 |
-| `/update_route` | `route_msgs/srv/UpdateRoute` | 滞留時の再計画。成功時に部分ルートを差し替え、`Route.version` を進める。 |
+| `/get_route` | `tc_route_msgs/srv/GetRoute` | 初期ルート取得。成功時は `Route.version=1` で保存。 |
+| `/update_route` | `tc_route_msgs/srv/UpdateRoute` | 滞留時の再計画。成功時に部分ルートを差し替え、`Route.version` を進める。 |
 
 ### Service Server
 | 名称 | 型 | 説明 |
 |------|----|------|
-| `/report_stuck` | `route_msgs/srv/ReportStuck` | `route_follower` からの滞留通報を受け付け、再計画方針と `offset_hint` を返す。 |
+| `/report_stuck` | `tc_route_msgs/srv/ReportStuck` | `route_follower` からの滞留通報を受け付け、再計画方針と `offset_hint` を返す。 |
 
 > 本ノードは購読トピックを持たず、滞留状況は `/report_stuck` 要求に含まれる情報を利用します。
 
@@ -96,7 +96,7 @@ ros2 launch route_manager route_manager.launch.py \
 2. 上記コマンドで `route_manager` を起動し、初期ルート取得後に `/active_route` が Publish されることを確認する。
 3. 滞留状況を模擬する場合は以下のように `/report_stuck` を呼び出す。
    ```bash
-   ros2 service call /report_stuck route_msgs/srv/ReportStuck \
+   ros2 service call /report_stuck tc_route_msgs/srv/ReportStuck \
      "{route_version: 1, current_index: 5, current_wp_label: 'W5',
         current_pose_map: {header: {frame_id: 'map'}, pose: {position: {x: 0.0, y: 0.0}}},
         reason: 'front_blocked', avoid_trial_count: 2, last_hint_blocked: true,

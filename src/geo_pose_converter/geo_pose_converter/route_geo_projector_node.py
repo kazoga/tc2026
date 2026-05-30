@@ -12,7 +12,7 @@ import rclpy
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
-from route_msgs.msg import ActiveTargetLlh, FollowerState, Route, Waypoint
+from tc_route_msgs.msg import ActiveTargetLlh, FollowerState, Route, Waypoint
 from std_msgs.msg import Header
 from tc_geo_msgs.msg import GeoPoseWithQuality
 

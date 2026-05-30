@@ -6,7 +6,7 @@ Google Python Style / 型ヒント完備 / 日本語コメント。cv_bridgeはb
 本ノードは単一2D LiDARの `/scan` を購読し、以下を行う:
   * 前方くさび領域の閉塞判定 (front_blocked)  … legacy: ±front_cone_half_deg 内で x < stop_dist_m の点が存在
   * 左右の回避オフセット（可用幅）を legacy 方式で算出（ギャップ検出 + 外縁 + 下限0.75m）
-  * 上記ヒントを `route_msgs/ObstacleAvoidanceHint` として publish（front_clearance_m / left_offset_m / right_offset_m を [m] で出力）
+  * 上記ヒントを `tc_route_msgs/ObstacleAvoidanceHint` として publish（front_clearance_m / left_offset_m / right_offset_m を [m] で出力）
   * デバッグ用に LiDAR 点群を画像化し `sensor_msgs/Image` (bgr8) で publish（laserScanViewer 相当の描画仕様）
 
 参考に踏襲した実装: waypoint_manager.py の laserScanCallback / laserScanViewer。
@@ -34,8 +34,8 @@ from sensor_msgs.msg import LaserScan, Image
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped
 from builtin_interfaces.msg import Time as TimeMsg
 
-# ユーザー指定: route_msgs が正しい
-from route_msgs.msg import ObstacleAvoidanceHint  # stamp, front_blocked: bool, front_clearance_m: float32, left_offset_m: float32, right_offset_m: float32
+# ユーザー指定: tc_route_msgs が正しい
+from tc_route_msgs.msg import ObstacleAvoidanceHint  # stamp, front_blocked: bool, front_clearance_m: float32, left_offset_m: float32, right_offset_m: float32
 
 from cv_bridge import CvBridge
 

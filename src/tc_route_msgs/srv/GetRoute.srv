@@ -7,5 +7,5 @@ string[] checkpoint_labels
 # Response
 bool success
 string message
-route_msgs/Route route
+tc_route_msgs/Route route
 

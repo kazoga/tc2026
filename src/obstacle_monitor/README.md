@@ -2,7 +2,7 @@
 
 ## 概要
 `obstacle_monitor` は `/scan`（LiDAR）から前方障害物を解析し、
-`route_msgs/ObstacleAvoidanceHint` を `/obstacle_avoidance_hint` として配信するノードです。
+`tc_route_msgs/ObstacleAvoidanceHint` を `/obstacle_avoidance_hint` として配信するノードです。
 Phase2 では legacy の避障ロジックを ROS2 へ移植し、`/sensor_viewer`
 （`sensor_msgs/Image`）で LaserScan の可視化も提供します。動作確認用に
 `laser_scan_simulator` ノードも同梱しています。
@@ -42,7 +42,7 @@ ros2 run obstacle_monitor obstacle_monitor
 ### Publisher
 | 名称 | 型 | 説明 | QoS |
 |------|----|------|-----|
-| `/obstacle_avoidance_hint` | `route_msgs/ObstacleAvoidanceHint` | front_blocked・front_clearance_m・左右オフセット[m] を配信。 | BEST_EFFORT / VOLATILE / depth=1 |
+| `/obstacle_avoidance_hint` | `tc_route_msgs/ObstacleAvoidanceHint` | front_blocked・front_clearance_m・左右オフセット[m] を配信。 | BEST_EFFORT / VOLATILE / depth=1 |
 | `/sensor_viewer` | `sensor_msgs/Image` | LaserScanViewer 相当のデバッグ画像（bgr8）。 | BEST_EFFORT / VOLATILE / depth=1 |
 
 > サービス・アクションは提供しません。

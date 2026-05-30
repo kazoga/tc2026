@@ -42,7 +42,7 @@ GUI と HTML 遠隔観測 UI では、GPS 受信状態、自己位置 LLH、rout
 | --- | --- | --- |
 | `rtk_gps_um982` | GNSS receiver から raw fix、heading、RTK status を取得して ROS topic 化する | `geo_pose_converter_node` の入力元。測位デバイス固有の処理はここに閉じる |
 | `tc_geo_msgs` | LLH point / pose / quality / projection の共通 message を提供する | `geo_pose_converter` が publish / subscribe する地理系 message 定義 |
-| `route_msgs` | route、waypoint、active target LLH など route 系 interface を提供する | `route_geo_projector_node` が `/active_route` と `/route/active_target_llh` で利用する |
+| `tc_route_msgs` | route、waypoint、active target LLH など route 系 interface を提供する | `route_geo_projector_node` が `/active_route` と `/route/active_target_llh` で利用する |
 | `route_planner` | CSV/YAML から route 正本を生成し、ENU pose と route CSV 由来 LLH を `Route` に格納する | `Route.projection` と `Waypoint.geo_pose` の生成元 |
 | `route_manager` | route の受理、再配信、SHIFT/SKIP/再計画結果の管理を行う | `/active_route` の publisher。LLH/projection field を保持して再配信する |
 | `route_follower` | `/active_route` の ENU waypoint と ENU 自己位置を使い、走行制御用 `/active_target` を publish する | `route_geo_projector_node` に active target ENU を提供する。LLH は制御に使わない |
@@ -76,7 +76,7 @@ src/geo_pose_converter/
 | 構成要素 | 責務 | 非責務 |
 | --- | --- | --- |
 | `geo_core.py` | WGS84 LLH、ECEF、map ENU の相互変換、heading/yaw 変換、bearing 算出 | ROS topic、message、parameter、logger を扱わない |
-| `message_utils.py` | `geo_core.py` の値を `tc_geo_msgs` / `route_msgs` / `geometry_msgs` に詰める | 座標変換式そのもの、topic publish 判断を持たない |
+| `message_utils.py` | `geo_core.py` の値を `tc_geo_msgs` / `tc_route_msgs` / `geometry_msgs` に詰める | 座標変換式そのもの、topic publish 判断を持たない |
 | `geo_pose_converter_node.py` | GNSS raw topic を GNSS 単独 LLH / ENU pose に正規化し、投影条件を publish する | fusion 済み ENU 自己位置の採用判断、route target 生成、走行制御を行わない |
 | `route_geo_projector_node.py` | ENU pose topic を LLH pose topic へ変換し、route / target の表示用 LLH 派生情報を生成する | route 生成、route 再計画、follower 制御、自己位置 fusion、走行系自己位置 publish を行わない |
 
@@ -93,7 +93,7 @@ src/geo_pose_converter/
 | ファイル | 役割 |
 | --- | --- |
 | `geo_core.py` | WGS84 ECEF、LLH/ENU、heading/yaw 変換 |
-| `message_utils.py` | `tc_geo_msgs` と `route_msgs` の message 生成補助 |
+| `message_utils.py` | `tc_geo_msgs` と `tc_route_msgs` の message 生成補助 |
 | `geo_pose_converter_node.py` | GNSS raw topic から GNSS 単独 LLH / ENU pose を生成し、投影条件を publish する |
 | `route_geo_projector_node.py` | ENU pose topic を LLH pose topic へ変換し、route / active target の LLH 派生情報を生成する |
 | `params/default.yaml` | 投影原点、frame、topic の既定値 |
@@ -124,10 +124,10 @@ src/geo_pose_converter/
 | --- | --- | --- | --- | --- |
 | Subscribe | `/localization/pose_enu` | `geometry_msgs/PoseWithCovarianceStamped` | `RELIABLE / depth=10` | 表示用 LLH へ変換する ENU 自己位置 |
 | Publish | `/localization/pose_llh` | `tc_geo_msgs/GeoPoseWithQuality` | `RELIABLE / depth=10` | GUI / HTML UI / OSM 表示用の LLH 自己位置 |
-| Subscribe | `/active_route` | `route_msgs/Route` | `RELIABLE / TRANSIENT_LOCAL / depth=1` | route 正本。ENU pose と LLH pose を含む |
+| Subscribe | `/active_route` | `tc_route_msgs/Route` | `RELIABLE / TRANSIENT_LOCAL / depth=1` | route 正本。ENU pose と LLH pose を含む |
 | Subscribe | `/active_target` | `geometry_msgs/PoseStamped` | `RELIABLE / depth=10` | 走行制御用 active target ENU |
-| Subscribe | `/follower_state` | `route_msgs/FollowerState` | `RELIABLE / depth=10` | active waypoint index / label |
-| Publish | `/route/active_target_llh` | `route_msgs/ActiveTargetLlh` | `RELIABLE / depth=10` | 表示・ログ用 active target LLH |
+| Subscribe | `/follower_state` | `tc_route_msgs/FollowerState` | `RELIABLE / depth=10` | active waypoint index / label |
+| Publish | `/route/active_target_llh` | `tc_route_msgs/ActiveTargetLlh` | `RELIABLE / depth=10` | 表示・ログ用 active target LLH |
 
 初期実装や診断用途では、`/gnss/pose_llh` を fallback として利用してよい。ただし本来的な変換経路は ENU pose topic から LLH pose topic への変換である。
 
@@ -224,7 +224,7 @@ GUI は通常、自己位置表示には `/localization/pose_llh` を使用す�
 
 ## 14. 依存関係・ビルド設定
 
-`ament_python` package とする。依存は `rclpy`、`geometry_msgs`、`sensor_msgs`、`std_msgs`、`tc_geo_msgs`、`route_msgs`、`rtk_gps_um982_msgs`、`launch`、`launch_ros`、`ament_index_python` である。
+`ament_python` package とする。依存は `rclpy`、`geometry_msgs`、`sensor_msgs`、`std_msgs`、`tc_geo_msgs`、`tc_route_msgs`、`rtk_gps_um982_msgs`、`launch`、`launch_ros`、`ament_index_python` である。
 
 ## 15. テスト計画・受け入れ条件
 

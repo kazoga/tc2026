@@ -1,4 +1,4 @@
-# route_msgs/msg/ObstacleAvoidanceHint.msg
+# tc_route_msgs/msg/ObstacleAvoidanceHint.msg
 # obstacle_monitor が出力する障害物検知ヒント
 
 std_msgs/Header header

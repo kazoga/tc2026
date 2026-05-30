@@ -26,8 +26,8 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPo
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped, Pose, Quaternion
 from std_msgs.msg import Header, Bool, Int32
-from route_msgs.msg import Route, Waypoint, FollowerState, ObstacleAvoidanceHint  # type: ignore
-from route_msgs.srv import ReportStuck  # type: ignore
+from tc_route_msgs.msg import Route, Waypoint, FollowerState, ObstacleAvoidanceHint  # type: ignore
+from tc_route_msgs.srv import ReportStuck  # type: ignore
 
 # 可変ルート探索（外部モジュール）
 _THIS_DIR = Path(__file__).resolve().parent

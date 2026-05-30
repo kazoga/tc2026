@@ -95,7 +95,7 @@ timeout 30s ros2 launch route_planner route_planner.launch.py \
 
 ```bash
 source install/setup.bash
-ros2 service call /get_route route_msgs/srv/GetRoute \
+ros2 service call /get_route tc_route_msgs/srv/GetRoute \
   "{start_label: '10', goal_label: '50', checkpoint_labels: []}"
 ```
 
@@ -125,8 +125,8 @@ ros2 launch route_manager route_manager.launch.py \
 
 ```bash
 source install/setup.bash
-timeout 10s ros2 topic echo --once /route_state route_msgs/msg/RouteState
-timeout 10s ros2 topic echo --once /active_route route_msgs/msg/Route
+timeout 10s ros2 topic echo --once /route_state tc_route_msgs/msg/RouteState
+timeout 10s ros2 topic echo --once /active_route tc_route_msgs/msg/Route
 ```
 
 ## `route_follower`
@@ -145,7 +145,7 @@ timeout 10s ros2 topic echo --once /active_route route_msgs/msg/Route
 ```bash
 source install/setup.bash
 timeout 10s ros2 topic echo --once /active_target geometry_msgs/msg/PoseStamped
-timeout 10s ros2 topic echo --once /follower_state route_msgs/msg/FollowerState
+timeout 10s ros2 topic echo --once /follower_state tc_route_msgs/msg/FollowerState
 ```
 
 ## `robot_navigator`
@@ -260,9 +260,9 @@ GUI あり評価では `UiMain` を実際に生成し、画面座標クリック
 
 ### 監視条件
 
-- `/route_state` (`route_msgs/msg/RouteState`) を監視する。
-- `/active_route` (`route_msgs/msg/Route`) を監視し、waypoint 数と start / goal label を確認する。
-- `/follower_state` (`route_msgs/msg/FollowerState`) を監視する。
+- `/route_state` (`tc_route_msgs/msg/RouteState`) を監視する。
+- `/active_route` (`tc_route_msgs/msg/Route`) を監視し、waypoint 数と start / goal label を確認する。
+- `/follower_state` (`tc_route_msgs/msg/FollowerState`) を監視する。
 - `/cmd_vel` (`geometry_msgs/msg/Twist`) を監視し、走行中に出力されることを確認する。
 - `/manual_start` (`std_msgs/msg/Bool`) を監視し、`True` が送信されたことを確認する。
 - `/route_state.current_label == <goal_label>` になったら goal 到達とみなす。

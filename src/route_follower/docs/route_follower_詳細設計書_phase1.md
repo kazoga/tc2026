@@ -73,7 +73,7 @@ signal_stop や rerouting 遷移は、次フェーズ以降に実装予定であ
 
 | トピック名 | 型 | 説明 | QoS |
 |-------------|----|------|-----|
-| `/active_route` | `route_msgs/Route` | 経路入力。frame_id が target_frame と異なる場合は ERROR に遷移。 | RELIABLE / TRANSIENT_LOCAL |
+| `/active_route` | `tc_route_msgs/Route` | 経路入力。frame_id が target_frame と異なる場合は ERROR に遷移。 | RELIABLE / TRANSIENT_LOCAL |
 | `/localization/pose_enu` | `geometry_msgs/PoseStamped` | 現在姿勢を購読し到達判定に使用。 | RELIABLE / VOLATILE |
 | `/manual_start` | `std_msgs/Bool` | True 受信時に WAITING_STOP を解除し RUNNING に復帰。 | RELIABLE / VOLATILE |
 
@@ -82,7 +82,7 @@ signal_stop や rerouting 遷移は、次フェーズ以降に実装予定であ
 | トピック名 | 型 | 説明 | 発行条件 | QoS |
 |-------------|----|------|-----------|-----|
 | `/active_target` | `geometry_msgs/PoseStamped` | 現在の追従ターゲット。一定周期(1Hz)で再送。 | RUNNING状態時または初期送信時 | RELIABLE / TRANSIENT_LOCAL |
-| `/follower_state` | `route_msgs/FollowerState` | 現在状態、距離、waypointラベルを発行。100ms デバウンスで周期発行。 | 常時 | RELIABLE / VOLATILE |
+| `/follower_state` | `tc_route_msgs/FollowerState` | 現在状態、距離、waypointラベルを発行。100ms デバウンスで周期発行。 | 常時 | RELIABLE / VOLATILE |
 
 ---
 

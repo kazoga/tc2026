@@ -35,7 +35,7 @@ from geometry_msgs.msg import Pose, Point
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool
-from route_msgs.msg import ObstacleAvoidanceHint, Route
+from tc_route_msgs.msg import ObstacleAvoidanceHint, Route
 from visualization_msgs.msg import Marker
 
 

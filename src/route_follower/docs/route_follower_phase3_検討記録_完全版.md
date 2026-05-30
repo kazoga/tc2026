@@ -93,7 +93,7 @@ dy2 =  sin(yaw)*forward
 
 | 項目 | 値 |
 |------|----|
-| サービス型 | route_msgs/srv/ReportStuck |
+| サービス型 | tc_route_msgs/srv/ReportStuck |
 | リクエスト | route_version:int32, current_index:int32, current_wp_label:string, current_pose_map:Pose, reason_code:uint8, reason_detail:string, avoid_trial_count:uint32, last_hint_blocked:bool, last_applied_offset_m:float |
 | レスポンス | decision_code:uint8(1=replan/2=skip/3=failed), waiting_deadline:Duration, offset_hint:float, note:string |
 | 呼出方式 | 同期（timeout=30s） |

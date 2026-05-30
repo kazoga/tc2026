@@ -15,6 +15,6 @@ string map_frame_id
 string earth_frame_id
 tc_geo_msgs/MapProjection projection
 
-route_msgs/Waypoint[] waypoints
+tc_route_msgs/Waypoint[] waypoints
 int32 start_index
 string start_waypoint_label

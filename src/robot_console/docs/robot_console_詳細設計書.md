@@ -139,16 +139,16 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 ### 4.1 購読トピック
 | トピック名 | 型 | 想定更新 | 利用箇所 |
 | --- | --- | --- | --- |
-| `/route_state` | `route_msgs/msg/RouteState` | 1Hz (`state_publish_rate_hz`) | ルート進捗カード、再計画履歴。 |
-| `/manager_status` | `route_msgs/msg/ManagerStatus` | 状態遷移時 | 状態ラベル・再計画要因。 |
-| `/active_route` | `route_msgs/msg/Route` | ルート更新時 | ルート地図画像、ウェイポイント一覧。 |
-| `/mission_info` | `route_msgs/msg/MissionInfo` | 起動時／ルート更新時 | ミッション概要（カード内ツールチップ）。 |
-| `/follower_state` | `route_msgs/msg/FollowerState` | 20Hz (`control_rate_hz`) | フォロワ状態カード、障害物統計。 |
+| `/route_state` | `tc_route_msgs/msg/RouteState` | 1Hz (`state_publish_rate_hz`) | ルート進捗カード、再計画履歴。 |
+| `/manager_status` | `tc_route_msgs/msg/ManagerStatus` | 状態遷移時 | 状態ラベル・再計画要因。 |
+| `/active_route` | `tc_route_msgs/msg/Route` | ルート更新時 | ルート地図画像、ウェイポイント一覧。 |
+| `/mission_info` | `tc_route_msgs/msg/MissionInfo` | 起動時／ルート更新時 | ミッション概要（カード内ツールチップ）。 |
+| `/follower_state` | `tc_route_msgs/msg/FollowerState` | 20Hz (`control_rate_hz`) | フォロワ状態カード、障害物統計。 |
 | `/active_target` | `geometry_msgs/msg/PoseStamped` | 20Hz | 目標距離カード、地図描画。 |
 | `/cmd_vel` | `geometry_msgs/msg/Twist` | 20Hz | ロボット速度カード。 |
 | `/localization/pose_enu` | `geometry_msgs/msg/PoseWithCovarianceStamped` | 10Hz | 目標距離カード、地図描画。 |
 | `/odom` | `nav_msgs/msg/Odometry` | 30Hz | 速度比較（将来拡張用ログ）。 |
-| `/obstacle_avoidance_hint` | `route_msgs/msg/ObstacleAvoidanceHint` | 10Hz | 障害物パネル、オーバレイ数値。 |
+| `/obstacle_avoidance_hint` | `tc_route_msgs/msg/ObstacleAvoidanceHint` | 10Hz | 障害物パネル、オーバレイ数値。 |
 | `/sensor_viewer` | `sensor_msgs/msg/Image` | 5Hz | 障害物画像パネル。 |
 | `/perception/road_blockage/decision_image` | `sensor_msgs/msg/Image` | 5Hz | 通常走行時カメラパネル (16:9)。 |
 | `/perception/traffic_signal/decision_image` | `sensor_msgs/msg/Image` | 5Hz | 信号停止時カメラパネル (4:3)。 |
@@ -161,7 +161,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 | --- | --- | --- | --- |
 | `/manual_start` | `std_msgs/msg/Bool` | manual_start タブ送信時 | True/False をラッチ送信し、復帰命令を発行。 |
 | `/sig_recog` | `std_msgs/msg/Int32` | sig_recog タブ送信時 | 1=GO、2=STOP をラッチ送信。 |
-| `/obstacle_avoidance_hint` | `route_msgs/msg/ObstacleAvoidanceHint` | 固定値送出開始／停止 | GUI入力値をそのまま配信し、停止時はゼロ値を送信して obstacle_monitor へ制御を戻す。 |
+| `/obstacle_avoidance_hint` | `tc_route_msgs/msg/ObstacleAvoidanceHint` | 固定値送出開始／停止 | GUI入力値をそのまま配信し、停止時はゼロ値を送信して obstacle_monitor へ制御を戻す。 |
 | `/road_blocked` | `std_msgs/msg/Bool` | road_blocked タブ送信時 | 道路封鎖検知の仮想トピック。現在は他ノード未購読だがログに残す。 |
 
 ### 4.3 サービス・アクション

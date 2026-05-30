@@ -26,8 +26,8 @@ YAML 設定、CSV キャッシュ、グラフ探索を組み合わせて再計�
 ### Service Server
 | 名称 | 型 | 説明 |
 |------|----|------|
-| `/get_route` | `route_msgs/srv/GetRoute` | YAML 定義に基づきルートを生成して返却。成功時は `Route.version=1` に初期化。 |
-| `/update_route` | `route_msgs/srv/UpdateRoute` | 滞留地点情報を受け取り、可変ブロックを再探索して部分ルートを返却。成功時は `Route.version` を加算。 |
+| `/get_route` | `tc_route_msgs/srv/GetRoute` | YAML 定義に基づきルートを生成して返却。成功時は `Route.version=1` に初期化。 |
+| `/update_route` | `tc_route_msgs/srv/UpdateRoute` | 滞留地点情報を受け取り、可変ブロックを再探索して部分ルートを返却。成功時は `Route.version` を加算。 |
 
 ## パラメータ
 | 名称 | 型 | 既定値 | 概要 |
@@ -105,7 +105,7 @@ CSV の Waypoint は `segment_id` 単位でキャッシュされ、進行方向�
 2. `ros2 run route_planner route_planner` を起動し、`/get_route` `/update_route` サービスが利用可能であることを確認する。
 3. 初期ルート生成を確認するには次を実行する。
    ```bash
-   ros2 service call /get_route route_msgs/srv/GetRoute "{start_label: '', goal_label: '', checkpoint_labels: []}"
+   ros2 service call /get_route tc_route_msgs/srv/GetRoute "{start_label: '', goal_label: '', checkpoint_labels: []}"
    ```
 4. 滞留再計画を確認するには、`route_manager` などから `/update_route` を呼び出し、`prev_index` と `current_index` に隣接インデックスを指定する。
 

@@ -1,8 +1,8 @@
-# route_msgs LLH拡張 詳細設計書
+# tc_route_msgs LLH拡張 詳細設計書
 
 ## 1. 文書目的・対象範囲
 
-本書は `route_msgs` の LLH 拡張仕様を定義する。対象は `Waypoint.msg`、`Route.msg`、`ActiveTargetLlh.msg` である。今回の実装 phase では package 名を `route_msgs` のまま維持し、`tc_route_msgs` への改名は次 phase に送る。
+本書は `tc_route_msgs` の LLH 拡張仕様を定義する。対象は `Waypoint.msg`、`Route.msg`、`ActiveTargetLlh.msg` である。今回の実装 phase では package 名を `tc_route_msgs` に統一し、旧 package 名への alias や fallback は残さない。
 
 ## 2. 背景・要求・スコープ
 
@@ -12,10 +12,10 @@ route CSV には LLH 情報を持つ waypoint が存在する一方、従来の 
 
 ## 3. 全体構成・アーキテクチャ
 
-`route_msgs` は既存 route stack の interface package である。LLH 拡張では `tc_geo_msgs` に依存し、route 固有 message から共通地理 message を参照する。
+`tc_route_msgs` は route stack の正式 interface package である。LLH 拡張では `tc_geo_msgs` に依存し、route 固有 message から共通地理 message を参照する。
 
 ```text
-src/route_msgs/
+src/tc_route_msgs/
 ├── msg/
 │   ├── Waypoint.msg
 │   ├── Route.msg
@@ -23,7 +23,7 @@ src/route_msgs/
 ├── CMakeLists.txt
 ├── package.xml
 └── docs/
-    └── route_msgs_llh拡張_詳細設計書.md
+    └── tc_route_msgs_llh拡張_詳細設計書.md
 ```
 
 ## 4. パッケージ構成・ファイル配置
@@ -40,15 +40,15 @@ src/route_msgs/
 
 | Topic / field | 型 | 方向 | QoS | 意味 |
 | --- | --- | --- | --- | --- |
-| `/active_route` | `route_msgs/msg/Route` | `route_manager` publish | `RELIABLE / TRANSIENT_LOCAL / depth=1` | route 正本。ENU pose と LLH pose を含む |
-| `/route/active_target_llh` | `route_msgs/msg/ActiveTargetLlh` | `geo_pose_converter` publish | `RELIABLE / VOLATILE / depth=10` | 表示・ログ用 active target LLH |
+| `/active_route` | `tc_route_msgs/msg/Route` | `route_manager` publish | `RELIABLE / TRANSIENT_LOCAL / depth=1` | route 正本。ENU pose と LLH pose を含む |
+| `/route/active_target_llh` | `tc_route_msgs/msg/ActiveTargetLlh` | `geo_pose_converter` publish | `RELIABLE / VOLATILE / depth=10` | 表示・ログ用 active target LLH |
 | `Waypoint.pose` | `geometry_msgs/Pose` | field | - | 走行制御用 map ENU pose |
 | `Waypoint.geo_pose` | `tc_geo_msgs/GeoPose` | field | - | 表示・ログ用 LLH pose |
 | `Route.projection` | `tc_geo_msgs/MapProjection` | field | - | route ENU と LLH の変換条件 |
 
 ## 6. パラメータ・設定仕様
 
-`route_msgs` 自体は parameter を持たない。`Route.projection` の値は `route_planner` と `geo_pose_converter` の parameter で管理する。
+`tc_route_msgs` 自体は parameter を持たない。`Route.projection` の値は `route_planner` と `geo_pose_converter` の parameter で管理する。
 
 ## 7. データモデル・内部状態
 
@@ -83,7 +83,7 @@ LLH 変換は message package では実装しない。`route_geo_projector` は 
 
 ## 11. 起動・終了・launch 設計
 
-`route_msgs` 自体は launch を持たない。関連 node の launch は `route_planner`、`route_manager`、`geo_pose_converter` 側に置く。
+`tc_route_msgs` 自体は launch を持たない。関連 node の launch は `route_planner`、`route_manager`、`geo_pose_converter` 側に置く。
 
 ## 12. エラー処理・ログ・診断
 
@@ -95,11 +95,11 @@ GUI と HTML UI は `/active_route` の `Waypoint.geo_pose` と `/route/active_t
 
 ## 14. 依存関係・ビルド設定
 
-`route_msgs` は `tc_geo_msgs` に build / exec 依存する。`CMakeLists.txt` の `rosidl_generate_interfaces()` に `tc_geo_msgs` を依存として追加する。
+`tc_route_msgs` は `tc_geo_msgs` に build / exec 依存する。`CMakeLists.txt` の `rosidl_generate_interfaces()` に `tc_geo_msgs` を依存として追加する。
 
 ## 15. テスト計画・受け入れ条件
 
-- `route_msgs` が `tc_geo_msgs` と共に build できる。
+- `tc_route_msgs` が `tc_geo_msgs` と共に build できる。
 - `route_planner` が route CSV の LLH を `Waypoint.geo_pose` に保持する。
 - `route_manager` の local shift / skip / reissue で LLH field が失われない。
 - `route_follower` と `robot_navigator` の ENU 制御 topic は従来どおり動作する。
@@ -110,11 +110,12 @@ GUI と HTML UI は `/active_route` の `Waypoint.geo_pose` と `/route/active_t
 
 ## 17. 未決事項・今後の拡張
 
-- `tc_route_msgs` への改名は次 phase で実施する。
+- 旧 package 名への alias や fallback は設けない。
 - route editor 実装時に `geo_pose_source` の手動編集値と route file 値の扱いを追加定義する。
 
 ## 18. 改版履歴
 
 | 日付 | 版 | 変更概要 |
 | --- | --- | --- |
-| 2026-05-28 | 1.0 | 初版。`route_msgs` を維持した LLH 拡張仕様を定義 |
+| 2026-05-30 | 1.1 | package 名を `tc_route_msgs` に完全移行し、旧 package 名を廃止 |
+| 2026-05-28 | 1.0 | 初版。LLH 拡張仕様を定義 |

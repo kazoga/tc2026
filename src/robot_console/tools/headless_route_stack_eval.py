@@ -20,7 +20,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from route_msgs.msg import DriveModeStatus, FollowerState, Route, RouteState
+from tc_route_msgs.msg import DriveModeStatus, FollowerState, Route, RouteState
 from std_msgs.msg import Bool
 
 from robot_console.robot_console_node import RobotConsoleNode

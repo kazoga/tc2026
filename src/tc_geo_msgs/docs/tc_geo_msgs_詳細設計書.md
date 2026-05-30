@@ -2,7 +2,7 @@
 
 ## 1. 文書目的・対象範囲
 
-本書は `tc_geo_msgs` パッケージの詳細設計を定義する。対象は LLH 系座標、LLH pose、測位品質、地図投影条件を表す ROS 2 interface である。実装対象 phase では `route_msgs` のパッケージ名は変更せず、`tc_geo_msgs` を新規追加して `route_msgs`、`geo_pose_converter`、将来の `localization_fusion` から共有する。
+本書は `tc_geo_msgs` パッケージの詳細設計を定義する。対象は LLH 系座標、LLH pose、測位品質、地図投影条件を表す ROS 2 interface である。実装対象 phase では `tc_geo_msgs` を地理系共通 interface とし、`tc_route_msgs`、`geo_pose_converter`、将来の `localization_fusion` から共有する。
 
 ## 2. 背景・要求・スコープ
 
@@ -106,11 +106,11 @@ src/tc_geo_msgs/
 
 - `colcon build --packages-select tc_geo_msgs` が成功する。
 - `ros2 interface show` 相当の確認はローカル ROS 実行確認が許可された場合に実施する。
-- downstream の `route_msgs` と `geo_pose_converter` が同時に build できる。
+- downstream の `tc_route_msgs` と `geo_pose_converter` が同時に build できる。
 
 ## 16. 互換性・移行・影響範囲
 
-新規 package のため既存 topic 互換性への直接影響はない。ただし `route_msgs/Waypoint` と `route_msgs/Route` が本パッケージの message を参照するため、route stack の再ビルドが必要である。
+新規 package のため既存 topic 互換性への直接影響はない。ただし `tc_route_msgs/Waypoint` と `tc_route_msgs/Route` が本パッケージの message を参照するため、route stack の再ビルドが必要である。
 
 ## 17. 未決事項・今後の拡張
 

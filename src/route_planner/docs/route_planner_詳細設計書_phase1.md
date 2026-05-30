@@ -13,7 +13,7 @@
 - `/update_route` : 現行経路に対して、**可変ブロックの封鎖**（エッジクローズ）等を反映し、**再探索**を行う。
 - `graph_solver.solve_variable_route()` を呼び出し、可変ブロック探索を行う。地図重畳画像は `graph_solver.render_route_on_map()` で別途生成し、必要に応じてファイルへ保存する。
 - 地図画像と Worldfile のパラメータを**相対パス**で受け取り、パッケージ共有ディレクトリ配下の実ファイルへ解決する。
-- route CSV に `latitude` / `longitude` / `altitude` / `heading_deg` が含まれる場合、`route_msgs/Waypoint.geo_pose` として `/active_route` へ引き継ぐ。
+- route CSV に `latitude` / `longitude` / `altitude` / `heading_deg` が含まれる場合、`tc_route_msgs/Waypoint.geo_pose` として `/active_route` へ引き継ぐ。
 
 ### 1.2 phase1 での実装範囲
 - サービス：`/get_route`, `/update_route` を実装済み（同期実行）
@@ -58,13 +58,13 @@
 ### 4.1 サービス
 | 名称 | 型 | 概要 |
 |:--|:--|:--|
-| `/get_route` | `route_msgs/srv/GetRoute` | ブロック構成とラベル情報をもとに**経路生成**を行い、`Route` を返す。 |
-| `/update_route` | `route_msgs/srv/UpdateRoute` | **現行経路**を前提に**可変ブロック**の再探索を行い、`Route` を返す。固定ブロック封鎖は**失敗**を返す。 |
+| `/get_route` | `tc_route_msgs/srv/GetRoute` | ブロック構成とラベル情報をもとに**経路生成**を行い、`Route` を返す。 |
+| `/update_route` | `tc_route_msgs/srv/UpdateRoute` | **現行経路**を前提に**可変ブロック**の再探索を行い、`Route` を返す。固定ブロック封鎖は**失敗**を返す。 |
 
 > 備考：どちらも**同期**であり、完了まで呼び出し元は待機する。
 
 ### 4.2 メッセージ（要素の意味）
-- `Route`（`route_msgs/msg/Route`）  
+- `Route`（`tc_route_msgs/msg/Route`）  
   - `waypoints: Waypoint[]` … 経路順のウェイポイント列  
     - `Waypoint.index: int` … **その Route 内の順序**（0..N-1）  
     - `Waypoint.label: string` … ノードの**地物識別**。**再訪**があり得る（indexと無関係）。  

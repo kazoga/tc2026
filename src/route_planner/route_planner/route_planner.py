@@ -32,9 +32,9 @@ from std_msgs.msg import Header
 from geometry_msgs.msg import PoseStamped, Quaternion, Pose
 from sensor_msgs.msg import Image
 
-from route_msgs.msg import Route, Waypoint
+from tc_route_msgs.msg import Route, Waypoint
 from tc_geo_msgs.msg import MapProjection
-from route_msgs.srv import GetRoute, UpdateRoute
+from tc_route_msgs.srv import GetRoute, UpdateRoute
 
 # 可変ルート探索（外部モジュール）
 _THIS_DIR = Path(__file__).resolve().parent

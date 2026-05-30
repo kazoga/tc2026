@@ -55,7 +55,7 @@ ros2 run robot_navigator robot_navigator
 | `/odom` | `nav_msgs/Odometry` | 現在速度を取得し加速度制限に利用。 | RELIABLE / VOLATILE / depth=10 |
 | `/localization/pose_enu` | `geometry_msgs/PoseWithCovarianceStamped` | 現在姿勢（位置・ヨー角）を取得。launch の `pose_enu_topic` で `/localization/pose_enu` などへ変更可能。 | RELIABLE / VOLATILE / depth=10 |
 | `/active_target` | `geometry_msgs/PoseStamped` | 追従対象の目標姿勢。 | RELIABLE / VOLATILE / depth=10 |
-| `/obstacle_avoidance_hint` | `route_msgs/ObstacleAvoidanceHint` | `obstacle_distance_mode=hint` のとき使用。 | BEST_EFFORT / VOLATILE / depth=1 |
+| `/obstacle_avoidance_hint` | `tc_route_msgs/ObstacleAvoidanceHint` | `obstacle_distance_mode=hint` のとき使用。 | BEST_EFFORT / VOLATILE / depth=1 |
 | `/scan` | `sensor_msgs/LaserScan` | `obstacle_distance_mode=scan` のとき使用（SensorDataQoS）。 | BEST_EFFORT / VOLATILE / depth=1 |
 | `/localization/pose_enu_glitch_trigger` | `std_msgs/Bool` | `robot_simulator` が停止中に受信すると `pose_topic` へ単発オフセットを加算。 | RELIABLE / VOLATILE / depth=10 |
 

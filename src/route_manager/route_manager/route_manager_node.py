@@ -40,10 +40,10 @@ from std_msgs.msg import Header
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import Image
 
-# route_msgs はユーザ環境のメッセージ/サービスに準拠
-from route_msgs.msg import FollowerState, ManagerStatus, MissionInfo, Route, RouteState  # type: ignore
-from route_msgs.msg import Waypoint  # type: ignore
-from route_msgs.srv import GetRoute, ReportStuck, UpdateRoute  # type: ignore
+# tc_route_msgs はユーザ環境のメッセージ/サービスに準拠
+from tc_route_msgs.msg import FollowerState, ManagerStatus, MissionInfo, Route, RouteState  # type: ignore
+from tc_route_msgs.msg import Waypoint  # type: ignore
+from tc_route_msgs.srv import GetRoute, ReportStuck, UpdateRoute  # type: ignore
 
 # 可変ルート探索（外部モジュール）
 _THIS_DIR = Path(__file__).resolve().parent

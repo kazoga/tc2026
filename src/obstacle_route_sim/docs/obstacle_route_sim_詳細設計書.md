@@ -212,7 +212,7 @@ robot_console の実 GUI 自動操作から `route_planner`、`route_manager`、
 
 ## 11. 互換性・移行・影響範囲
 
-既存 `route_msgs`、`route_planner`、`route_follower`、`robot_navigator`、
+既存 `tc_route_msgs`、`route_planner`、`route_follower`、`robot_navigator`、
 `obstacle_monitor` の公開 interface は変更しない。移植に伴う互換は
 `obstacle_route_sim` の bridge topic と launch 構成で吸収する。
 

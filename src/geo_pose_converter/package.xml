@@ -14,7 +14,7 @@
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
   <depend>tc_geo_msgs</depend>
-  <depend>route_msgs</depend>
+  <depend>tc_route_msgs</depend>
   <depend>rtk_gps_um982_msgs</depend>
 
   <exec_depend>launch_ros</exec_depend>

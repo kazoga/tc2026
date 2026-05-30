@@ -12,7 +12,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from std_msgs.msg import Bool, Int32, String
 
-from route_msgs.msg import (
+from tc_route_msgs.msg import (
     FollowerState,
     ManagerStatus,
     ObstacleAvoidanceHint,

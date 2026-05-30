@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""tc_geo_msgs/route_msgs 生成の補助関数."""
+"""tc_geo_msgs/tc_route_msgs 生成の補助関数."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
 from sensor_msgs.msg import NavSatFix
 from std_msgs.msg import Header
 
-from route_msgs.msg import ActiveTargetLlh
+from tc_route_msgs.msg import ActiveTargetLlh
 from rtk_gps_um982_msgs.msg import RtkStatus
 from tc_geo_msgs.msg import GeoPoint, GeoPose, GeoPoseWithQuality, MapProjection
 

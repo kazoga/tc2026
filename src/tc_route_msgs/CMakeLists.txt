@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(route_msgs)
+project(tc_route_msgs)
 
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)

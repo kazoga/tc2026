@@ -52,15 +52,15 @@ ros2 launch robot_console robot_console.launch.py \
 |----------|----|------|
 | `/manual_start` | `std_msgs/msg/Bool` | 手動開始フラグ（Transient Local）。|
 | `/sig_recog` | `std_msgs/msg/Int32` | 信号認識結果 1=GO / 2=STOP。|
-| `/obstacle_avoidance_hint` | `route_msgs/msg/ObstacleAvoidanceHint` | GUI 指定の固定回避指示。停止時はゼロ値を送信。|
+| `/obstacle_avoidance_hint` | `tc_route_msgs/msg/ObstacleAvoidanceHint` | GUI 指定の固定回避指示。停止時はゼロ値を送信。|
 | `/road_blocked` | `std_msgs/msg/Bool` | 道路封鎖通知（外部入力と競合した場合は外部を優先）。|
 
 ### Subscription（抜粋）
 | トピック | 型 | 表示場所 |
 |----------|----|----------|
-| `/route_state` / `/manager_status` | `route_msgs/msg/RouteState` / `route_msgs/msg/ManagerStatus` | ルート進捗カード、再計画履歴。|
-| `/follower_state` | `route_msgs/msg/FollowerState` | フォロワ状態カード、イベントログ。|
-| `/active_route` | `route_msgs/msg/Route` | ルート地図画像とウェイポイント一覧。|
+| `/route_state` / `/manager_status` | `tc_route_msgs/msg/RouteState` / `tc_route_msgs/msg/ManagerStatus` | ルート進捗カード、再計画履歴。|
+| `/follower_state` | `tc_route_msgs/msg/FollowerState` | フォロワ状態カード、イベントログ。|
+| `/active_route` | `tc_route_msgs/msg/Route` | ルート地図画像とウェイポイント一覧。|
 | `/sensor_viewer` | `sensor_msgs/msg/Image` | 障害物ビュー画像パネル。|
 | `/perception/road_blockage/decision_image` / `/perception/traffic_signal/decision_image` | `sensor_msgs/msg/Image` | 走行カメラ・信号監視パネル。|
 | `/active_target` / `/localization/pose_enu` | `geometry_msgs/msg/PoseStamped` / `PoseWithCovarianceStamped` | 目標距離計算。|
@@ -149,6 +149,6 @@ export ROS_LOG_DIR="$PWD/log/codex/${run_id}/ros"
 
 ## 依存パッケージ
 - GUI 機能：`tkinter`（標準ライブラリ）、`Pillow`（画像描画）、`opencv-python`（画像デコード）。Pillow / OpenCV は未導入でも縮退動作します。
-- ROS2 メッセージ：`route_msgs`、`geometry_msgs`、`sensor_msgs`、`std_msgs`。
+- ROS2 メッセージ：`tc_route_msgs`、`geometry_msgs`、`sensor_msgs`、`std_msgs`。
 
 以上の内容を参考に、運用開始前に `config/node_launch_profiles.yaml` や `config/robot_console.yaml`（必要に応じて作成）を実際の環境に合わせて整備してください。
