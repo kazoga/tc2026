@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox, ttk
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 try:
     import yaml
@@ -303,6 +303,7 @@ class UiMain:
         self._frame_image_status_var = tk.StringVar(value='最終送信: --:--:--')
         self._obstacle_override_active = False
         self._obstacle_toggle_btn: Optional[ttk.Button] = None
+        self._manual_send_button: Optional[ttk.Button] = None
         self._image_warning_label: Optional[ttk.Label] = None
         self._image_warning_parent: Optional[ttk.Frame] = None
 
@@ -765,11 +766,12 @@ class UiMain:
             sticky='w',
             padx=(12, 0),
         )
-        ttk.Button(
+        self._manual_send_button = ttk.Button(
             manual_row,
             text='manual_start を送信',
             command=self._on_send_manual,
-        ).grid(row=0, column=2, sticky='w', padx=(12, 0))
+        )
+        self._manual_send_button.grid(row=0, column=2, sticky='w', padx=(12, 0))
         ttk.Label(manual_tab, textvariable=self._manual_status_var).grid(
             row=1,
             column=0,
@@ -1050,21 +1052,25 @@ class UiMain:
                 )
                 chk.grid(row=current_row, column=0, sticky='w')
                 current_row += 1
+            else:
+                chk = None
 
             button_frame = ttk.Frame(card)
             button_frame.grid(row=current_row, column=0, sticky='ew', pady=2)
             button_frame.columnconfigure(0, weight=1)
             button_frame.columnconfigure(1, weight=1)
-            ttk.Button(
+            launch_button = ttk.Button(
                 button_frame,
                 text='起動',
                 command=lambda pid=profile_id: self._on_launch_node(pid),
-            ).grid(row=0, column=0, sticky='ew', padx=(0, 4))
-            ttk.Button(
+            )
+            launch_button.grid(row=0, column=0, sticky='ew', padx=(0, 4))
+            stop_button = ttk.Button(
                 button_frame,
                 text='停止',
                 command=lambda pid=profile_id: self._core.request_stop(pid),
-            ).grid(row=0, column=1, sticky='ew')
+            )
+            stop_button.grid(row=0, column=1, sticky='ew')
             current_row += 1
 
             self._launch_widgets[profile_id] = {
@@ -1074,7 +1080,121 @@ class UiMain:
                 'combo': combo,
                 'overrides': override_widgets,
                 'launch_toggle': launch_mode_var,
+                'sim_widget': chk,
+                'launch_button': launch_button,
+                'stop_button': stop_button,
             }
+
+    def automation_after(self, delay_ms: int, callback: Callable[[], None]) -> str:
+        """GUI 自動操作用に Tk の after を登録する。"""
+
+        return str(self._root.after(delay_ms, callback))
+
+    def automation_set_launch_param(self, profile_id: str, param_display: str) -> None:
+        """ノード起動カードのパラメータ Combobox を操作する。"""
+
+        widgets = self._automation_launch_widgets(profile_id)
+        combo = widgets.get('combo')
+        if not isinstance(combo, ttk.Combobox):
+            raise ValueError(f'{profile_id} のパラメータ Combobox が見つかりません')
+        values = tuple(str(value) for value in combo['values'])
+        if param_display not in values:
+            raise ValueError(
+                f'{profile_id} のパラメータ {param_display!r} が候補にありません: '
+                f'{values}'
+            )
+        combo.set(param_display)
+        combo.event_generate('<<ComboboxSelected>>')
+
+    def automation_set_launch_override(
+        self, profile_id: str, key: str, value: str
+    ) -> None:
+        """ノード起動カードの追加引数 Entry を操作する。"""
+
+        widgets = self._automation_launch_widgets(profile_id)
+        overrides = widgets.get('overrides')
+        if not isinstance(overrides, dict) or key not in overrides:
+            raise ValueError(f'{profile_id} の override {key!r} が見つかりません')
+        holder = overrides[key]
+        entry = holder.get('entry') if isinstance(holder, dict) else None
+        var = holder.get('var') if isinstance(holder, dict) else None
+        if isinstance(entry, ttk.Entry):
+            entry.delete(0, tk.END)
+            entry.insert(0, value)
+            return
+        if isinstance(var, tk.StringVar):
+            var.set(value)
+            return
+        raise ValueError(f'{profile_id} の override {key!r} を操作できません')
+
+    def automation_set_simulator_enabled(
+        self, profile_id: str, enabled: bool
+    ) -> None:
+        """ノード起動カードの Simulator Checkbutton を操作する。"""
+
+        widgets = self._automation_launch_widgets(profile_id)
+        sim_var = widgets.get('sim')
+        sim_widget = widgets.get('sim_widget')
+        if not isinstance(sim_var, tk.BooleanVar):
+            raise ValueError(f'{profile_id} の simulator 変数が見つかりません')
+        if isinstance(sim_widget, ttk.Checkbutton):
+            if bool(sim_var.get()) != enabled:
+                sim_widget.invoke()
+            return
+        sim_var.set(enabled)
+        self._core.update_simulator_enabled(profile_id, enabled)
+
+    def automation_launch_profile(self, profile_id: str) -> None:
+        """ノード起動カードの起動ボタンを invoke する。"""
+
+        widgets = self._automation_launch_widgets(profile_id)
+        button = widgets.get('launch_button')
+        if not isinstance(button, ttk.Button):
+            raise ValueError(f'{profile_id} の起動ボタンが見つかりません')
+        button.invoke()
+
+    def automation_stop_profile(self, profile_id: str) -> None:
+        """ノード起動カードの停止ボタンを invoke する。"""
+
+        widgets = self._automation_launch_widgets(profile_id)
+        button = widgets.get('stop_button')
+        if not isinstance(button, ttk.Button):
+            raise ValueError(f'{profile_id} の停止ボタンが見つかりません')
+        button.invoke()
+
+    def automation_send_manual_start(self, value: bool) -> None:
+        """manual_start タブの送信ボタンを invoke する。"""
+
+        if not isinstance(self._manual_send_button, ttk.Button):
+            raise ValueError('manual_start 送信ボタンが見つかりません')
+        self._manual_value.set(value)
+        self._manual_send_button.invoke()
+
+    def automation_get_log_file_path(self, profile_id: str) -> Optional[str]:
+        """ログファイルボタンが参照するファイルパスを返す。"""
+
+        return self._log_file_paths.get(profile_id)
+
+    def automation_open_log_file(self, profile_id: str) -> None:
+        """ログファイルを開くボタンを invoke する。"""
+
+        button = self._log_open_buttons.get(profile_id)
+        if not isinstance(button, ttk.Button):
+            raise ValueError(f'{profile_id} のログファイルボタンが見つかりません')
+        if button.instate(['disabled']):
+            raise ValueError(f'{profile_id} のログファイルボタンは無効です')
+        button.invoke()
+
+    def automation_request_close(self) -> None:
+        """ウィンドウクローズ相当の停止処理を開始する。"""
+
+        self._on_close_request()
+
+    def _automation_launch_widgets(self, profile_id: str) -> Dict[str, object]:
+        widgets = self._launch_widgets.get(profile_id)
+        if widgets is None:
+            raise ValueError(f'{profile_id} の起動カードが見つかりません')
+        return widgets
 
     def _create_override_callback(self, profile_id: str, key: str, var: tk.StringVar):
         def _callback(*_args: object) -> None:
@@ -1188,6 +1308,7 @@ class UiMain:
             'route_planner',
             'route_manager',
             'route_follower',
+            'drive_mode_manager',
             'robot_navigator',
             'obstacle_monitor',
             'road_blockage_detector',
@@ -1260,6 +1381,7 @@ class UiMain:
             'route_planner',
             'route_manager',
             'route_follower',
+            'drive_mode_manager',
             'robot_navigator',
             'obstacle_monitor',
             'road_blockage_detector',

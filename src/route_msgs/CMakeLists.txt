@@ -16,6 +16,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/RouteState.msg"
   "msg/Waypoint.msg"
   "msg/ObstacleAvoidanceHint.msg"
+  "msg/DriveModeStatus.msg"
   "srv/GetRoute.srv"
   "srv/UpdateRoute.srv"
   "srv/ReportStuck.srv"

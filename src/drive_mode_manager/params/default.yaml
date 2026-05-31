@@ -1,0 +1,70 @@
+manual_teleop_node:
+  ros__parameters:
+    linear_axis: 1
+    angular_axis: 0
+    linear_y_axis: -1
+    linear_scale: 1.2
+    angular_scale: 1.5
+    linear_y_scale: 0.5
+    deadzone: 0.05
+    linear_axis_invert: false
+    angular_axis_invert: false
+    enable_button: 4
+    turbo_button: 5
+    turbo_ratio: 1.5
+    joy_timeout_s: 0.5
+    publish_rate_hz: 20.0
+
+drive_cmd_mux_node:
+  ros__parameters:
+    initial_mode: autonomous
+    manual_transition_trigger: l1_ps_button_hold
+    manual_transition_hold_s: 2.0
+    manual_to_auto_l1_released_s: 1.0
+    auto_resume_delay_s: 5.0
+    autonomous_cmd_timeout_s: 0.5
+    manual_cmd_timeout_s: 0.3
+    joy_timeout_s: 0.5
+    publish_rate_hz: 20.0
+    l1_button_index: 4
+    ps_button_index: 16
+
+drive_status_gui_node:
+  ros__parameters:
+    main_display_ratio: 0.70
+    turn_preview_seconds: 1.0
+    manual_to_auto_l1_released_s: 1.0
+    max_autonomous_resume_linear_x: 0.8
+    max_autonomous_resume_angular_z: 1.2
+    direction_linear_scale: 1.2
+    direction_angular_scale: 1.5
+    direction_deadzone: 0.05
+    direction_linear_axis_invert: false
+    direction_angular_axis_invert: true
+
+ps3_joy_sim_node:
+  ros__parameters:
+    joy_topic: joy
+    publish_rate_hz: 20.0
+    num_axes: 6
+    num_buttons: 17
+    left_stick_x_axis: 0
+    left_stick_y_axis: 1
+    invert_left_stick_x: true
+    invert_left_stick_y: false
+    stick_step: 0.1
+    l1_button_index: 4
+    ps_button_index: 16
+    key_l1: l
+    key_ps: p
+    key_stick_forward: w
+    key_stick_backward: s
+    key_stick_left: a
+    key_stick_right: d
+    key_reset: space
+    normalize_diagonal_stick: true
+    cmd_vel_linear_scale: 1.2
+    cmd_vel_angular_scale: 1.5
+    cmd_vel_deadzone: 0.05
+    cmd_vel_linear_axis_invert: false
+    cmd_vel_angular_axis_invert: false

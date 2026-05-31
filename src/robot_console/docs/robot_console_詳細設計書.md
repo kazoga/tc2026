@@ -71,12 +71,16 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 
 ### 3.4 ノード起動サイドバー
 - 右端に折り畳み式のサイドカラムを設け、`Canvas` の論理幅を 288px（従来の 320px から約 10% 縮小）に固定してメインパネルの表示領域を拡張する。開閉ボタンでサイドバーの表示・非表示を切り替える。
-- 項目順：`route_planner`、`route_manager`、`route_follower`、`robot_navigator`、
-  `obstacle_monitor`、`road_blockage_detector`、`traffic_signal_recognizer`。
+- 項目順：`route_planner`、`route_manager`、`route_follower`、`drive_mode_manager`、
+  `robot_navigator`、`obstacle_monitor`、`road_blockage_detector`、`traffic_signal_recognizer`。
 - サイドバー上部に「全起動」「全停止」ボタンを常設し、現在の Combobox 選択値とシミュレータ設定を尊重しながら、`NodeLaunchProfile` の優先順位順に逐次処理する。
 - 各カードに含める要素：
   - 状態インジケータ（停止／起動中／エラー）。
   - パラメータファイル `Combobox`（既定は `params/default.yaml`。表示はファイル名のみで、内部では実パスへマッピングする）。
+  - `drive_mode_manager` カードでは launch 引数 `start_gui` を任意指定できる。
+    `joy_input` で `joy_node` または `ps3_joy_sim` を選択し、`manual_teleop_node` と `drive_cmd_mux_node` は常に同時起動する。画面確認時だけ `start_gui=true` を指定する。
+  - `robot_navigator` カードでは launch 引数 `cmd_vel_topic` と `odom_topic` を任意指定できる。
+    route stack 評価では `cmd_vel_topic=/cmd_vel/autonomous`、`odom_topic=/ypspur_ros/odom` を渡す。
   - `robot_navigator`、`obstacle_monitor`、認識系カードでは「Simulator 同時起動」
     チェックボックスを表示する。認識系カードの simulator は `yolo_detector` の
     `camera_simulator_node.launch.py` を起動する。
@@ -92,7 +96,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 
 ### 3.5 コンソールログタブ
 - `Notebook` の第2タブに 2列グリッドでセクションを配置する。順序は
-  `route_planner`、`route_manager`、`route_follower`、`robot_navigator`、
+  `route_planner`、`route_manager`、`route_follower`、`drive_mode_manager`、`robot_navigator`、
   `obstacle_monitor`、`road_blockage_detector`、`traffic_signal_recognizer` とする。
 - 各セクションは `LabelFrame` + `Text` ウィジェット + 縦スクロールバー。起動マネージャが受信した stdout/stderr を `INFO/ERR` プレフィックス付きで追記する。表示領域は操作者が必要に応じて開き、未読管理は行わない。
 
@@ -199,7 +203,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 ## 7. ノード起動管理
 - `NodeLaunchProfile`（dataclass）で以下を定義：`profile_id`, `display_name`, `package`,
   `launch_file`, `alternate_launch_file`, `param_argument`, `default_param`,
-  `simulator_package`, `simulator_launch_file`。
+  `simulator_package`, `simulator_launch_file`, `user_arguments`。
 - プロファイル定義は `robot_console/config/node_launch_profiles.yaml` に集約し、各ノードごとに以下を記載する。
   - `default_param`: 既定で選択する YAML ファイル。
   - `param_search_paths`: `share` 直下からの相対パスまたは絶対パスのリスト。ワイルドカード対応。
@@ -212,11 +216,17 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
   `ros2 launch <package> <launch_file>` を実行し、各ノードを独立プロセスとして起動する。
   `param_argument` が指定されている場合のみ `<argument>:=<path>` を引数に追加する。
   `simulator_launch_file` があるプロファイルでは、`simulator_package` が指定されていれば
-  そのパッケージから simulator launch を追加起動する。
+  そのパッケージから simulator launch を追加起動する。`user_arguments` に列挙された launch 引数は
+  UI または評価ツールから値が入力された場合に `<name>:=<value>` として追加する。
 - 追加パラメータファイルは `share/<package>/params/` と `share/<package>/config/` を起点に探索し、
   `robot_console/config/node_params/<package>/` や `node_launch_profiles.yaml` に定義されたパスも
   併せて取り込む。`param_package` が指定されている場合は、launch 所属パッケージとは別に
   パラメータ所有パッケージも探索対象に含める。
+- route stack 連携に関わる既定プロファイルは以下とする。
+  - `drive_mode_manager`: `drive_mode_manager.launch.py` を起動し、`start_gui` と `joy_input` を user argument として受け付ける。
+    `joy_input` は `joy_node` または `ps3_joy_sim` を指定する。`manual_teleop_node` と `drive_cmd_mux_node` は個別停止せず、常に同時起動する。
+  - `robot_navigator`: `robot_navigator.launch.py` を起動し、`cmd_vel_topic` と `odom_topic` を
+    user argument として受け付ける。simulator 有効時は `robot_simulator.launch.py` を併起動する。
 - 認識系の既定プロファイルは以下とする。
   - `road_blockage_detector`: `road_blockage_perception.launch.py` を起動し、選択 YAML は
     `detector_param_file:=<path>` として渡す。toggle 有効時は
@@ -225,16 +235,31 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
     `recognizer_param_file:=<path>` として渡す。NCNN 切替は持たない。
 - **起動要求の処理手順**：
   1. GUI から `GuiCore.request_launch()` が呼ばれると、コマンドキューに `profile_id` が積まれる。
-  2. ROS 側ワーカーがキューを取り出し、対応する `NodeLaunchProfile` と `NodeLaunchState.selected_param` を参照してコマンド配列 `['ros2', 'launch', package, launch_file, param_argument:=<path>]` を組み立てる。
+  2. ROS 側ワーカーがキューを取り出し、対応する `NodeLaunchProfile` と `NodeLaunchState.selected_param`、
+     `user_arguments` の入力値を参照してコマンド配列 `['ros2', 'launch', package, launch_file, param_argument:=<path>, <arg>:=<value>...]` を組み立てる。
   3. `subprocess.Popen(text=True)` でプロセスを起動し、PID と状態を `NodeLaunchState` に反映する。stdout/stderr は行単位で読み出すスレッドを生成し、`ConsoleLogBuffer` に追記する。シミュレータを併起動した場合はログ行頭に `[SIM]` を付与する。
 - **停止要求の処理手順**：
   1. `GuiCore.request_stop()` が呼ばれると対象 `profile_id` のプロセスを取得し、まず `SIGINT` を送信する。
   2. 5 秒待っても終了しない場合は `terminate()`（SIGTERM）を発行し、さらに 3 秒待機する。
   3. それでも終了しない場合は `kill()` を実行し、最終的な終了を確認する。同時に起動しているシミュレータにも同じ手順を適用する。
   4. 停止結果は `NodeLaunchState.status` と `process_id`／`simulator_process_id` に反映し、GUI に伝達する。
-- **ログ収集**：標準出力・標準エラーを監視するスレッドはプロファイルごとに生成し、テキストモードで読み出した行を `ConsoleLogBuffer(capacity=2000)` に格納する。容量超過時は古い行から破棄し、未読管理は行わない。
+- **ログ収集**：標準出力・標準エラーを監視するスレッドはプロファイルごとに生成し、テキストモードで読み出した行を `ConsoleLogBuffer(capacity=2000)` に格納する。容量超過時は古い行から破棄し、未読管理は行わない。PyQt5 GUI ノードを子プロセスで起動する場合に備え、`NodeLaunchManager` は子プロセス環境へ Qt plugin path と `QT_QPA_PLATFORM` を補完する。
 - **全起動／全停止**：`GuiCore.request_launch_all()` は `default_launch_profiles()` の定義順に起動を連続要求し、失敗したプロファイルが出た時点で処理を停止してエラーを状態に記録する。`request_stop_all()` は逆順に停止要求を出し、強制終了が発生した場合は `NodeLaunchStatus.ERROR` とエラーメッセージを表示する。
 - **エラーハンドリング**：`ros2 launch` コマンドが開始できなかった場合や非ゼロ終了コードを返した場合は `NodeLaunchStatus.ERROR` とし、stderr の先頭行を `NodeLaunchState.error_message` に格納して GUI 側に通知する。再起動ボタンを押すまで状態は保持する。
+
+## 7.1 Route Stack 評価ツール連携
+
+`tools/headless_route_stack_eval.py` と `tools/gui_route_stack_eval.py` は、route stack の回帰評価時に
+`drive_mode_manager` を起動順へ含める。評価時の標準構成は以下である。
+
+| Profile | 主な override | 理由 |
+| --- | --- | --- |
+| `drive_mode_manager` | `start_gui=false`, `joy_input=joy_node` | `joy_node`、manual teleop、mux を同時起動し、自律 cmd と最終 `/cmd_vel` の mux を検証対象に含める。headless 評価では GUI を起動しない |
+| `robot_navigator` | `cmd_vel_topic=/cmd_vel/autonomous`, `odom_topic=/ypspur_ros/odom` | `drive_cmd_mux_node` が最終 `/cmd_vel` を publish する構成に合わせる |
+
+headless monitor は `/cmd_vel` に加え、`/cmd_vel/autonomous` と `/drive_mode_status` を購読し、
+自律 cmd の発行有無、mux の出力元、復帰カウントダウン状態をログへ出す。GUI あり評価では
+`--show-drive-status-gui` が指定された場合のみ `drive_status_gui_node` を起動する。
 
 ## 8. デバッグログ方針
 - 動作確認や障害調査はユーザーが robot_console を実行し、結果をフィードバックする前提である。GUI 操作中に常時表示するログは `info` 以上に限定し、デバッグ時のみ詳細情報を `debug` レベルで出力する。

@@ -1,5 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -8,8 +9,14 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description() -> LaunchDescription:
     pkg_share = FindPackageShare('robot_navigator')
+    drive_mode_share = FindPackageShare('drive_mode_manager')
     default_param = PathJoinSubstitution([pkg_share, 'params', 'default.yaml'])
     navigator_launch = PathJoinSubstitution([pkg_share, 'launch', 'robot_navigator.launch.py'])
+    drive_mode_launch = PathJoinSubstitution([
+        drive_mode_share,
+        'launch',
+        'drive_mode_manager.launch.py',
+    ])
 
     param_file_arg = DeclareLaunchArgument(
         'param_file',
@@ -36,7 +43,14 @@ def generate_launch_description() -> LaunchDescription:
         description='PoseStamped 目標入力トピック',
     )
     cmd_vel_topic_arg = DeclareLaunchArgument(
-        'cmd_vel_topic', default_value='/cmd_vel', description='Twist 出力トピック'
+        'cmd_vel_topic',
+        default_value='/cmd_vel/autonomous',
+        description='robot_navigator の Twist 出力トピック',
+    )
+    use_drive_mode_manager_arg = DeclareLaunchArgument(
+        'use_drive_mode_manager',
+        default_value='true',
+        description='drive_mode_manager の mux を併用する',
     )
     marker_topic_arg = DeclareLaunchArgument(
         'marker_topic',
@@ -58,6 +72,15 @@ def generate_launch_description() -> LaunchDescription:
     cmd_vel_topic = LaunchConfiguration('cmd_vel_topic')
     marker_topic = LaunchConfiguration('marker_topic')
     obstacle_hint_topic = LaunchConfiguration('obstacle_hint_topic')
+    use_drive_mode_manager = LaunchConfiguration('use_drive_mode_manager')
+
+    drive_mode_include = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(drive_mode_launch),
+        launch_arguments={
+            'start_gui': 'false',
+        }.items(),
+        condition=IfCondition(use_drive_mode_manager),
+    )
 
     navigator_include = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(navigator_launch),
@@ -113,8 +136,10 @@ def generate_launch_description() -> LaunchDescription:
             amcl_pose_topic_arg,
             active_target_topic_arg,
             cmd_vel_topic_arg,
+            use_drive_mode_manager_arg,
             marker_topic_arg,
             obstacle_hint_topic_arg,
+            drive_mode_include,
             navigator_include,
             simulator_node,
         ]

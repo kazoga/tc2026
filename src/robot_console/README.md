@@ -17,8 +17,8 @@
 - **イベントバナー**：`road_blocked` → `manual_start` → `sig_recog` の優先順位で最新イベントを表示。60 秒経過で自動クリア。
 - **制御コマンドタブ**：各トピックの送信 UI を Notebook 形式でまとめ、Spinbox やラジオボタンで値を入力。`frame_image_path` タグでは静止画パスを入力して `/frame_image_path` トピックへ単発 publish できます。送信結果は最終送信値と時刻として即座に反映されます。
 - **画像パネル**：ルート地図（`/active_route` の付帯画像）、障害物ビュー（`/sensor_viewer`）、カメラ映像（`/perception/road_blockage/decision_image`・`/perception/traffic_signal/decision_image`）。レターボックス処理でアスペクト比を保持し、障害物ヒント値を左上にオーバレイ表示。
-- **ノード起動サイドバー**：主要ノードカードに加え `Road Blockage Detector` と
-  `Traffic Signal Recognizer` カードを配置。各カードは対応パッケージの統合 launch を起動し、
+- **ノード起動サイドバー**：主要ノードカードに加え `Drive Mode Manager`、
+  `Road Blockage Detector`、`Traffic Signal Recognizer` カードを配置。各カードは対応パッケージの統合 launch を起動し、
   下流判定ノードと用途別 `yolo_detector` インスタンスを同時に立ち上げます。
 
 ### Console Logs タブ
@@ -70,6 +70,7 @@ ros2 launch robot_console robot_console.launch.py \
 ## ノード起動管理
 - プロファイル定義は `config/node_launch_profiles.yaml`（必要に応じて作成）にまとめられ、起動対象・既定パラメータ・シミュレータ有無を記述します。
 - GUI で選択した YAML は `ros2 launch <package> <file> param_file:=<path>` として渡され、`NodeLaunchManager` が `SIGINT → SIGTERM → SIGKILL` の順に安全に停止処理を行います。
+- `Drive Mode Manager` カードでは `start_gui` に加えて `joy_input` を指定できます。既定は `joy_node` で、開発用入力源にする場合は `ps3_joy_sim` を指定します。
 - `Road Blockage Detector` は既定で NCNN 版 YOLO を使い、カードの「PyTorch版YOLOを使用」を
   有効にした場合のみ PyTorch 版 launch へ切り替えます。
 - `Traffic Signal Recognizer` は信号用 PyTorch モデルのみを起動候補とし、NCNN 版への切替は
@@ -85,6 +86,66 @@ ros2 launch robot_console robot_console.launch.py \
 - GUI なしでロジックを確認したい場合は `python3 -m robot_console.gui_core` でユニットテスト用メインを実行できます（PyYAML / Pillow / OpenCV が未導入でもフォールバック動作）。
 - モック画面は `python3 tools/mock_ui.py` で起動し、ROS 環境なしに画面レイアウトと操作フローを確認できます。
 - `tools/tests/` 配下に pytest ベースのテストを収録しています。`pytest tools/tests` を実行してロジックの回帰を検出してください。
+- `tools/headless_route_stack_eval.py` は tkinter 画面を生成せず、`GuiCore` に
+  GUI 操作相当の入力を与えて route stack の簡易回帰評価を行う補助ツールです。
+  `route_planner`、`route_manager`、`route_follower`、`drive_mode_manager`、
+  `robot_navigator`、`robot_simulator` を起動し、`/route_state`、`/active_route`、
+  `/follower_state`、`/cmd_vel`、`/cmd_vel/autonomous`、`/drive_mode_status`、
+  `/manual_start` を監視します。
+
+  ```bash
+  source install/setup.bash
+  run_id=$(date +%Y%m%d_%H%M%S)
+  mkdir -p "log/codex/${run_id}/ros" "log/codex/${run_id}/robot_console"
+  export ROS_LOG_DIR="$PWD/log/codex/${run_id}/ros"
+  python3 src/robot_console/tools/headless_route_stack_eval.py \
+    --start-label 10 \
+    --goal-label 30 \
+    --console-log-directory "log/codex/${run_id}/robot_console"
+  ```
+
+  既定では `route_planner` / `route_manager` に `tsukuba.yaml`、`route_follower` /
+  `drive_mode_manager` は `start_gui=false` で `joy_node`、manual teleop、mux を同時起動し、`robot_navigator` は
+  `cmd_vel_topic=/cmd_vel/autonomous` で起動し、`robot_navigator` の simulator を有効にします。
+  評価終了時は `GuiCore.request_stop_all()` 相当の停止処理を行い、各 profile の
+  停止状態を出力します。GUI あり評価で専用状態 GUI も起動する場合は
+  `tools/gui_route_stack_eval.py --show-drive-status-gui` を指定します。異なる範囲を評価する場合は `--start-label`、`--goal-label`、
+  `--timeout-sec`、`--post-goal-wait-sec`、`--no-simulator` などを指定してください。
+- `tools/gui_route_stack_eval.py` は `UiMain` を実際に生成し、座標クリックではなく
+  automation hook 経由で Combobox、Entry、Checkbutton、Button 相当の操作を行います。
+  ローカルデスクトップまたは X11 転送ありの環境で実行してください。
+
+  ```bash
+  source install/setup.bash
+  run_id=$(date +%Y%m%d_%H%M%S)
+  mkdir -p "log/codex/${run_id}/ros" "log/codex/${run_id}/robot_console"
+  export ROS_LOG_DIR="$PWD/log/codex/${run_id}/ros"
+  python3 src/robot_console/tools/gui_route_stack_eval.py \
+    --start-label 10 \
+    --goal-label 30 \
+    --console-log-directory "log/codex/${run_id}/robot_console" \
+    --verify-log-open-buttons
+  ```
+
+### 評価ツール実行時のログ
+
+Codex が評価ツールを実行する場合は、ワークスペース直下の `log/codex/` 配下に
+実行ごとのログディレクトリを作成し、`ROS_LOG_DIR` を設定してから実行する運用を
+基本にします。
+
+```bash
+run_id=$(date +%Y%m%d_%H%M%S)
+mkdir -p "log/codex/${run_id}/ros" "log/codex/${run_id}/robot_console"
+export ROS_LOG_DIR="$PWD/log/codex/${run_id}/ros"
+```
+
+`ros2 launch robot_console robot_console.launch.py` 経由で起動した場合は、`ROS_LOG_DIR` が
+`console_log_directory` として `RobotConsoleNode` に渡され、`NodeLaunchManager` が
+各 profile の stdout/stderr をその配下に保存します。評価ツールを Python から
+直接実行する場合は、`--console-log-directory` に
+`log/codex/<run_id>/robot_console` を指定してください。この場合も、
+`NodeLaunchManager` が各 profile の stdout/stderr をその配下へ保存します。
+保存済み ROS ログは `ROS_LOG_DIR` 配下を参照してください。
 
 ## 依存パッケージ
 - GUI 機能：`tkinter`（標準ライブラリ）、`Pillow`（画像描画）、`opencv-python`（画像デコード）。Pillow / OpenCV は未導入でも縮退動作します。

@@ -1,0 +1,2 @@
+blocks:
+  - { type: fixed, name: straight_w5, segment_id: "fixed/waypoints.csv" }
