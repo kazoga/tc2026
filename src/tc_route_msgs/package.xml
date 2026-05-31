@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>route_msgs</name>
+  <name>tc_route_msgs</name>
   <version>0.0.0</version>
   <description>経路共有用のカスタムメッセージとサービス定義を提供するパッケージ</description>
   <maintainer email="kaz.ogata1988@gmail.com">kazuki</maintainer>
@@ -14,12 +14,14 @@
   <build_depend>sensor_msgs</build_depend>
   <build_depend>std_msgs</build_depend>
   <build_depend>builtin_interfaces</build_depend>
+  <build_depend>tc_geo_msgs</build_depend>
 
   <exec_depend>rosidl_default_runtime</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>builtin_interfaces</exec_depend>
+  <exec_depend>tc_geo_msgs</exec_depend>
 
   <member_of_group>rosidl_interface_packages</member_of_group>
 

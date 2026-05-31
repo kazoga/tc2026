@@ -21,7 +21,7 @@
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>visualization_msgs</exec_depend>
-  <exec_depend>route_msgs</exec_depend>
+  <exec_depend>tc_route_msgs</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>

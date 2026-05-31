@@ -32,8 +32,9 @@ from std_msgs.msg import Header
 from geometry_msgs.msg import PoseStamped, Quaternion, Pose
 from sensor_msgs.msg import Image
 
-from route_msgs.msg import Route, Waypoint
-from route_msgs.srv import GetRoute, UpdateRoute
+from tc_route_msgs.msg import Route, Waypoint
+from tc_geo_msgs.msg import MapProjection
+from tc_route_msgs.srv import GetRoute, UpdateRoute
 
 # 可変ルート探索（外部モジュール）
 _THIS_DIR = Path(__file__).resolve().parent
@@ -105,6 +106,26 @@ def yaw_to_quaternion(yaw: float) -> Quaternion:
     q.z = math.sin(half)
     q.w = math.cos(half)
     return q
+
+
+def quaternion_to_yaw(q: Quaternion) -> float:
+    """Quaternionからmap frameのyaw[rad]を抽出する。"""
+
+    siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+    cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+    return math.atan2(siny_cosp, cosy_cosp)
+
+
+def yaw_enu_rad_to_heading_deg(yaw_enu_rad: float) -> float:
+    """ENU yaw[rad]を真北0度・時計回りのheading[deg]へ変換する。"""
+
+    return (90.0 - math.degrees(yaw_enu_rad)) % 360.0
+
+
+def heading_deg_to_yaw_enu_rad(heading_deg: float) -> float:
+    """真北0度・時計回りのheading[deg]をENU yaw[rad]へ変換する。"""
+
+    return math.radians(90.0 - float(heading_deg))
 
 
 def make_text_png_image(text: str = "No variable route in this plan") -> Image:
@@ -331,6 +352,15 @@ class RoutePlannerNode(Node):
         self.declare_parameter("csv_base_dir", "routes")
         self.declare_parameter("map_image_path", None)
         self.declare_parameter("map_worldfile_path", None)
+        self.declare_parameter("route_id", "default_route")
+        self.declare_parameter("projection_id", "tokyo_station")
+        self.declare_parameter("datum", "WGS84")
+        self.declare_parameter("map_frame_id", "map")
+        self.declare_parameter("earth_frame_id", "earth")
+        self.declare_parameter("origin_latitude", 35.681382)
+        self.declare_parameter("origin_longitude", 139.766084)
+        self.declare_parameter("origin_altitude", 3.86)
+        self.declare_parameter("map_yaw_offset_rad", 0.0)
 
         try:
             pkg_share = get_package_share_directory("route_planner")
@@ -342,6 +372,15 @@ class RoutePlannerNode(Node):
         csv_base_dir_raw = str(self.get_parameter("csv_base_dir").value)
         map_image_raw = self.get_parameter("map_image_path").value
         map_worldfile_raw = self.get_parameter("map_worldfile_path").value
+        self.route_id = str(self.get_parameter("route_id").value)
+        self.projection_id = str(self.get_parameter("projection_id").value)
+        self.datum = str(self.get_parameter("datum").value)
+        self.map_frame_id = str(self.get_parameter("map_frame_id").value)
+        self.earth_frame_id = str(self.get_parameter("earth_frame_id").value)
+        self.origin_latitude = float(self.get_parameter("origin_latitude").value)
+        self.origin_longitude = float(self.get_parameter("origin_longitude").value)
+        self.origin_altitude = float(self.get_parameter("origin_altitude").value)
+        self.map_yaw_offset_rad = float(self.get_parameter("map_yaw_offset_rad").value)
         get_service_name = 'get_route'
         update_service_name = 'update_route'
 
@@ -487,6 +526,7 @@ class RoutePlannerNode(Node):
         wp = Waypoint()
         wp.label = record.label
         wp.index = int(record.index)
+        wp.has_pose_enu = True
         wp.pose.position.x = float(record.pose.position.x)
         wp.pose.position.y = float(record.pose.position.y)
         wp.pose.position.z = float(record.pose.position.z)
@@ -501,7 +541,66 @@ class RoutePlannerNode(Node):
         wp.not_skip = bool(record.not_skip)
         if hasattr(wp, "segment_is_fixed"):
             wp.segment_is_fixed = bool(record.segment_is_fixed)
+
+        if record.latitude is not None and record.longitude is not None:
+            wp.has_geo_pose = True
+            wp.geo_pose.header = Header()
+            wp.geo_pose.header.stamp = self.get_clock().now().to_msg()
+            wp.geo_pose.header.frame_id = self.earth_frame_id
+            wp.geo_pose.child_frame_id = "route_waypoint"
+            wp.geo_pose.point.latitude = float(record.latitude)
+            wp.geo_pose.point.longitude = float(record.longitude)
+            wp.geo_pose.point.altitude = (
+                float(record.altitude) if record.altitude is not None else float(record.pose.position.z)
+            )
+            wp.geo_pose.point.has_altitude = record.altitude is not None
+
+            yaw_map = quaternion_to_yaw(wp.pose.orientation)
+            if record.heading_deg is not None:
+                heading_deg = float(record.heading_deg) % 360.0
+                yaw_enu_rad = heading_deg_to_yaw_enu_rad(heading_deg)
+            else:
+                yaw_enu_rad = yaw_map + self.map_yaw_offset_rad
+                heading_deg = yaw_enu_rad_to_heading_deg(yaw_enu_rad)
+            wp.geo_pose.heading_deg = heading_deg
+            wp.geo_pose.has_heading = True
+            wp.geo_pose.yaw_enu_rad = yaw_enu_rad
+            wp.geo_pose.has_yaw_enu = True
+            wp.geo_pose_source = Waypoint.GEO_SOURCE_ROUTE_FILE
+        else:
+            wp.has_geo_pose = False
+            wp.geo_pose_source = Waypoint.GEO_SOURCE_UNKNOWN
         return wp
+
+    def _make_projection_msg(self) -> MapProjection:
+        """Route.msgへ埋め込む地図投影メタデータを生成する。"""
+
+        projection = MapProjection()
+        projection.header = Header()
+        projection.header.stamp = self.get_clock().now().to_msg()
+        projection.header.frame_id = self.earth_frame_id
+        projection.projection_type = MapProjection.PROJECTION_LOCAL_TANGENT_PLANE
+        projection.projection_id = self.projection_id
+        projection.datum = self.datum
+        projection.map_frame_id = self.map_frame_id
+        projection.earth_frame_id = self.earth_frame_id
+        projection.origin_latitude = self.origin_latitude
+        projection.origin_longitude = self.origin_longitude
+        projection.origin_altitude = self.origin_altitude
+        projection.map_yaw_offset_rad = self.map_yaw_offset_rad
+        projection.utm_zone = ""
+        projection.utm_north = True
+        return projection
+
+    def _apply_route_metadata(self, route: Route) -> None:
+        """Route全体の識別子・座標系メタデータを設定する。"""
+
+        route.header.frame_id = self.map_frame_id
+        route.route_id = self.route_id
+        route.map_frame_id = self.map_frame_id
+        route.earth_frame_id = self.earth_frame_id
+        route.projection = self._make_projection_msg()
+        route.route_image.header.frame_id = self.map_frame_id
 
     def _refresh_segment_cache(self) -> None:
         """RouteBuilderのキャッシュからROSメッセージ形式のセグメントを再構築する。"""
@@ -560,6 +659,7 @@ class RoutePlannerNode(Node):
 
             self.route_version = 1
             route = pack_route_msg(route_wps, self.route_version, total_distance, route_image)
+            self._apply_route_metadata(route)
 
             self.current_route = route
             self.current_route_origins = origins
@@ -822,6 +922,7 @@ class RoutePlannerNode(Node):
                 route_image = make_text_png_image()
             self.route_version += 1
             new_route = pack_route_msg(new_wps, self.route_version, total_distance, route_image)
+            self._apply_route_metadata(new_route)
 
             # 状態更新
             self.current_route = new_route

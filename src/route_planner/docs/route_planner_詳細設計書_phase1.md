@@ -13,6 +13,7 @@
 - `/update_route` : 現行経路に対して、**可変ブロックの封鎖**（エッジクローズ）等を反映し、**再探索**を行う。
 - `graph_solver.solve_variable_route()` を呼び出し、可変ブロック探索を行う。地図重畳画像は `graph_solver.render_route_on_map()` で別途生成し、必要に応じてファイルへ保存する。
 - 地図画像と Worldfile のパラメータを**相対パス**で受け取り、パッケージ共有ディレクトリ配下の実ファイルへ解決する。
+- route CSV に `latitude` / `longitude` / `altitude` / `heading_deg` が含まれる場合、`tc_route_msgs/Waypoint.geo_pose` として `/active_route` へ引き継ぐ。
 
 ### 1.2 phase1 での実装範囲
 - サービス：`/get_route`, `/update_route` を実装済み（同期実行）
@@ -57,21 +58,26 @@
 ### 4.1 サービス
 | 名称 | 型 | 概要 |
 |:--|:--|:--|
-| `/get_route` | `route_msgs/srv/GetRoute` | ブロック構成とラベル情報をもとに**経路生成**を行い、`Route` を返す。 |
-| `/update_route` | `route_msgs/srv/UpdateRoute` | **現行経路**を前提に**可変ブロック**の再探索を行い、`Route` を返す。固定ブロック封鎖は**失敗**を返す。 |
+| `/get_route` | `tc_route_msgs/srv/GetRoute` | ブロック構成とラベル情報をもとに**経路生成**を行い、`Route` を返す。 |
+| `/update_route` | `tc_route_msgs/srv/UpdateRoute` | **現行経路**を前提に**可変ブロック**の再探索を行い、`Route` を返す。固定ブロック封鎖は**失敗**を返す。 |
 
 > 備考：どちらも**同期**であり、完了まで呼び出し元は待機する。
 
 ### 4.2 メッセージ（要素の意味）
-- `Route`（`route_msgs/msg/Route`）  
+- `Route`（`tc_route_msgs/msg/Route`）  
   - `waypoints: Waypoint[]` … 経路順のウェイポイント列  
     - `Waypoint.index: int` … **その Route 内の順序**（0..N-1）  
     - `Waypoint.label: string` … ノードの**地物識別**。**再訪**があり得る（indexと無関係）。  
     - `Waypoint.pose: geometry_msgs/Pose`（x, y, z, qx, qy, qz, qw）  
-    - `Waypoint.reach_tolerance: float` … 到達判定距離  
+    - `Waypoint.has_pose_enu: bool` … 走行制御用 ENU pose が有効であることを示す。通常は `true`。  
+    - `Waypoint.geo_pose: tc_geo_msgs/GeoPose` … route CSV 由来の LLH pose。`latitude` と `longitude` がある場合に設定する。  
+    - `Waypoint.has_geo_pose: bool` … `geo_pose` が route 正本として有効かどうか。  
+    - `Waypoint.geo_pose_source: uint8` … `GEO_SOURCE_ROUTE_FILE` を route CSV 由来として設定する。  
+  - `route_id: string` … route 設定識別子。  
+  - `map_frame_id: string` / `earth_frame_id: string` … ENU と LLH の frame 名。  
+  - `projection: tc_geo_msgs/MapProjection` … `pose` と `geo_pose` の投影条件。  
   - `image: sensor_msgs/Image` … `bgr8` 形式で 1 枚返す（後述）  
   - `version: int` … ノード内で単調増加（phase1実装準拠）  
-  - `meta: 任意の補助情報`（phase1は必要最小限のみ設定）
 
 > **重要**：`label` は地物同一性、`index` は**同一Route内の通過順**を表す。再訪時は `label` が同じで `index` は異なる。
 
@@ -135,7 +141,7 @@
 - `edges.csv` : `source, target, segment_id, reversible[, weight_factor]`
   - `reversible` は `0/1`, `true/false`, `yes/no` を受理
   - `weight_factor` は正の数値。指定時はセグメント長へ係数を掛けた重みを使用
-- **Waypoint CSV（segment）**：`(x,y)` または `(lat,lon)` 形式のいずれかを許容
+- **Waypoint CSV（segment）**：`(x,y)` または `(lat,lon)` 形式のいずれかを許容。`lat` / `lon` または `latitude` / `longitude`、任意の `alt` / `altitude`、`heading` / `heading_deg` を読み取り、Route msg の LLH field へ保持する。
 
 ---
 
@@ -177,6 +183,7 @@
 
 ### 9.6 `pack_route_msg(wps, route_image_bgr)`（モジュール関数）
 - **目的**：`Route` メッセージを**構築**する。
+- **LLH拡張**：呼び出し後に `_apply_route_metadata()` を適用し、`route_id`、`map_frame_id`、`earth_frame_id`、`projection` を設定する。各 waypoint の LLH field は `_record_to_waypoint()` で設定済みとする。
 - **引数**：`wps: List[Waypoint]`, `route_image_bgr: Optional[np.ndarray]`
 - **戻り値**：`Route`
 - **仕様**：NumPy 配列（BGR, `dtype=uint8`）が与えられた場合は `sensor_msgs/Image` を `bgr8` で生成する。`None` の場合や変換失敗時は**テキストPNG**を生成して代入する。
@@ -213,7 +220,8 @@
 5. **ラベルスライス**：`slice_by_labels()` により start/goal 範囲で切出し
 6. **採番/姿勢補正**：`indexing()` → `adjust_orientations()`
 7. **画像**：地図リソースが解決できた場合は `graph_solver.render_route_on_map()` を呼び出し、得られた `route_image_bgr` を `pack_route_msg()` で `sensor_msgs/Image` へ変換。画像生成に失敗した場合やリソース未指定時はテキストPNGを生成
-8. **状態更新**：`current_route`, `current_route_origins`, `visited_checkpoints_hist` を更新。`route_version` を**加算**
+8. **LLHメタデータ設定**：`_apply_route_metadata()` で route 全体の frame / projection を設定し、CSV由来の LLH を含む waypoint 列を保持する
+9. **状態更新**：`current_route`, `current_route_origins`, `visited_checkpoints_hist` を更新。`route_version` を**加算**
 9. **応答**：`Route` を返却
 
 ### 10.2 `/update_route`

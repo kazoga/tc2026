@@ -28,10 +28,10 @@ def generate_launch_description() -> LaunchDescription:
         default_value='/sensor_viewer',
         description='デバッグ画像出力トピック名',
     )
-    amcl_pose_topic_arg = DeclareLaunchArgument(
-        'amcl_pose_topic',
-        default_value='/amcl_pose',
-        description='AMCL Pose入力トピック名',
+    pose_enu_topic_arg = DeclareLaunchArgument(
+        'pose_enu_topic',
+        default_value='/localization/pose_enu',
+        description='ENU自己位置入力トピック名',
     )
     active_target_topic_arg = DeclareLaunchArgument(
         'active_target_topic',
@@ -42,7 +42,7 @@ def generate_launch_description() -> LaunchDescription:
     scan_topic = LaunchConfiguration('scan_topic')
     hint_topic = LaunchConfiguration('hint_topic')
     viewer_topic = LaunchConfiguration('viewer_topic')
-    amcl_pose_topic = LaunchConfiguration('amcl_pose_topic')
+    pose_enu_topic = LaunchConfiguration('pose_enu_topic')
     active_target_topic = LaunchConfiguration('active_target_topic')
 
     node = Node(
@@ -55,7 +55,7 @@ def generate_launch_description() -> LaunchDescription:
             ('scan', scan_topic),
             ('obstacle_avoidance_hint', hint_topic),
             ('sensor_viewer', viewer_topic),
-            ('amcl_pose', amcl_pose_topic),
+            ('localization/pose_enu', pose_enu_topic),
             ('active_target', active_target_topic),
         ],
     )
@@ -64,7 +64,7 @@ def generate_launch_description() -> LaunchDescription:
         scan_topic_arg,
         hint_topic_arg,
         viewer_topic_arg,
-        amcl_pose_topic_arg,
+        pose_enu_topic_arg,
         active_target_topic_arg,
         node,
     ])

@@ -1,7 +1,7 @@
-# route_msgs パッケージ README (phase3正式版)
+# tc_route_msgs パッケージ README (phase3正式版)
 
 ## 概要
-`route_msgs` は経路計画・走行系で共通利用するメッセージ／サービス型を定義する
+`tc_route_msgs` は経路計画・走行系で共通利用するメッセージ／サービス型を定義する
 インタフェース専用パッケージです。Phase3 ではルートバージョン管理、滞留報告の
 理由コード化（`reason_code` / `reason_detail`）、経路封鎖判定用フラグなどのフィールドを拡張し、
 `route_manager`・`route_planner`・`route_follower`・`obstacle_monitor`・`robot_navigator` など
@@ -17,8 +17,8 @@
 本パッケージはノードを持たず、`colcon build` により他パッケージと同時にビルドされます。
 インタフェースの確認には以下を利用してください。
 ```bash
-ros2 interface show route_msgs/msg/Route
-ros2 interface show route_msgs/srv/ReportStuck
+ros2 interface show tc_route_msgs/msg/Route
+ros2 interface show tc_route_msgs/srv/ReportStuck
 ```
 
 ## 外部インタフェース
@@ -54,8 +54,8 @@ ros2 interface show route_msgs/srv/ReportStuck
 - `ObstacleAvoidanceHint.front_clearance_m` は `robot_navigator`・`route_follower` の減速／停止条件に利用されます。
 
 ## 動作確認手順
-1. `colcon build` 後、`ros2 interface show route_msgs/msg/ManagerStatus` などで定義内容を確認する。
-2. `ros2 interface proto route_msgs/msg/Route` を用いてテストデータを生成し、Publish/Service 呼び出しの型整合を確認する。
+1. `colcon build` 後、`ros2 interface show tc_route_msgs/msg/ManagerStatus` などで定義内容を確認する。
+2. `ros2 interface proto tc_route_msgs/msg/Route` を用いてテストデータを生成し、Publish/Service 呼び出しの型整合を確認する。
 3. `route_manager`・`route_planner`・`route_follower` 間で通信ログを収集し、定義どおりのフィールドが送受信されているか検証する。
 
 ## デバッグのヒント

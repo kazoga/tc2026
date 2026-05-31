@@ -35,9 +35,9 @@ obstacle_monitor、route_manager との連携仕様を含めた完全設計情�
 
 | トピック名 | 型 | 説明 |
 |-------------|----|------|
-| /active_route | route_msgs/Route | 経路情報（Waypoint配列、TRANSIENT_LOCAL） |
-| /amcl_pose | geometry_msgs/PoseStamped | 現在推定位置（map座標系） |
-| /obstacle_avoidance_hint | route_msgs/ObstacleAvoidanceHint | 回避ヒント情報（front_blocked / 左右オフセット提案[m]） |
+| /active_route | tc_route_msgs/Route | 経路情報（Waypoint配列、TRANSIENT_LOCAL） |
+| /localization/pose_enu | geometry_msgs/PoseStamped | 現在推定位置（map座標系） |
+| /obstacle_avoidance_hint | tc_route_msgs/ObstacleAvoidanceHint | 回避ヒント情報（front_blocked / 左右オフセット提案[m]） |
 | /manual_start | std_msgs/Bool | 手動再開信号（Trueで解除） |
 | /sig_recog | std_msgs/Int32 | 信号認識結果（1=GO, 2=NOGO, 他=未定義） |
 
@@ -46,7 +46,7 @@ obstacle_monitor、route_manager との連携仕様を含めた完全設計情�
 | トピック名 | 型 | 内容 |
 |-------------|----|------|
 | /active_target | geometry_msgs/PoseStamped | 現在の目標Pose（1Hzで再送） |
-| /follower_state | route_msgs/FollowerState | 状態情報（Phase3拡張版） |
+| /follower_state | tc_route_msgs/FollowerState | 状態情報（Phase3拡張版） |
 
 ### 3.3 サービス
 
@@ -228,7 +228,7 @@ IDLE → RUNNING → WAITING_STOP → RUNNING/FINISHED
 | トピック | 信頼性 | 永続性 | 履歴 | 深度 |
 |-----------|----------|----------|--------|------|
 | /active_route | RELIABLE | TRANSIENT_LOCAL | KEEP_LAST | 1 |
-| /amcl_pose | RELIABLE | VOLATILE | KEEP_LAST | 10 |
+| /localization/pose_enu | RELIABLE | VOLATILE | KEEP_LAST | 10 |
 | /obstacle_avoidance_hint | BEST_EFFORT | VOLATILE | KEEP_LAST | 5 |
 | /active_target | RELIABLE | VOLATILE | KEEP_LAST | 10 |
 | /follower_state | RELIABLE | VOLATILE | KEEP_LAST | 10 |

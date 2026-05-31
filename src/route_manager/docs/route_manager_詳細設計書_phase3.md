@@ -127,8 +127,8 @@ followerから滞留検知を受けた場合、`ReportStuck.Request.reason_code`
 
 | 名称 | 型 | QoS | 方向 | 説明 |
 |------|----|-----|------|------|
-| `/active_route` | `route_msgs/Route` | RELIABLE / TRANSIENT_LOCAL | Pub | 経路配信 |
-| `/manager_status` | `route_msgs/ManagerStatus` | RELIABLE / VOLATILE | Pub | ノード状態通知 |
+| `/active_route` | `tc_route_msgs/Route` | RELIABLE / TRANSIENT_LOCAL | Pub | 経路配信 |
+| `/manager_status` | `tc_route_msgs/ManagerStatus` | RELIABLE / VOLATILE | Pub | ノード状態通知 |
 
 > Phase3では経路封鎖イベントを専用トピックではなく `/report_stuck` の `reason_code=ROAD_BLOCKED` として受信し、
 > `Waypoint.segment_is_fixed` と組み合わせて判断する。
@@ -137,9 +137,18 @@ followerから滞留検知を受けた場合、`ReportStuck.Request.reason_code`
 
 | 名称 | 型 | 方向 | 説明 |
 |------|----|------|------|
-| `/report_stuck` | `route_msgs/srv/ReportStuck` | Server | follower滞留通報受付 |
-| `/update_route` | `route_msgs/srv/UpdateRoute` | Client | 再計画要求 |
-| `/get_route` | `route_msgs/srv/GetRoute` | Client | 初期経路取得 |
+| `/report_stuck` | `tc_route_msgs/srv/ReportStuck` | Server | follower滞留通報受付 |
+| `/update_route` | `tc_route_msgs/srv/UpdateRoute` | Client | 再計画要求 |
+| `/get_route` | `tc_route_msgs/srv/GetRoute` | Client | 初期経路取得 |
+
+---
+
+
+### LLHメタデータ保持
+
+`tc_route_msgs/Route` は LLH 拡張により `route_id`、`map_frame_id`、`earth_frame_id`、`projection` を持つ。`route_manager` はこれらを `RouteModel` に保持し、`/active_route` 再配信時に失わずに再設定する。
+
+`WaypointLite` は `index`、`has_pose_enu`、`geo_pose`、`has_geo_pose`、`geo_pose_source` を保持する。SHIFT / SKIP / 固定ブロック再配信など、manager 内部で local route を作る処理でもこれらの field は `copy.deepcopy()` で継承する。走行判断は従来どおり ENU の `pose` を使い、LLH field は GUI、HTML UI、ログ、`route_geo_projector` 用の参照情報として扱う。
 
 ---
 

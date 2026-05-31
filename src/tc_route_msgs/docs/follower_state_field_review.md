@@ -5,7 +5,7 @@
 - `next_waypoint_label` を廃止し、監視UIからも次ラベル表示を撤去した。
 - 距離系フィールドを `active_target_distance_m`（現在地〜アクティブターゲット距離）と `segment_length_m`（前区間長）へ整理し、命名に単位サフィックスを付与した。
 - 障害物ヒント統計の名称を `front_blocked` / `left_offset_m` / `right_offset_m` / `front_clearance_m` に揃え、中央値を意味するサフィックスを除去した。
-- `current_pose` フィールドを削除し、姿勢は従来通り `/amcl_pose` から取得する前提とした。
+- `current_pose` フィールドを削除し、姿勢は従来通り `/localization/pose_enu` から取得する前提とした。
 
 ## FollowerState.msg のフィールド一覧
 

@@ -33,7 +33,7 @@ Phase3でもグローバル経路の再計算までは行わず、ローカル�
 ## 3. 検討経緯の要約
 
 ### 3.1 滞留検知方式
-- map座標系（/amcl_pose）基準で過去位置を比較。
+- map座標系（/localization/pose_enu）基準で過去位置を比較。
 - 直近2秒間での距離変化と速度を評価し、15秒連続で基準未満の場合に滞留成立。
 - STOP（line_stop / signal_stop）中は検出対象外。
 
@@ -93,7 +93,7 @@ dy2 =  sin(yaw)*forward
 
 | 項目 | 値 |
 |------|----|
-| サービス型 | route_msgs/srv/ReportStuck |
+| サービス型 | tc_route_msgs/srv/ReportStuck |
 | リクエスト | route_version:int32, current_index:int32, current_wp_label:string, current_pose_map:Pose, reason_code:uint8, reason_detail:string, avoid_trial_count:uint32, last_hint_blocked:bool, last_applied_offset_m:float |
 | レスポンス | decision_code:uint8(1=replan/2=skip/3=failed), waiting_deadline:Duration, offset_hint:float, note:string |
 | 呼出方式 | 同期（timeout=30s） |

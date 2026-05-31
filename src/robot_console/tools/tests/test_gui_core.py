@@ -276,7 +276,7 @@ def test_target_distance_prefers_pose_when_available() -> None:
     core.update_active_target(target)
     pose_cov = geometry_msgs.msg.PoseWithCovarianceStamped()
     pose_cov.pose.pose.position.x = 4.0  # type: ignore[attr-defined]
-    core.update_amcl_pose(pose_cov)
+    core.update_pose_enu(pose_cov)
     follower_msg = _make_follower_state(active_target_distance_m=123.0)
     core.update_follower_state(follower_msg)
     snapshot = core.snapshot()

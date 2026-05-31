@@ -1,4 +1,4 @@
-# route_msgs/msg/FollowerState.msg
+# tc_route_msgs/msg/FollowerState.msg
 # route_follower ノードが現在の追従状態を通知する。
 # Phase2にて拡張された最終仕様。
 

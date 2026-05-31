@@ -8,7 +8,8 @@
   <license>Apache-2.0</license>
 
   <depend>rclpy</depend>
-  <depend>route_msgs</depend>
+  <depend>tc_route_msgs</depend>
+  <depend>tc_geo_msgs</depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>sensor_msgs</depend>

@@ -95,7 +95,7 @@ timeout 30s ros2 launch route_planner route_planner.launch.py \
 
 ```bash
 source install/setup.bash
-ros2 service call /get_route route_msgs/srv/GetRoute \
+ros2 service call /get_route tc_route_msgs/srv/GetRoute \
   "{start_label: '10', goal_label: '50', checkpoint_labels: []}"
 ```
 
@@ -125,32 +125,32 @@ ros2 launch route_manager route_manager.launch.py \
 
 ```bash
 source install/setup.bash
-timeout 10s ros2 topic echo --once /route_state route_msgs/msg/RouteState
-timeout 10s ros2 topic echo --once /active_route route_msgs/msg/Route
+timeout 10s ros2 topic echo --once /route_state tc_route_msgs/msg/RouteState
+timeout 10s ros2 topic echo --once /active_route tc_route_msgs/msg/Route
 ```
 
 ## `route_follower`
 
-`route_follower` は `/active_route`, `/amcl_pose`, `/manual_start`, `/sig_recog`,
+`route_follower` は `/active_route`, `/localization/pose_enu`, `/manual_start`, `/sig_recog`,
 `/road_blocked`, `/obstacle_avoidance_hint` を入力として、`/active_target`,
 `/follower_state`, `/recog_flag` を出力する。単体確認では、短い `Route` と
 `PoseWithCovarianceStamped` を仮想入力として与え、`/active_target` と
 `/follower_state` が出ることを確認する。
 
 実 route を使う場合は、`route_planner` と `route_manager` を併用し、
-`robot_simulator` またはテスト用 publisher で `/amcl_pose` を与える。
+`robot_simulator` またはテスト用 publisher で `/localization/pose_enu` を与える。
 
 出力確認例:
 
 ```bash
 source install/setup.bash
 timeout 10s ros2 topic echo --once /active_target geometry_msgs/msg/PoseStamped
-timeout 10s ros2 topic echo --once /follower_state route_msgs/msg/FollowerState
+timeout 10s ros2 topic echo --once /follower_state tc_route_msgs/msg/FollowerState
 ```
 
 ## `robot_navigator`
 
-`robot_navigator` は `/active_target`, `/amcl_pose`, `/odom` などを入力として
+`robot_navigator` は `/active_target`, `/localization/pose_enu`, `/odom` などを入力として
 `/cmd_vel` を publish する。単体確認では、仮想 pose と target を与え、
 `/cmd_vel` が publish されることを確認する。実機 driver には接続しない。
 
@@ -165,7 +165,7 @@ ros2 launch robot_navigator robot_navigator.launch.py
 source install/setup.bash
 ros2 topic pub --once /active_target geometry_msgs/msg/PoseStamped \
   "{header: {frame_id: 'map'}, pose: {position: {x: 1.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}}"
-ros2 topic pub --once /amcl_pose geometry_msgs/msg/PoseWithCovarianceStamped \
+ros2 topic pub --once /localization/pose_enu geometry_msgs/msg/PoseWithCovarianceStamped \
   "{header: {frame_id: 'map'}, pose: {pose: {position: {x: 0.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}}}"
 ros2 topic pub --once /odom nav_msgs/msg/Odometry \
   "{header: {frame_id: 'odom'}, child_frame_id: 'base_link', pose: {pose: {orientation: {w: 1.0}}}}"
@@ -260,9 +260,9 @@ GUI あり評価では `UiMain` を実際に生成し、画面座標クリック
 
 ### 監視条件
 
-- `/route_state` (`route_msgs/msg/RouteState`) を監視する。
-- `/active_route` (`route_msgs/msg/Route`) を監視し、waypoint 数と start / goal label を確認する。
-- `/follower_state` (`route_msgs/msg/FollowerState`) を監視する。
+- `/route_state` (`tc_route_msgs/msg/RouteState`) を監視する。
+- `/active_route` (`tc_route_msgs/msg/Route`) を監視し、waypoint 数と start / goal label を確認する。
+- `/follower_state` (`tc_route_msgs/msg/FollowerState`) を監視する。
 - `/cmd_vel` (`geometry_msgs/msg/Twist`) を監視し、走行中に出力されることを確認する。
 - `/manual_start` (`std_msgs/msg/Bool`) を監視し、`True` が送信されたことを確認する。
 - `/route_state.current_label == <goal_label>` になったら goal 到達とみなす。

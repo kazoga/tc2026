@@ -100,6 +100,9 @@ class GuiRouteStackEvaluator:
             self._ui.automation_set_launch_override(
                 "robot_navigator", "odom_topic", "/ypspur_ros/odom"
             )
+            self._ui.automation_set_launch_override(
+                "robot_navigator", "pose_enu_topic", "/localization/pose_enu"
+            )
             self._ui.automation_set_simulator_enabled(
                 "robot_navigator", self._config.simulator
             )

@@ -32,7 +32,7 @@ install(
 
 install(
   PROGRAMS
-    scripts/fake_amcl_pose.py
+    scripts/fake_localization_pose.py
     scripts/generate_pylon_world.py
     scripts/generate_waypoints.py
     scripts/odom_tf_broadcaster.py

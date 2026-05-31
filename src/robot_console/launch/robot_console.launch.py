@@ -58,7 +58,7 @@ _TOPIC_CONFIGS = [
         '信号判定画像トピック',
     ),
     ('active_target_topic', 'active_target', '/active_target', 'ターゲット姿勢トピック'),
-    ('amcl_pose_topic', 'amcl_pose', '/amcl_pose', 'AMCL 推定姿勢トピック'),
+    ('pose_enu_topic', 'localization/pose_enu', '/localization/pose_enu', 'ENU自己位置トピック'),
     ('cmd_vel_topic', 'cmd_vel', '/cmd_vel', '速度指令トピック'),
 ]
 

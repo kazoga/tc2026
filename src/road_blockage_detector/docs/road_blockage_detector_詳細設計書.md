@@ -6,7 +6,7 @@ road_blockage_detector ノードは YOLO 推論結果、カメラ画像、自己
 ## 2. 背景と前提条件
 - YOLO 推論結果は `yolo_detector` パッケージが `vision_msgs/msg/Detection2DArray` として publish 済みである。
 - `road_blockage_detector` は YOLO モデルのロードや画像推論を行わず、検出結果の意味判定だけを担当する。
-- ノードは `/amcl_pose` を唯一の自己位置情報として使用し、TF2 には依存しない。
+- ノードは `/localization/pose_enu` を唯一の自己位置情報として使用し、TF2 には依存しない。
 - YOLO の生の検出矩形だけを確認する画像は `yolo_detector` 側の `/perception/road_blockage/detection_image` を使用する。
 - 本ノードは、経路封鎖判定の根拠を確認するため、raw 画像に判定状態と有効検知情報を重畳した `/perception/road_blockage/decision_image` を publish する。
 - 過去の経路封鎖位置はノード内メモリで累積保持すればよい。永続化要件は無し。
@@ -25,7 +25,7 @@ road_blockage_detector ノードは YOLO 推論結果、カメラ画像、自己
 | 責務1 | 検知パラメータ（クラス ID・スコア・バウンディングボックス閾値）に基づくフィルタリング処理を実装する。 |
 | 責務2 | 判定期間内のカウント履歴から封鎖確率を評価し、`road_blocked` Bool を publish する。 |
 | 責務3 | 確定封鎖とみなした自己位置を履歴として保持し、再侵入時の多重検知抑止を行う。 |
-| 責務4 | `/amcl_pose` が取得できない場合や Detection と `/amcl_pose` の時刻差が大きい場合に警告ログを出力する。 |
+| 責務4 | `/localization/pose_enu` が取得できない場合や Detection と `/localization/pose_enu` の時刻差が大きい場合に警告ログを出力する。 |
 | 責務5 | 判定状態、検知割合、有効検知数、仮判定経過時間を画像へ重畳し、運用確認用の判定画像を publish する。 |
 
 ## 5. 外部 I/F
@@ -34,7 +34,7 @@ road_blockage_detector ノードは YOLO 推論結果、カメラ画像、自己
 | -------- | -- | --- | ---- |
 | `/perception/road_blockage/detections` | `vision_msgs/msg/Detection2DArray` | SensorData | YOLO 推論結果受信。 |
 | `/usb_cam/image_raw` | `sensor_msgs/msg/Image` | SensorData | 判定重畳画像の元画像。 |
-| `/amcl_pose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | Default | 最新の自己位置キャッシュ。Detection 時刻との差も確認する。 |
+| `/localization/pose_enu` | `geometry_msgs/msg/PoseWithCovarianceStamped` | Default | 最新の自己位置キャッシュ。Detection 時刻との差も確認する。 |
 
 ### 5.2 Publish
 | トピック | 型 | QoS | 条件 |
@@ -49,16 +49,16 @@ road_blockage_detector ノードは YOLO 推論結果、カメラ画像、自己
 - 判定重畳画像は運用確認用であり、制御判断の正本は `/road_blocked` とする。
 
 ### 5.4 自己位置取得
-- `/amcl_pose` を subscribe し、メッセージヘッダーの時刻を含めてキャッシュする。
-- Detection2DArray のヘッダー時刻と最新の `/amcl_pose` ヘッダー時刻に 3 秒以上の差がある場合は警告を出すが、処理自体は続行する。
-- 最新 `/amcl_pose` が未取得の場合は警告を出して検知処理をスキップする。
+- `/localization/pose_enu` を subscribe し、メッセージヘッダーの時刻を含めてキャッシュする。
+- Detection2DArray のヘッダー時刻と最新の `/localization/pose_enu` ヘッダー時刻に 3 秒以上の差がある場合は警告を出すが、処理自体は続行する。
+- 最新 `/localization/pose_enu` が未取得の場合は警告を出して検知処理をスキップする。
 
 ## 6. パラメータ仕様
 | 名称 | 型 | 既定値 | 説明 |
 | ---- | -- | ------ | ---- |
 | `detections_topic` | string | `/perception/road_blockage/detections` | YOLO 推論結果入力 topic。 |
 | `image_topic` | string | `/usb_cam/image_raw` | 判定重畳画像の元画像 topic。 |
-| `amcl_pose_topic` | string | `/amcl_pose` | 自己位置入力 topic。 |
+| `pose_enu_topic` | string | `/localization/pose_enu` | 自己位置入力 topic。 |
 | `road_blocked_topic` | string | `/road_blocked` | 経路封鎖判定出力 topic。 |
 | `decision_image_topic` | string | `/perception/road_blockage/decision_image` | 判定状態を重畳した画像の出力 topic。 |
 | `publish_decision_image` | bool | `true` | 判定重畳画像を publish するか。 |
@@ -80,9 +80,9 @@ road_blockage_detector ノードは YOLO 推論結果、カメラ画像、自己
 | `count_history` | `collections.deque[tuple[float, int]]` | 「秒単位バケットの開始時刻（float, ROS time 秒）」と、その1秒間に記録した判定カウントの合計を保持。`decision_duration` 秒を超えた古いバケットは随時削除する。検知周期に依存せず秒単位のスライディングウィンドウを構成する。 |
 | `last_detection_time` | `builtin_interfaces/msg/Time` | 最後に `detections` を処理した時刻。間引きや欠損検出に利用。 |
 | `temporary_decision_count` | int | 仮判定カウント。秒バケット割合に応じて加算／リセット。 |
-| `blocked_positions` | `list[geometry_msgs.msg.Pose]` | 確定封鎖と判断した際の `map` 座標（`/amcl_pose` 基準）。多重検知抑止に使用。 |
-| `latest_amcl_pose` | `Pose` | `/amcl_pose` からの最新値キャッシュ。 |
-| `latest_amcl_time` | `rclpy.time.Time` | `/amcl_pose` メッセージヘッダーの時刻。Detection のヘッダー時刻との乖離チェックに利用。 |
+| `blocked_positions` | `list[geometry_msgs.msg.Pose]` | 確定封鎖と判断した際の `map` 座標（`/localization/pose_enu` 基準）。多重検知抑止に使用。 |
+| `latest_pose_enu` | `Pose` | `/localization/pose_enu` からの最新値キャッシュ。 |
+| `latest_pose_enu_time` | `rclpy.time.Time` | `/localization/pose_enu` メッセージヘッダーの時刻。Detection のヘッダー時刻との乖離チェックに利用。 |
 | `blocked_state_started_at` | float | road_blocked=true に遷移した ROS 時刻 (秒)。経過時間で確定判定。 |
 | `latest_image` | `numpy.ndarray` | `image_topic` から受信した最新画像。判定重畳画像の生成に利用。 |
 | `latest_image_header` | `std_msgs/msg/Header` | `latest_image` に対応するヘッダー。publish 時に可能な範囲で継承する。 |
@@ -103,7 +103,7 @@ road_blockage_detector ノードは YOLO 推論結果、カメラ画像、自己
    - 画像受信のみでは判定処理を行わない。
 
 3. **検知メッセージ受信 (`Detection2DArray` コールバック)**
-   1. 最新の `/amcl_pose` を取得できていない場合は警告を出して処理を終了。取得済みの場合はヘッダー時刻差を確認し、3 秒以上ずれていれば警告を出す。
+   1. 最新の `/localization/pose_enu` を取得できていない場合は警告を出して処理を終了。取得済みの場合はヘッダー時刻差を確認し、3 秒以上ずれていれば警告を出す。
    2. `blocked_positions` と比較し、現在位置がいずれかの確定封鎖地点から `multi_detection_suppression_range` 未満なら、`count_history` へ 0 を push し残処理をスキップ。
    3. 各 `Detection2D` について以下を実施：
       - `results` を走査し、最大スコアクラスを決定。
@@ -124,7 +124,7 @@ road_blockage_detector ノードは YOLO 推論結果、カメラ画像、自己
 
 5. **封鎖確定処理**
    - `temporary_decision_count > 0` かつ `blocked_state_started_at` が設定済みの場合に経過時間をチェック。
-   - `now - blocked_state_started_at >= confirmation_duration` なら、最新 `/amcl_pose` から取得した pose を `blocked_positions` に追加し、仮判定カウントを 0 にクリア、`blocked_state_started_at` も None に戻す。road_blocked は true のまま維持し、以降は `route_follower` の滞留判定と `route_manager` のリルート処理により走行再開が行われる。
+   - `now - blocked_state_started_at >= confirmation_duration` なら、最新 `/localization/pose_enu` から取得した pose を `blocked_positions` に追加し、仮判定カウントを 0 にクリア、`blocked_state_started_at` も None に戻す。road_blocked は true のまま維持し、以降は `route_follower` の滞留判定と `route_manager` のリルート処理により走行再開が行われる。
 
 ## 9. 画像出力
 `/perception/road_blockage/decision_image` には以下を重畳する。
@@ -143,13 +143,13 @@ road_blockage_detector ノードは YOLO 推論結果、カメラ画像、自己
 | レベル | タイミング |
 | ------ | ---------- |
 | info | ノード起動、road_blocked true/false への遷移、封鎖確定時（位置情報含む）。 |
-| warn | `/amcl_pose` 未取得時、Detection と `/amcl_pose` の時刻差が 3 秒以上ある場合、検知メッセージが連続で欠損した場合、判定画像の元画像が長時間未受信の場合。 |
+| warn | `/localization/pose_enu` 未取得時、Detection と `/localization/pose_enu` の時刻差が 3 秒以上ある場合、検知メッセージが連続で欠損した場合、判定画像の元画像が長時間未受信の場合。 |
 | debug | フィルタ後の検知数、割合計算結果、履歴長などの内部状態（パラメータでオンオフ可）。 |
 
 ## 11. エラー／例外ハンドリング
 - `Detection2DArray` に要素が無い場合でも `count_history` へ 0 を push し、割合計算を継続する。
-- `/amcl_pose` が未取得の場合は処理をスキップし、警告ログを出力する。回復後は通常処理へ復帰する。
-- Detection のヘッダー時刻と `/amcl_pose` のヘッダー時刻の差が大きい場合は警告のみを出し、処理は継続する。
+- `/localization/pose_enu` が未取得の場合は処理をスキップし、警告ログを出力する。回復後は通常処理へ復帰する。
+- Detection のヘッダー時刻と `/localization/pose_enu` のヘッダー時刻の差が大きい場合は警告のみを出し、処理は継続する。
 - 画像変換に失敗した場合は判定重畳画像の publish のみをスキップし、`road_blocked` 判定は継続する。
 - 判定画像 publish は制御系へ影響させない。画像処理例外は捕捉してログ出力に留める。
 
