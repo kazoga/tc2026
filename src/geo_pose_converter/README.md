@@ -8,7 +8,7 @@
 - GNSS センサ系 topic を `tc_geo_msgs` と ENU pose へ変換する。
 - `/localization/pose_enu`、`/active_route`、`/active_target` を表示用 LLH topic へ投影する。
 - LLH 自己位置を OpenStreetMap 上で確認する。
-- route CSV の `latitude,longitude,altitude,heading_deg` から `x,y,z,q1,q2,q3,q4` を一括生成する。
+- route CSV の `latitude,longitude,heading_deg` をもとに、走行用2D ENU pose と表示用LLH poseを相互変換する。
 
 ## ノード
 ### `geo_pose_converter_node`
@@ -37,7 +37,7 @@ ENU topic を表示用 LLH topic へ変換します。
 | Publish | `/localization/pose_llh` | `tc_geo_msgs/msg/GeoPoseWithQuality` | GUI、HTML UI、OSM 表示用の自己位置。 |
 | Publish | `/route/active_target_llh` | `tc_route_msgs/msg/ActiveTargetLlh` | 表示用 active target。 |
 
-`Route.projection` を受信すると、その projection を使って `/localization/pose_enu` を LLH に戻します。route CSV 生成時と `Route.projection` の原点がずれると、表示位置もずれるため注意してください。
+`Route.projection` を受信すると、その projection を使って `/localization/pose_enu` を LLH に戻します。ENU pose は走行用2D座標のため、逆投影で作ったLLH高度は有効扱いせず `GeoPoint.has_altitude=false` とします。route CSV 生成時と `Route.projection` の原点がずれると、表示位置もずれるため注意してください。
 
 ### `llh_osm_viewer_node`
 `/localization/pose_llh` を購読し、ローカル HTTP サーバで OpenStreetMap ビューアを提供します。自己位置は赤い二等辺三角形で表示され、三角形の向きは `heading_deg` を表します。

@@ -145,7 +145,7 @@
   - `reversible` は `0/1`, `true/false`, `yes/no` を受理
   - `weight_factor` は正の数値。指定時はセグメント長へ係数を掛けた重みを使用
 - **Waypoint CSV（segment）**：LLH 系または ENU 系のどちらか一方を正本として持つ。
-  - 実コース用 LLH route: `latitude,longitude,altitude,heading_deg` または `lat,lon,alt,heading` を持つ。`latitude/longitude/heading_deg` は必須、`altitude` は任意で未指定時は 0.0 m として扱う。`route_planner` は `geo_pose_converter.geo_core` をライブラリ import し、起動時に ENU pose と quaternion を生成する。
+  - 実コース用 LLH route: `latitude,longitude,altitude,heading_deg` または `lat,lon,alt,heading` を持つ。`latitude/longitude/heading_deg` は必須、`altitude` は任意である。現状のrouteでは高度を扱わないため `altitude` 空欄を標準とし、`tc_geo_msgs/GeoPoint.has_altitude=false` とする。`route_planner` は `geo_pose_converter.geo_core` をライブラリ import し、起動時に ENU pose と quaternion を生成する。走行用 ENU pose は2Dとして扱い、LLH高度の有無に関わらず `pose.position.z=0.0` とする。
   - simulation / Gazebo 用 ENU route: `x,y,z,q1,q2,q3,q4` を持つ。LLH がない場合は ENU pose をそのまま走行用 route として使い、`Waypoint.has_geo_pose=false` とする。
   - LLH と ENU が併記された場合は warning を出し、LLH を正本として使う。併記 ENU は検証対象であり、水平 0.10 m、鉛直 0.30 m、heading 1.0 deg を超える差分があれば warning を出す。
 

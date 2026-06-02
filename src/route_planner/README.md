@@ -82,13 +82,13 @@ blocks:
 CSV の Waypoint は `segment_id` 単位でキャッシュされ、進行方向に応じて反転されます。
 
 ### CSV 仕様
-- 実コース用 Waypoint CSV: `label,latitude,longitude,altitude,heading_deg,right_is_open,left_is_open,line_is_stop,signal_is_stop,isnot_skipnum`
+- 実コース用 Waypoint CSV: `label,latitude,longitude,altitude,heading_deg,right_is_open,left_is_open,line_is_stop,signal_is_stop,isnot_skipnum`。現状のrouteでは高度を扱わないため、`altitude` は空欄を標準とする。
 - simulation / Gazebo 用 Waypoint CSV: `label,x,y,z,q1,q2,q3,q4,right_is_open,left_is_open,line_is_stop,signal_is_stop,isnot_skipnum`
 - グラフ CSV: `nodes.csv`（`id,lat,lon,...`）、`edges.csv`（`source,target,waypoint_list,reversible[,weight_factor]`）
 
-Waypoint CSV は LLH 系または ENU 系のどちらか一方を正本として持つ。`latitude,longitude,heading_deg` が全て有効な行は LLH route として扱い、`route_planner` が `geo_pose_converter.geo_core` のライブラリを使って ENU pose を生成する。`x,y` があり LLH がない行は ENU route として扱い、simulation / Gazebo 向けにそのまま使用する。
+Waypoint CSV は LLH 系または ENU 系のどちらか一方を正本として持つ。`latitude,longitude,heading_deg` が全て有効な行は LLH route として扱い、`route_planner` が `geo_pose_converter.geo_core` のライブラリを使って ENU pose を生成する。走行用 ENU pose は2D座標として扱い、LLH route由来でも `pose.position.z=0.0` に正規化する。`x,y` があり LLH がない行は ENU route として扱い、simulation / Gazebo 向けにそのまま使用する。
 
-LLH と ENU が併記された CSV も読み込み可能だが、warning を出した上で LLH を正本として使用する。この場合、併記された `x,y,z` は LLH から再計算した ENU と水平 `0.10 m`、鉛直 `0.30 m` の閾値で整合性を確認し、超過時は warning を出す。併記された quaternion と `heading_deg` の差も確認し、差が `1.0 deg` を超える場合は warning を出す。
+LLH と ENU が併記された CSV も読み込み可能だが、warning を出した上で LLH を正本として使用する。この場合、併記された `x,y` は LLH から再計算した ENU と水平 `0.10 m` の閾値で整合性を確認する。併記された `z` は2D走行座標として `0.0` を期待し、鉛直 `0.30 m` を超える場合は warning を出す。併記された quaternion と `heading_deg` の差も確認し、差が `1.0 deg` を超える場合は warning を出す。
 
 `waypoint_list` には Waypoint CSV への相対パスを記述します。`reversible=0` の場合は片方向エッジとして扱われます。
 `weight_factor` は任意の正の実数で、指定するとセグメント長に係数を掛けた重みでグラフ探索を行います。

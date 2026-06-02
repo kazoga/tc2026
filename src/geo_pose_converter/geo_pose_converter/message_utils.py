@@ -79,12 +79,13 @@ def make_geo_pose(
     heading_deg: float = 0.0,
     has_heading: bool = False,
     child_frame_id: str = "",
+    has_altitude: bool = True,
 ) -> GeoPose:
     """GeoPose msgを生成する."""
 
     msg = GeoPose()
     msg.header = header
-    msg.point = make_geo_point(point)
+    msg.point = make_geo_point(point, has_altitude)
     msg.heading_deg = float(heading_deg)
     msg.has_heading = bool(has_heading)
     msg.yaw_enu_rad = float(heading_deg_to_yaw_enu_rad(heading_deg)) if has_heading else 0.0
@@ -154,7 +155,11 @@ def llh_to_pose_with_covariance(
     has_heading: bool,
     projection: ProjectionConfig,
 ) -> PoseWithCovarianceStamped:
-    """LLH poseをmap ENUのPoseWithCovarianceStampedへ変換する."""
+    """LLH poseをmap ENUのPoseWithCovarianceStampedへ変換する.
+
+    本プロジェクトでは走行用ENU poseを2Dとして扱うため、zは高度から復元せず0.0に
+    正規化する。GNSS高度はLLH系topic側で保持する。
+    """
 
     enu = llh_to_enu(point, projection)
     msg = PoseWithCovarianceStamped()
@@ -162,7 +167,7 @@ def llh_to_pose_with_covariance(
     msg.header.frame_id = projection.map_frame_id
     msg.pose.pose.position.x = enu.x
     msg.pose.pose.position.y = enu.y
-    msg.pose.pose.position.z = enu.z
+    msg.pose.pose.position.z = 0.0
     yaw = heading_deg_to_yaw_enu_rad(heading_deg) - projection.map_yaw_offset_rad if has_heading else 0.0
     qx, qy, qz, qw = yaw_to_quaternion(yaw)
     msg.pose.pose.orientation.x = qx
@@ -177,8 +182,12 @@ def pose_to_llh_pose(
     pose: Pose,
     projection: ProjectionConfig,
     child_frame_id: str = "",
+    has_altitude: bool = False,
 ) -> GeoPose:
-    """map ENU PoseをGeoPoseへ変換する."""
+    """map ENU PoseをGeoPoseへ変換する.
+
+    ENU poseは走行用2D座標として扱うため、既定では逆投影した高度を有効値としない。
+    """
 
     enu = EnuPoint(
         float(pose.position.x),
@@ -193,7 +202,7 @@ def pose_to_llh_pose(
         pose.orientation.w,
     )
     heading = yaw_enu_rad_to_heading_deg(yaw_map + projection.map_yaw_offset_rad)
-    return make_geo_pose(header, point, heading, True, child_frame_id)
+    return make_geo_pose(header, point, heading, True, child_frame_id, has_altitude)
 
 
 def make_active_target_llh(
@@ -217,11 +226,21 @@ def make_active_target_llh(
     msg.is_avoidance_subgoal = bool(is_avoidance_subgoal)
     msg.target_kind = "avoidance_subgoal" if is_avoidance_subgoal else "route_waypoint"
     if current_pose is not None:
+        current_altitude = (
+            current_pose.point.altitude
+            if current_pose.point.has_altitude
+            else projection.origin_altitude
+        )
+        target_altitude = (
+            target_pose.point.altitude
+            if target_pose.point.has_altitude
+            else projection.origin_altitude
+        )
         cur = llh_to_enu(
             LlhPoint(
                 current_pose.point.latitude,
                 current_pose.point.longitude,
-                current_pose.point.altitude,
+                current_altitude,
             ),
             projection,
         )
@@ -229,7 +248,7 @@ def make_active_target_llh(
             LlhPoint(
                 target_pose.point.latitude,
                 target_pose.point.longitude,
-                target_pose.point.altitude,
+                target_altitude,
             ),
             projection,
         )

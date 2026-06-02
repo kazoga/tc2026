@@ -201,7 +201,7 @@ GNSS センサ系 topic の入力がない simulation 統合動作確認では�
 
 ## 9. 主要アルゴリズム・判定ロジック
 
-LLH/ENU 変換は WGS84 楕円体から ECEF へ変換し、原点 ECEF との差分を East/North/Up へ射影する。`map_yaw_offset_rad` により ENU east/north 軸と map x/y 軸の回転差を扱う。
+LLH/ENU 変換は WGS84 楕円体から ECEF へ変換し、原点 ECEF との差分を East/North/Up へ射影する。`map_yaw_offset_rad` により ENU east/north 軸と map x/y 軸の回転差を扱う。本プロジェクトの走行用 ENU pose は2D座標として扱い、publishする `Pose.position.z` は原則 `0.0` とする。GNSS由来の高度はLLH系topicで保持し、ENU逆投影だけで生成したLLH poseは `GeoPoint.has_altitude=false` とする。
 
 heading は真北 0 度・時計回り正、ENU yaw は東 0 rad・反時計回り正とする。変換式は `heading = 90deg - yaw_enu` を正規化したものである。
 

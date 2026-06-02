@@ -569,9 +569,7 @@ class RoutePlannerNode(Node):
             wp.geo_pose.child_frame_id = "route_waypoint"
             wp.geo_pose.point.latitude = float(record.latitude)
             wp.geo_pose.point.longitude = float(record.longitude)
-            wp.geo_pose.point.altitude = (
-                float(record.altitude) if record.altitude is not None else float(record.pose.position.z)
-            )
+            wp.geo_pose.point.altitude = float(record.altitude) if record.altitude is not None else 0.0
             wp.geo_pose.point.has_altitude = record.altitude is not None
 
             yaw_map = quaternion_to_yaw(wp.pose.orientation)

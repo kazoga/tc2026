@@ -538,7 +538,7 @@ LLH系topic/msg仕様の実装完了条件は以下とする。
 - `Route.projection.projection_id` がpublishされ、GUIで表示できる。
 - `/active_route.version` は従来どおりroute更新ごとに管理される。
 - `/active_target` はENU poseのまま維持され、既存 `robot_navigator` と `obstacle_monitor` の入力型を変えない。
-- `/localization/pose_llh` で、融合後または暫定自己位置の緯度・経度・高度・heading・qualityを取得できる。
+- `/localization/pose_llh` で、融合後または暫定自己位置の緯度・経度・heading・qualityを取得できる。GNSS/localization由来の高度がある場合は `GeoPoint.has_altitude=true` で高度も保持する。
 - `robot_console` はOSM地図表示に必要な座標変換を内部に持たず、公開topicのLLH fieldを表示できる。
 - raw GNSS位置と融合後自己位置が画面上で区別される。
 - heading表示が真北基準CWで統一され、ENU yawとの混同がない。
@@ -550,7 +550,7 @@ LLH系topic/msg仕様の実装完了条件は以下とする。
 | 地理系package名 | `tc_geo_msgs` を推奨候補とする。短縮名が必要ならチーム内で再検討する | Phase Aではblocker |
 | route interface package名 | `tc_route_msgs` に完全移行する。旧 package 名は残さない | 高 |
 | `header.frame_id` | LLH msgは `earth` 推奨。既存REP運用やTF設計と合わせて最終確認する | 低 |
-| 高度の扱い | WGS84楕円体高を既定にする。MSL高度が必要なら別field追加を検討する | 中 |
+| 高度の扱い | 走行用ENUでは高度を使わず `z=0.0` を標準とする。GNSS/localization由来のLLH高度は `GeoPoint.has_altitude=true` で保持し、routeやtargetの高度未指定・ENU逆投影由来は `has_altitude=false` とする | 中 |
 | route CSVの高度・heading | 現行CSVはLLH altitude/heading_degを正規化していない。route編集仕様と合わせて拡張する | Phase Bでblocker |
 | `/route/active_target_llh` のpublisher | `route_follower` がpublishするか、`robot_console` backendがView生成するかを決める | 中 |
 | 逆投影に必要な原点管理 | `geo_pose_converter` のparamsまたは `MapProjection` で一元管理する必要がある | Phase Cではblocker |

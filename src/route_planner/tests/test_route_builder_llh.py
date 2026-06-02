@@ -85,7 +85,7 @@ def test_parse_waypoint_csv_projects_llh_only_route(tmp_path: Path) -> None:
     assert len(waypoints) == 1
     assert abs(waypoints[0].pose.position.x - expected.x) < 1.0e-6
     assert abs(waypoints[0].pose.position.y - expected.y) < 1.0e-6
-    assert abs(waypoints[0].pose.position.z - expected.z) < 1.0e-6
+    assert waypoints[0].pose.position.z == 0.0
     assert abs(waypoints[0].pose.orientation.z) < 1.0e-9
     assert abs(waypoints[0].pose.orientation.w - 1.0) < 1.0e-9
 
@@ -111,9 +111,34 @@ def test_parse_waypoint_csv_prefers_llh_and_warns_when_both_exist(tmp_path: Path
     expected = llh_to_enu(LlhPoint(36.000001, 140.000002, 1.5), projection)
 
     assert abs(waypoints[0].pose.position.x - expected.x) < 1.0e-6
+    assert waypoints[0].pose.position.z == 0.0
     assert any("LLH座標とENU座標が併記" in message for message in logger.messages)
     assert any("水平誤差" in message for message in logger.messages)
 
+
+def test_parse_waypoint_csv_projects_llh_without_altitude_to_2d_enu(tmp_path: Path) -> None:
+    """altitude空欄のLLH-only CSVはENU zを0.0にし、altitudeは未指定のまま保持する."""
+
+    projection = ProjectionConfig(
+        origin_latitude=36.0,
+        origin_longitude=140.0,
+        origin_altitude=25.0,
+        map_yaw_offset_rad=0.0,
+    )
+    csv_path = tmp_path / "llh_without_altitude.csv"
+    csv_path.write_text(
+        "label,latitude,longitude,altitude,heading_deg\n"
+        "wp1,36.000001,140.000002,,90.0\n",
+        encoding="utf-8",
+    )
+
+    waypoints = parse_waypoint_csv(str(csv_path), projection=projection)
+    expected = llh_to_enu(LlhPoint(36.000001, 140.000002, 25.0), projection)
+
+    assert waypoints[0].altitude is None
+    assert abs(waypoints[0].pose.position.x - expected.x) < 1.0e-6
+    assert abs(waypoints[0].pose.position.y - expected.y) < 1.0e-6
+    assert waypoints[0].pose.position.z == 0.0
 
 def test_parse_waypoint_csv_keeps_enu_only_route(tmp_path: Path) -> None:
     """ENU-only CSVはprojectionなしで従来通りposeを使用する."""

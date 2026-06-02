@@ -451,11 +451,11 @@ def _set_pose_from_llh(
     if wp.latitude is None or wp.longitude is None or wp.heading_deg is None:
         raise ValueError("LLH routeにはlatitude/longitude/heading_degが必要です。")
 
-    altitude = 0.0 if wp.altitude is None else float(wp.altitude)
+    altitude = projection.origin_altitude if wp.altitude is None else float(wp.altitude)
     enu = llh_to_enu(LlhPoint(wp.latitude, wp.longitude, altitude), projection)
     wp.pose.position.x = enu.x
     wp.pose.position.y = enu.y
-    wp.pose.position.z = enu.z
+    wp.pose.position.z = 0.0
     yaw_map = (
         heading_deg_to_yaw_enu_rad(wp.heading_deg) - projection.map_yaw_offset_rad
     )
@@ -481,11 +481,11 @@ def _validate_enu_against_llh(
     if wp.latitude is None or wp.longitude is None or wp.heading_deg is None:
         return
 
-    altitude = 0.0 if wp.altitude is None else float(wp.altitude)
+    altitude = projection.origin_altitude if wp.altitude is None else float(wp.altitude)
     expected = llh_to_enu(LlhPoint(wp.latitude, wp.longitude, altitude), projection)
     dx = float(source_pose.position.x) - expected.x
     dy = float(source_pose.position.y) - expected.y
-    dz = float(source_pose.position.z) - expected.z
+    dz = float(source_pose.position.z)
     horizontal_error = math.hypot(dx, dy)
     vertical_error = abs(dz)
     if horizontal_error > horizontal_warning_threshold_m:
