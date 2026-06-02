@@ -213,6 +213,8 @@ heading は真北 0 度・時計回り正、ENU yaw は東 0 rad・反時計回�
 
 `geo_pose_converter.launch.py` は `geo_pose_converter_node` と `route_geo_projector_node` を起動し、`params/default.yaml` を読み込む。Phase 2 以降の launch 既定値は `gnss_pose_enu_topic=/localization/pose_enu`、`pose_enu_topic=/localization/pose_enu` とし、`localization_fusion` 実装前の統合確認で走行系と projector が同じ ENU 自己位置を使える構成にする。`localization_fusion` 実装後は `gnss_pose_enu_topic=/gnss/pose_enu`、`pose_enu_topic=/localization/pose_enu` とする。
 
+`enable_llh_osm_viewer` launch 引数を `true` にした場合は、診断用の `llh_osm_viewer_node` も同時に起動する。viewer は `pose_llh_topic`、`/active_route`、`active_target_llh_topic` を購読し、HTTPビューアを提供する。HTTP host、port、ブラウザ自動起動は `llh_osm_viewer_host`、`llh_osm_viewer_port`、`llh_osm_viewer_open_browser` で指定する。viewerは統合確認用であり、正式な `robot_console` HTML遠隔観測UIを置き換えない。
+
 GNSS センサ系 topic の入力がない simulation 統合動作確認では、`enable_geo_pose_converter=false` として `geo_pose_converter_node` を起動しない。simulation または別 localizer が `/localization/pose_enu` を publish し、`route_geo_projector_node` も同 topic を購読する。
 
 `localization_fusion` 実装後は、実機・シミュレーションの統合 launch で `geo_pose_converter_node`、`localization_fusion`、`route_geo_projector_node` の接続を明示する。走行系は `/localization/pose_enu` を購読する。
@@ -231,6 +233,16 @@ GUI は通常、自己位置表示には `/localization/pose_llh` を使用す�
 
 走行系の `/localization/pose_enu` は GUI 上では ENU 自己位置のデバッグ表示には使えるが、OSM 上の通常表示では `/localization/pose_llh` を使う。
 
+`llh_osm_viewer_node` は `geo_pose_converter` の診断・統合確認用可視化ノードである。表示対象は以下とする。
+
+- `/localization/pose_llh`: 赤い二等辺三角形で自己位置とheadingを表示する。
+- `/active_route`: `Waypoint.has_geo_pose=true` の waypoint を青いroute polylineと点で表示する。LLHを持たないwaypointは表示対象外として数を `skipped_waypoints` に含める。
+- `/route/active_target_llh`: 橙色の点でactive targetを表示する。
+- `/state`: HTTP JSON APIとして、自己位置、route、active target、`pose_status` を返す。
+- `/pose`: 後方互換の簡易HTTP JSON APIとして、自己位置のみを返す。
+
+`pose_status` は最後に `/localization/pose_llh` を受信した壁時計時刻からの経過時間で `OK` / `STALE` / `LOST` / `NO_DATA` を判定する。通信状態による地図マーカー色変更は行わず、状態表示欄でのみ示す。地図描画は Leaflet CDN と OpenStreetMap 外部タイルを利用し、ネットワーク接続がある運用を前提とする。オフラインタイルキャッシュや正式な遠隔観測UIのSnapshot APIは `robot_console` 側の将来実装範囲とする。
+
 ## 14. 依存関係・ビルド設定
 
 `ament_python` package とする。依存は `rclpy`、`geometry_msgs`、`sensor_msgs`、`std_msgs`、`tc_geo_msgs`、`tc_route_msgs`、`rtk_gps_um982_msgs`、`launch`、`launch_ros`、`ament_index_python` である。
@@ -245,6 +257,8 @@ GUI は通常、自己位置表示には `/localization/pose_llh` を使用す�
 - `params/default.yaml` で投影条件が `/**` の共通 parameter として 1 箇所に定義され、node 別に異なる `origin_*` を設定できる構造になっていないことを確認する。
 - `route_planner` が `geo_pose_converter.geo_core` を install 後に import し、LLH-only route CSV から ENU pose を生成できることを確認する。
 - `/active_route` に LLH が含まれる route で `/route/active_target_llh` の緯度経度が waypoint LLH と一致することを確認する。
+- `llh_osm_viewer_node` のJSON生成テストで、pose、route、active target、`pose_status` が期待通り生成されることを確認する。
+- `enable_llh_osm_viewer:=true` を指定した launch で viewer が起動対象に含まれることを確認する。
 - 自律走行確認では `/active_target` と route follower の ENU 制御が変更前と同等に動作することを確認する。
 
 ## 16. 互換性・移行・影響範囲
@@ -270,6 +284,7 @@ Phase 2 で走行系の現在自己位置入力は `/localization/pose_enu` へ�
 
 | 日付 | 版 | 変更概要 |
 | --- | --- | --- |
+| 2026-06-03 | 1.8 | `llh_osm_viewer_node` の route/active target overlay、stale表示、launch引数、正式HTML UIとの差分を追記 |
 | 2026-06-02 | 1.7 | `route_geo_projector_node` の projection mismatch 検出、起動順、統合 launch での `projection_config_path` 一本化方針を追記 |
 | 2026-06-01 | 1.6 | `geo_core.py` を route_planner から参照する共通変換ライブラリとして明記し、projection YAML 読み込み責務を追加 |
 | 2026-05-29 | 1.5 | Phase 2 として旧 `/amcl_pose` を廃止し、走行系自己位置 topic を `/localization/pose_enu` へ統一 |
