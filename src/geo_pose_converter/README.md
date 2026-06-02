@@ -99,35 +99,6 @@ ros2 launch geo_pose_converter geo_pose_converter.launch.py \
 | `origin_altitude` | `3.86` | ENU/LLH 変換原点の高度[m]。 |
 | `map_yaw_offset_rad` | `0.0` | map x/y と ENU east/north の回転オフセット[rad]。 |
 
-## ルート CSV ENU 変換ツール
-`tools/llh_to_enu_csv.py` は、`latitude,longitude,altitude,heading_deg` を持つ waypoint CSV へ `x,y,z,q1,q2,q3,q4` を書き戻す補助ツールです。
-
-```bash
-python3 src/geo_pose_converter/tools/llh_to_enu_csv.py \
-  --input src/route_planner/routes \
-  --config src/geo_pose_converter/params/default.yaml \
-  --in-place
-```
-
-主な処理は次の通りです。
-
-- `latitude` / `longitude` を持つ CSV を再帰的に処理する。
-- `params/default.yaml` の projection を使って LLH から ENU `x,y,z` を生成する。
-- `heading_deg` がある場合、真北基準・時計回り heading を ENU yaw に変換し、`q1,q2,q3,q4` を生成する。
-- `--in-place` 指定時は CSV を直接上書きする。`.bak` は作成しない。
-- `--output-dir` を指定すると、入力ディレクトリ構造を保ったまま別ディレクトリへ出力する。
-
-`route_planner/tools/convert_route_csv_to_llh_heading.py` と組み合わせる場合は、先に LLH/heading 形式へ変換し、その後このツールで ENU pose を再生成します。
-
-```bash
-python3 src/route_planner/tools/convert_route_csv_to_llh_heading.py \
-  src/route_planner/routes
-python3 src/geo_pose_converter/tools/llh_to_enu_csv.py \
-  --input src/route_planner/routes \
-  --config src/geo_pose_converter/params/default.yaml \
-  --in-place
-```
-
 ## 動作確認例
 route stack のシミュレーション実行中に、別プロセスで以下を起動すると OSM 上の自己位置を確認できます。
 

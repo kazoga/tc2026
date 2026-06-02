@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Any, Mapping, Tuple
+
+import yaml
 
 WGS84_A = 6378137.0
 WGS84_F = 1.0 / 298.257223563
@@ -44,6 +46,47 @@ class ProjectionConfig:
     datum: str = "WGS84"
     map_frame_id: str = "map"
     earth_frame_id: str = "earth"
+
+
+def projection_config_from_mapping(values: Mapping[str, Any]) -> ProjectionConfig:
+    """辞書からProjectionConfigを生成する."""
+
+    return ProjectionConfig(
+        origin_latitude=float(values.get("origin_latitude", 35.681382)),
+        origin_longitude=float(values.get("origin_longitude", 139.766084)),
+        origin_altitude=float(values.get("origin_altitude", 3.86)),
+        map_yaw_offset_rad=float(values.get("map_yaw_offset_rad", 0.0)),
+        projection_id=str(values.get("projection_id", "tokyo_station")),
+        datum=str(values.get("datum", "WGS84")),
+        map_frame_id=str(values.get("map_frame_id", "map")),
+        earth_frame_id=str(values.get("earth_frame_id", "earth")),
+    )
+
+
+def load_projection_config_from_yaml(
+    yaml_path: str,
+    node_name: str | None = None,
+) -> ProjectionConfig:
+    """ROS 2 parameter YAMLからProjectionConfigを読み込む."""
+
+    with open(yaml_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+
+    params: dict[str, Any] = {}
+    if isinstance(data, Mapping):
+        common = data.get("/**", {})
+        if isinstance(common, Mapping):
+            common_params = common.get("ros__parameters", {})
+            if isinstance(common_params, Mapping):
+                params.update(common_params)
+        if node_name:
+            node_data = data.get(node_name, {})
+            if isinstance(node_data, Mapping):
+                node_params = node_data.get("ros__parameters", {})
+                if isinstance(node_params, Mapping):
+                    params.update(node_params)
+
+    return projection_config_from_mapping(params)
 
 
 def normalize_heading_deg(heading_deg: float) -> float:
