@@ -4,6 +4,8 @@
 
 本書は、次期 `robot_console` GUIの正式画面仕様を定義する。対象は、PyQt5ローカル操作UIとHTML遠隔観測UIである。
 
+**実装状態:** 本書は次期UIの目標仕様であり、現行の正式UIは `tkinter` 版である。PyQt5の4タブ画面とHTML遠隔観測UIは未実装であり、現行操作はREADMEと `robot_console_詳細設計書.md` に従う。
+
 ROS 2ノード、Core、Snapshot、HTML観測UIとの構造的な役割分担は `robot_console_gui_architecture_design.md` を正とする。本書では、実際の業務フローから各画面の役割、想定操作、レイアウト、表示内容、入力方式を具体化する。
 
 ## 2. 基本方針

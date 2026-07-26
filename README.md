@@ -19,6 +19,12 @@ ROS 2 Jazzy ワークスペース。
 | [`src/route_follower`](src/route_follower/README.md)        | `/active_route` を追従し、現在の目標 Pose を `/active_target` として配信。滞留検知で `/report_stuck` を発行 |
 | [`src/tc_route_msgs`](src/tc_route_msgs/README.md)                | 経路・走行系で共有する msg / srv 定義 (`Route`, `RouteState`, `ReportStuck` ほか) |
 
+### 座標変換・地理情報
+| パッケージ                                                  | 役割                                                                 |
+| ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| [`src/tc_geo_msgs`](src/tc_geo_msgs/)                       | LLH位置、品質、地図投影条件を共有する msg 定義                       |
+| [`src/geo_pose_converter`](src/geo_pose_converter/README.md) | LLH/ENU相互変換、経路の地理座標投影、OSM経路表示を提供               |
+
 ### 走行制御・障害物
 | パッケージ                                                  | 役割                                                                 |
 | ----------------------------------------------------------- | -------------------------------------------------------------------- |
@@ -35,10 +41,20 @@ ROS 2 Jazzy ワークスペース。
 | パッケージ                                                  | 役割                                                                 |
 | ----------------------------------------------------------- | -------------------------------------------------------------------- |
 | [`src/yolo_detector`](src/yolo_detector/README.md)          | USB カメラ画像を YOLO (PyTorch / NCNN) で物体検出し、検出画像・`Detection2DArray` を配信 |
+| [`src/traffic_signal_recognizer`](src/traffic_signal_recognizer/README.md) | YOLO検出結果から信号のGO/STOPを判定し、判定画像を配信 |
+| [`src/road_blockage_detector`](src/road_blockage_detector/README.md) | YOLO検出結果と自己位置から道路封鎖を判定し、判定画像を配信 |
 | [`src/robot_console`](src/robot_console/README.md)          | 走行状態・障害物回避・経路進捗・ノード起動を一画面で監視する tkinter GUI ダッシュボード |
 
 ワークスペース横断の仕様書は [`docs/`](docs/)、パッケージ固有の設計書は各パッケージ
-配下の `docs/design.md` を参照。
+配下の `docs/` を参照。
+
+## 開発状態
+
+- `robot_console` の現行正式UIは tkinter 版である。PyQt5ローカルUIとHTML遠隔観測UIは
+  `src/robot_console/docs/` に設計を定義しているが、まだ実装していない。
+- `localization_fusion` 実装前の暫定構成では、GNSS入力がある場合に
+  `geo_pose_converter` のENU出力を `/localization/pose_enu` として使用する。
+- 走行制御はENU、OSM・GUI表示はLLHを使用し、`geo_pose_converter` が両者を変換する。
 
 ## 必要環境
 

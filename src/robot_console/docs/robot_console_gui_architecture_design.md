@@ -6,6 +6,8 @@
 
 対象は `robot_console` パッケージの正式GUI実装である。既存の `tkinter` GUIは移行期間中の別UIとして残さず、PyQt5 GUIへ完全移行する。完全移行後は `robot_console` の通常entry point、README、launch、評価ツール、設計書の参照先をPyQt5版に統一する。
 
+**実装状態:** 本書は次期GUIの目標設計を定義する。現行の正式entry point、README、launch、評価ツールは `tkinter` 版を使用しており、以下に示す `ConsoleCore`、PyQt5 UI、HTML UIの構成は未実装である。移行完了までは現行仕様を `robot_console_詳細設計書.md` とREADMEに従って扱う。
+
 画面配置や業務フロー上の操作仕様は `robot_console_gui_screen_function_design.md` を正とする。本書では、画面を実現するための実装境界、データモデル、将来のLLHベース自己位置・経路への移行前提を定義する。
 
 ## 2. 背景・要求・スコープ

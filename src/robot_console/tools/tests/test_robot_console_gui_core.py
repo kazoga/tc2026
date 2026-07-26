@@ -9,7 +9,9 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-if 'ament_index_python' not in sys.modules:
+try:
+    import ament_index_python.packages  # noqa: F401
+except ImportError:
     mock_root = types.ModuleType('ament_index_python')
     packages_mod = types.ModuleType('ament_index_python.packages')
 
@@ -81,10 +83,14 @@ def _install_sensor_stubs() -> None:
     sys.modules['sensor_msgs.msg'] = msg_module
 
 
-if 'geometry_msgs' not in sys.modules:
+try:
+    import geometry_msgs.msg
+except ImportError:
     _install_geometry_stubs()
 
-if 'sensor_msgs' not in sys.modules:
+try:
+    import sensor_msgs.msg  # noqa: F401
+except ImportError:
     _install_sensor_stubs()
 
 import geometry_msgs.msg
@@ -100,7 +106,9 @@ except ImportError:
     numpy_stub.frombuffer = _frombuffer
     sys.modules['numpy'] = numpy_stub
 
-if 'PIL' not in sys.modules:
+try:
+    import PIL  # noqa: F401
+except ImportError:
     pil_module = types.ModuleType('PIL')
     image_module = types.ModuleType('PIL.Image')
     imagetk_module = types.ModuleType('PIL.ImageTk')
