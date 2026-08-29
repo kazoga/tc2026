@@ -8,6 +8,13 @@ ROS 2 環境が有効な場合（`sensor_msgs` などが実際に import でき�
 また、`PyQt5` を使うテストがディスプレイの無い環境でも実行できるよう、他の
 モジュールが `PyQt5` をimportする前に `QT_QPA_PLATFORM=offscreen` を既定値
 として設定する。
+
+`opencv-python` は import 時に `QT_QPA_PLATFORM_PLUGIN_PATH` を自身が同梱する
+Qtプラグイン（cv2/qt/plugins、PyQt5と異なるQtビルド）へ書き換える。同一プロセス
+内でPyQt5のQApplicationがこのパスからプラットフォームプラグインを読み込むと、
+Qtライブラリのバージョン不整合により（タイミング依存で）セグメンテーション
+フォルトを起こすことを確認したため、`cv2` の読み込み後にPyQt5自身のプラグイン
+パスへ明示的に戻す。
 """
 
 from __future__ import annotations
@@ -22,6 +29,21 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+try:
+    import cv2  # noqa: F401  QT_QPA_PLATFORM_PLUGIN_PATH 書き換えを先に発生させる
+except ImportError:
+    pass
+
+try:
+    from PyQt5 import QtCore
+
+    _qt_plugin_root = QtCore.QLibraryInfo.location(QtCore.QLibraryInfo.PluginsPath)
+    if _qt_plugin_root:
+        os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = os.path.join(_qt_plugin_root, 'platforms')
+        os.environ['QT_PLUGIN_PATH'] = _qt_plugin_root
+except ImportError:
+    pass
 
 
 def _install_sensor_stubs() -> None:

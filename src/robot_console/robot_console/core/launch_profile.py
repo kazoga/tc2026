@@ -254,3 +254,67 @@ def build_initial_states(profiles: List[LaunchProfile]) -> Dict[str, LaunchProfi
         )
         for profile in profiles
     }
+
+
+def resolve_effective_overrides(
+    profile: LaunchProfile, state: LaunchProfileState
+) -> Dict[str, str]:
+    """state.override_inputs とprofile.default_argumentsから実効override値を求める。
+
+    state側に空でない入力があればそれを優先し、無ければprofile既定値を使う。
+    どちらも無い引数は起動コマンドへ含めない。
+    """
+
+    effective: Dict[str, str] = {}
+    for key in profile.user_arguments:
+        value = state.override_inputs.get(key, '').strip()
+        if not value:
+            value = profile.default_arguments.get(key, '')
+        if value:
+            effective[key] = value
+    return effective
+
+
+def build_launch_args(
+    profile: LaunchProfile,
+    *,
+    param_path: Optional[str] = None,
+    use_alternate: bool = False,
+    overrides: Optional[Dict[str, str]] = None,
+) -> List[str]:
+    """profileから `ros2 launch` 相当のコマンド引数列を組み立てる。
+
+    `LaunchManager`（実行）と起動・設定タブの起動内容プレビュー（表示）の
+    双方から参照される、コマンド組み立ての唯一の実装である。
+    """
+
+    launch_file = profile.launch_file
+    if use_alternate and profile.alternate_launch_file:
+        launch_file = profile.alternate_launch_file
+    args = ['ros2', 'launch', profile.package, launch_file]
+    if param_path and profile.param_argument:
+        args.append(f'{profile.param_argument}:={param_path}')
+    if overrides:
+        for key, value in overrides.items():
+            args.append(f'{key}:={value}')
+    return args
+
+
+def build_simulator_launch_args(
+    profile: LaunchProfile, overrides: Optional[Dict[str, str]] = None
+) -> List[str]:
+    """profileのsimulator代替launch向けコマンド引数列を組み立てる。
+
+    `overrides` のうち `profile.simulator_argument_map` に掲載のあるキーだけを
+    変換して転送する（simulator側launchが受け付けない引数を渡さないため）。
+    """
+
+    simulator_package = profile.simulator_package or profile.package
+    args = ['ros2', 'launch', simulator_package, profile.simulator_launch_file or '']
+    if overrides:
+        for key, value in overrides.items():
+            sim_key = profile.simulator_argument_map.get(key)
+            if sim_key is None:
+                continue
+            args.append(f'{sim_key}:={value}')
+    return args

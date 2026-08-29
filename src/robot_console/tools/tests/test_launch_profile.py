@@ -7,6 +7,9 @@ from robot_console.core.launch_profile import (
     LaunchProfileState,
     LaunchProfileStore,
     build_initial_states,
+    build_launch_args,
+    build_simulator_launch_args,
+    resolve_effective_overrides,
 )
 from robot_console.utils import NodeLaunchStatus
 
@@ -177,3 +180,95 @@ def test_build_initial_states_seeds_defaults_from_profile():
     assert state.status == NodeLaunchStatus.STOPPED
     assert state.selected_param == 'config/default.yaml'
     assert state.override_inputs == {'cmd_vel_topic': '/cmd_vel', 'odom_topic': ''}
+
+
+def _navigator_profile() -> LaunchProfile:
+    return LaunchProfile(
+        profile_id='robot_navigator',
+        category='drive_stack',
+        display_name='Robot Navigator',
+        package='robot_navigator',
+        launch_file='robot_navigator.launch.py',
+        param_argument='param_file',
+        default_param='params/default.yaml',
+        simulator_package='robot_navigator',
+        simulator_launch_file='robot_simulator.launch.py',
+        simulator_argument_map={'pose_enu_topic': 'pose_topic', 'odom_topic': 'odom_topic'},
+        user_arguments=['cmd_vel_topic', 'odom_topic', 'pose_enu_topic'],
+        default_arguments={'cmd_vel_topic': '/cmd_vel/autonomous', 'odom_topic': '/ypspur_ros/odom'},
+    )
+
+
+def test_resolve_effective_overrides_prefers_state_input_over_default():
+    profile = _navigator_profile()
+    state = LaunchProfileState(
+        profile_id='robot_navigator',
+        override_inputs={
+            'cmd_vel_topic': '/cmd_vel/manual',
+            'odom_topic': '',
+            'pose_enu_topic': '',
+        },
+    )
+
+    overrides = resolve_effective_overrides(profile, state)
+
+    # cmd_vel_topicはstate入力を優先、odom_topicはprofile既定値へfallback、
+    # pose_enu_topicはどちらも無いため含めない。
+    assert overrides == {'cmd_vel_topic': '/cmd_vel/manual', 'odom_topic': '/ypspur_ros/odom'}
+
+
+def test_build_launch_args_uses_alternate_launch_file_when_requested():
+    profile = LaunchProfile(
+        profile_id='road_blockage_detector',
+        category='perception_stack',
+        display_name='Road Blockage Detector',
+        package='road_blockage_detector',
+        launch_file='road_blockage_perception.launch.py',
+        alternate_launch_file='road_blockage_perception_yolo.launch.py',
+        param_argument='detector_param_file',
+    )
+
+    args = build_launch_args(
+        profile, param_path='params/default.yaml', use_alternate=True
+    )
+
+    assert args == [
+        'ros2',
+        'launch',
+        'road_blockage_detector',
+        'road_blockage_perception_yolo.launch.py',
+        'detector_param_file:=params/default.yaml',
+    ]
+
+
+def test_build_launch_args_omits_param_argument_when_profile_has_none():
+    profile = LaunchProfile(
+        profile_id='obstacle_monitor',
+        category='obstacle_stack',
+        display_name='Obstacle Monitor',
+        package='obstacle_monitor',
+        launch_file='obstacle_monitor.launch.py',
+        param_argument=None,
+    )
+
+    args = build_launch_args(profile, param_path='params/default.yaml')
+
+    assert args == ['ros2', 'launch', 'obstacle_monitor', 'obstacle_monitor.launch.py']
+
+
+def test_build_simulator_launch_args_only_forwards_mapped_overrides():
+    profile = _navigator_profile()
+
+    args = build_simulator_launch_args(
+        profile,
+        {
+            'cmd_vel_topic': '/cmd_vel/autonomous',
+            'odom_topic': '/ypspur_ros/odom',
+            'pose_enu_topic': '/localization/pose_enu',
+        },
+    )
+
+    assert args[:4] == ['ros2', 'launch', 'robot_navigator', 'robot_simulator.launch.py']
+    assert not any(arg.startswith('cmd_vel_topic:=') for arg in args)
+    assert 'odom_topic:=/ypspur_ros/odom' in args
+    assert 'pose_topic:=/localization/pose_enu' in args

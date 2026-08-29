@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Union
 
 from ..utils import NodeLaunchStatus
-from .launch_profile import LaunchProfile
+from .launch_profile import LaunchProfile, build_launch_args, build_simulator_launch_args
 
 StatusCallback = Callable[[str, NodeLaunchStatus, Optional[int], Optional[str]], None]
 LogCallback = Callable[[str, str], None]
@@ -70,15 +70,12 @@ class LaunchManager:
                 raise RuntimeError(f"{profile.profile_id} の停止完了を待っています")
             self._status_callback(profile.profile_id, NodeLaunchStatus.STARTING, None, None)
 
-            launch_file = profile.launch_file
-            if use_alternate and profile.alternate_launch_file:
-                launch_file = profile.alternate_launch_file
-            args = ["ros2", "launch", profile.package, launch_file]
-            if param_path and profile.param_argument:
-                args.append(f"{profile.param_argument}:={param_path}")
-            if overrides:
-                for key, value in overrides.items():
-                    args.append(f"{key}:={value}")
+            args = build_launch_args(
+                profile,
+                param_path=param_path,
+                use_alternate=use_alternate,
+                overrides=overrides,
+            )
 
             process = subprocess.Popen(
                 args,
@@ -111,14 +108,7 @@ class LaunchManager:
         受け付けない引数である可能性が高いため転送しない。
         """
 
-        simulator_package = profile.simulator_package or profile.package
-        sim_args = ["ros2", "launch", simulator_package, profile.simulator_launch_file]
-        if overrides:
-            for key, value in overrides.items():
-                sim_key = profile.simulator_argument_map.get(key)
-                if sim_key is None:
-                    continue
-                sim_args.append(f"{sim_key}:={value}")
+        sim_args = build_simulator_launch_args(profile, overrides)
 
         sim_process = subprocess.Popen(
             sim_args,
