@@ -1,6 +1,6 @@
 """LogManager の単体テスト。"""
 
-from robot_console.core.log_manager import LogManager, detect_log_level
+from robot_console.core.log_manager import LogManager, count_levels, detect_log_level, filter_levels
 
 
 def test_detect_log_level_variants():
@@ -9,6 +9,19 @@ def test_detect_log_level_variants():
     assert detect_log_level('[ERROR] failure') == 'ERROR'
     assert detect_log_level('[ERR] traceback line') == 'ERROR'
     assert detect_log_level('plain text with no level') is None
+
+
+def test_count_levels_works_without_log_manager_instance():
+    counts = count_levels(['[INFO] a', '[WARN] b', '[WARN] c', '[ERROR] d'])
+    assert counts.info == 1
+    assert counts.warn == 2
+    assert counts.error == 1
+    assert counts.debug == 0
+
+
+def test_filter_levels_keeps_only_requested_levels():
+    lines = ['[INFO] a', '[WARN] b', '[ERROR] c', '[DEBUG] d']
+    assert filter_levels(lines, ('WARN', 'ERROR')) == ['[WARN] b', '[ERROR] c']
 
 
 def test_append_and_snapshot_are_isolated_per_profile():

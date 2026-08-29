@@ -7,6 +7,8 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import pytest
 from PyQt5 import QtWidgets
 
+from robot_console.core.freshness import FreshnessLevel
+from robot_console.core.snapshot_model import ConsoleSnapshot, HealthSummaryView
 from robot_console.ui_qt.main_window import (
     TAB_TITLE_CONSOLE_LOG,
     TAB_TITLE_DASHBOARD,
@@ -60,3 +62,23 @@ def test_scaled_canvas_keeps_aspect_ratio_scale_uniform_after_resize(qt_app):
     assert transform.m11() > 0.0
     # KeepAspectRatio のため水平・垂直の拡縮率は一致する。
     assert transform.m11() == pytest.approx(transform.m22())
+
+
+def test_node_health_chip_click_navigates_to_console_log_tab(qt_app):
+    window = MainWindow()
+    window.dashboard_tab.update_snapshot(
+        ConsoleSnapshot(
+            health=[
+                HealthSummaryView(
+                    profile_id='obstacle_monitor', status='ERROR', health=FreshnessLevel.LOST
+                )
+            ]
+        )
+    )
+    window.console_log_tab.update_snapshot(ConsoleSnapshot())
+
+    chip = window.dashboard_tab.node_health_card._chip_layout.itemAt(0).widget()
+    chip.click()
+
+    assert window.tab_widget.currentWidget() is window.console_log_tab
+    assert window.console_log_tab._selected_profile_id == 'obstacle_monitor'

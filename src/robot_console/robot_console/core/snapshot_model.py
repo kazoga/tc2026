@@ -235,4 +235,5 @@ class ConsoleSnapshot:
     manual_controls: ManualControlsView = field(default_factory=ManualControlsView)
     launch_profiles: Dict[str, LaunchProfileState] = field(default_factory=dict)
     logs: Dict[str, List[str]] = field(default_factory=dict)
+    log_paths: Dict[str, Optional[str]] = field(default_factory=dict)
     health: List[HealthSummaryView] = field(default_factory=list)

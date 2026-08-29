@@ -31,7 +31,13 @@ from .launch_profile import (
     build_simulator_launch_args,
     resolve_effective_overrides,
 )
-from .log_manager import LogLevelCounts, LogManager, detect_log_level
+from .log_manager import (
+    LogLevelCounts,
+    LogManager,
+    count_levels,
+    detect_log_level,
+    filter_levels,
+)
 from .metrics import (
     Position3D,
     TripMetrics,
@@ -79,7 +85,9 @@ __all__ = [
     'resolve_effective_overrides',
     'LogLevelCounts',
     'LogManager',
+    'count_levels',
     'detect_log_level',
+    'filter_levels',
     'Position3D',
     'TripMetrics',
     'TripSnapshot',

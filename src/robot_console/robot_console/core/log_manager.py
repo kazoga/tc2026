@@ -42,6 +42,32 @@ def detect_log_level(line: str) -> Optional[str]:
     return None
 
 
+def count_levels(lines: Iterable[str]) -> 'LogLevelCounts':
+    """ログ行列からログレベル別件数を集計する（`LogManager` インスタンス不要）。"""
+
+    counts = LogLevelCounts()
+    for line in lines:
+        level = detect_log_level(line)
+        if level == 'DEBUG':
+            counts.debug += 1
+        elif level == 'INFO':
+            counts.info += 1
+        elif level == 'WARN':
+            counts.warn += 1
+        elif level == 'ERROR':
+            counts.error += 1
+        elif level == 'FATAL':
+            counts.fatal += 1
+    return counts
+
+
+def filter_levels(lines: Iterable[str], levels: Iterable[str]) -> List[str]:
+    """指定ログレベル集合に一致する行だけを抽出する。"""
+
+    level_set = set(levels)
+    return [line for line in lines if detect_log_level(line) in level_set]
+
+
 class LogManager:
     """profile別ログバッファと集計を管理する。"""
 
@@ -96,29 +122,12 @@ class LogManager:
     def level_counts(self, profile_id: str) -> LogLevelCounts:
         """指定profileのログレベル別件数を集計する。"""
 
-        counts = LogLevelCounts()
-        for line in self.snapshot(profile_id):
-            level = detect_log_level(line)
-            if level == 'DEBUG':
-                counts.debug += 1
-            elif level == 'INFO':
-                counts.info += 1
-            elif level == 'WARN':
-                counts.warn += 1
-            elif level == 'ERROR':
-                counts.error += 1
-            elif level == 'FATAL':
-                counts.fatal += 1
-        return counts
+        return count_levels(self.snapshot(profile_id))
 
     def warn_error_lines(self, profile_id: str) -> List[str]:
         """指定profileのWARN以上のログ行のみを抽出する。"""
 
-        return [
-            line
-            for line in self.snapshot(profile_id)
-            if detect_log_level(line) in ('WARN', 'ERROR', 'FATAL')
-        ]
+        return filter_levels(self.snapshot(profile_id), ('WARN', 'ERROR', 'FATAL'))
 
     def clear(self, profile_id: str) -> None:
         """指定profileのログを消去する。"""

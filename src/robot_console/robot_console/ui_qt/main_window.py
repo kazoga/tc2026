@@ -48,3 +48,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tab_widget.setCurrentWidget(self.dashboard_tab)
 
         self.setCentralWidget(ScaledCanvas(self.tab_widget))
+
+        self.dashboard_tab.node_health_card.profile_selected.connect(
+            self._on_node_health_profile_selected
+        )
+
+    def _on_node_health_profile_selected(self, profile_id: str) -> None:
+        """Node Healthカードのチップ選択を受け、コンソールログタブへ遷移する（9章 画面間導線）。"""
+
+        self.console_log_tab.select_profile(profile_id)
+        self.tab_widget.setCurrentWidget(self.console_log_tab)
