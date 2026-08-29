@@ -65,6 +65,21 @@ ROS 2 Jazzy ワークスペース。
 - Python 3
 - (パッケージごとの追加要件は各 README を参照)
 
+## Claude Code スキル設定
+
+本リポジトリでは、GUI・UI 実装時に Anthropic 公式の `frontend-design` スキルを
+共通利用する。`.claude/settings.json` (Git 管理対象) で
+`frontend-design@claude-plugins-official` を有効化しているため、リポジトリを
+Claude Code で開いて信頼 (trust) すると、このプラグインが自動的に有効化候補として
+認識される。初回のみ、各自の環境で以下を実行してインストールする。
+
+```bash
+claude plugin install frontend-design@claude-plugins-official
+```
+
+インストール後は Claude が GUI デザイン作業時に自動でこのスキルを参照する。
+手動で呼び出す場合は `/frontend-design:frontend-design` のように実行する。
+
 ## Codex ローカル実行設定
 
 Codex app / CLI / IDE Extension で `ros2 run`, `ros2 launch`, `ros2 topic` などを含む
