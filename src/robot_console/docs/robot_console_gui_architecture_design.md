@@ -304,6 +304,27 @@ profiles:
 
 profile追加時に必要なUI変更は原則不要とし、カテゴリ別カード、引数入力欄、ログ欄、health表示はprofile定義から自動生成する。
 
+profile定義は、実運用launchに加えて以下の代替launchを保持できる。
+
+| フィールド | 用途 |
+| --- | --- |
+| `alternate_launch_file` | 同一profile内で切り替え可能な別実装launch（例: `road_blockage_detector`のPyTorch版YOLO） |
+| `simulator_package` / `simulator_launch_file` | 実センサ・実機基盤（GPS、ypspur、Gazebo）を使わずに疑似データで単体確認するための代替launch |
+
+`simulator_launch_file`を持つprofileは、起動・設定タブのノード設定編集パネルに「Simulator代替を使用」トグルを持つ。トグルON時は`launch_file`の代わりに`simulator_package`/`simulator_launch_file`を起動する。この仕組みは、実機・Gazeboのどちらも使わない机上確認（10章参照）を成立させるために必須である。
+
+```yaml
+  - profile_id: robot_navigator
+    category: drive_stack
+    package: robot_navigator
+    launch_file: robot_navigator.launch.py
+    simulator_package: robot_navigator
+    simulator_launch_file: robot_simulator.launch.py
+    startup_group: desktop_check
+```
+
+`yolo_detector`は`road_blockage_detector`/`traffic_signal_recognizer`のlaunch内で直接Nodeとして起動され、単体のlaunchファイルとしては呼び出されないため、独立したprofileとしては扱わない。ただし`yolo_detector/camera_simulator_node.launch.py`は、`road_blockage_detector`・`traffic_signal_recognizer`・（将来の実カメラ導入時の）該当profileの`simulator_launch_file`として利用する。
+
 ### 9.2 起動カテゴリ
 
 | category | 用途 | 代表profile |
@@ -315,7 +336,7 @@ profile追加時に必要なUI変更は原則不要とし、カテゴリ別カ�
 | `drive_stack` | 走行制御・mux | `drive_mode_manager`, `robot_navigator` |
 | `obstacle_stack` | 障害物監視 | `obstacle_monitor` |
 | `perception_stack` | 認識・判定 | `road_blockage_detector`, `traffic_signal_recognizer` |
-| `visualization` | RViz等 | `robot_console_rviz` |
+| `visualization` | RViz、経路・目標のMarker表示 | `robot_console_rviz`, `route_markers`, `target_marker` |
 
 ### 9.3 既定profile
 
@@ -328,10 +349,13 @@ profile追加時に必要なUI変更は原則不要とし、カテゴリ別カ�
 | `route_manager` | `route_manager` | `route_manager.launch.py` | `param_file`, `start_label`, `goal_label`, `checkpoint_labels` |
 | `route_follower` | `route_follower` | `route_follower.launch.py` | `param_file` |
 | `drive_mode_manager` | `drive_mode_manager` | `drive_mode_manager.launch.py` | `start_gui`, `joy_input` |
-| `robot_navigator` | `robot_navigator` | `robot_navigator.launch.py` | `param_file`, `cmd_vel_topic`, `odom_topic` |
-| `obstacle_monitor` | `obstacle_monitor` | `obstacle_monitor.launch.py` | `param_file` |
-| `road_blockage_detector` | `road_blockage_detector` | `road_blockage_perception.launch.py` | `detector_param_file`, alternate launch |
-| `traffic_signal_recognizer` | `traffic_signal_recognizer` | `traffic_signal_perception.launch.py` | `recognizer_param_file` |
+| `robot_navigator` | `robot_navigator` | `robot_navigator.launch.py`（simulator代替: `robot_simulator.launch.py`） | `param_file`, `cmd_vel_topic`, `odom_topic` |
+| `obstacle_monitor` | `obstacle_monitor` | `obstacle_monitor.launch.py`（simulator代替: `laser_scan_simulator.launch.py`） | `param_file` |
+| `road_blockage_detector` | `road_blockage_detector` | `road_blockage_perception.launch.py`（alternate launch: `road_blockage_perception_yolo.launch.py`、simulator代替: `yolo_detector/camera_simulator_node.launch.py`） | `detector_param_file` |
+| `traffic_signal_recognizer` | `traffic_signal_recognizer` | `traffic_signal_perception.launch.py`（simulator代替: `yolo_detector/camera_simulator_node.launch.py`） | `recognizer_param_file` |
+| `route_markers` | `route_manager` | `active_route_marker.launch.py` | `active_route_topic`, `marker_topic` |
+| `target_marker` | `route_follower` | `active_target_marker.launch.py` | `active_target_topic`, `marker_topic` |
+| `robot_console_rviz` | `robot_console` | `robot_console_rviz.launch.py` | なし（固定config `rviz/robot_console_view.rviz`） |
 
 `rtk_gps_um982_msgs` はmsg定義パッケージであり、起動対象profileには含めない。
 
@@ -377,6 +401,23 @@ robot_navigator
 obstacle_route_sim
 drive_mode_manager
 ```
+
+机上確認（実センサ・Gazebo無し）の基本グループ:
+
+```text
+route_planner
+route_manager
+route_follower
+drive_mode_manager (joy_input=ps3_joy_sim)
+robot_navigator (simulator代替使用)
+obstacle_monitor (simulator代替使用)
+road_blockage_detector (simulator代替使用)
+traffic_signal_recognizer (simulator代替使用)
+```
+
+机上確認は、`ypspur_ros2`・`rtk_gps_um982`・`obstacle_route_sim`のいずれも起動せず、各profileのsimulator代替launchのみで自己位置・LaserScan・カメラ画像を疑似生成して確認する環境である。
+
+上記いずれのグループにも`robot_console_rviz`、`route_markers`、`target_marker`は含めていない。可視化系profileは業務モードによらず任意追加可能なオプション扱いとし、必要な業務でユーザーが個別に起動候補ツリーから追加する。
 
 ## 11. パラメータ・設定仕様
 
@@ -492,5 +533,6 @@ HTML UIには操作APIを提供しない。自己位置は現行 `/localization/
 
 | 日付 | 版 | 変更概要 |
 | --- | --- | --- |
+| 2026-08-29 | 0.3 | simulator代替launch（`robot_simulator` / `laser_scan_simulator` / `camera_simulator_node`）と可視化profile（`route_markers` / `target_marker`）をprofile定義・起動グループへ追加。机上確認（実センサ・Gazebo無し）の起動グループを新設。 |
 | 2026-05-28 | 0.2 | tkinterを別UIとして残さない完全移行方針、`localization_fusion/pose_llh` とLLH route/targetへの将来移行前提を反映。 |
 | 2026-05-27 | 0.1 | UI改修向けアーキテクチャ、GPS/GNSS起動管理、profile定義駆動方針を初版として作成。 |

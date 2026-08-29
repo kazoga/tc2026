@@ -50,6 +50,8 @@ ROS 2ノード、Core、Snapshot、HTML観測UIとの構造的な役割分担は
 | 実機自律走行 | 実機 | 自律 + 手動介入 | `rtk_gps_um982`, `ypspur_ros2`, route stack, drive stack, obstacle/perception stack |
 | シミュレーション手動走行 | Gazebo等 | 手動 | `obstacle_route_sim`, `drive_mode_manager` |
 | シミュレーション自律走行 | Gazebo等 | 自律 | `obstacle_route_sim`, route stack, drive stack, obstacle stack |
+| 机上確認（手動） | 机上（実センサ・Gazebo無し） | 手動 | `drive_mode_manager`（`joy_input=ps3_joy_sim`）、必要に応じ `robot_navigator`（simulator代替） |
+| 机上確認（自律） | 机上（実センサ・Gazebo無し） | 自律 | route stack, drive stack, `robot_navigator`/`obstacle_monitor`/`road_blockage_detector`/`traffic_signal_recognizer`（いずれもsimulator代替使用） |
 
 ### 3.2 共通業務フロー
 
@@ -109,6 +111,18 @@ ROS 2ノード、Core、Snapshot、HTML観測UIとの構造的な役割分担は
 6. ダッシュボードでdrive mode、Joy入力、最終 `/cmd_vel`、シミュレーションodomが正常であることを確認する。
 7. 手動走行中はダッシュボードで速度、drive mode、シミュレーションpose、非常系状態を監視する。
 
+### 3.7 机上確認フロー
+
+机上確認は、実機（GPS/ypspur）もGazebo（`obstacle_route_sim`）も使わず、各profileのsimulator代替launchが生成する疑似データ（自己位置、LaserScan、カメラ画像）だけで、route/drive/obstacle/perceptionの各ノードを単体または結合で確認するための業務である。開発時の単体テスト、変更後の素早い動作確認に用いる。
+
+1. 起動・設定タブで業務モード `机上確認 / 手動走行` または `机上確認 / 自律走行` を選択する。
+2. プリセット適用により、`ypspur_ros2` / `rtk_gps_um982` / `obstacle_route_sim` を含まない起動予定ノード一覧が生成される。
+3. 確認したい対象profile（`robot_navigator`、`obstacle_monitor`、`road_blockage_detector`、`traffic_signal_recognizer` 等）で「Simulator代替を使用」をONにする。
+4. `drive_mode_manager` の `joy_input` は `ps3_joy_sim` を選択する。
+5. 選択ノードを起動し、コンソールログタブで各simulator代替launchの起動を確認する。
+6. ダッシュボードで疑似pose、疑似scan、疑似カメラ画像を入力としたroute/drive/obstacle/perceptionの状態が正常であることを確認する。GPSカードは `GPS N/A`（灰）表示になる。
+7. 自律走行の場合は `/manual_start` を送信して確認する。手動走行の場合はJoy入力からのcmd_vel伝播を確認する。
+
 ## 4. 起動・設定タブ
 
 ### 4.1 役割
@@ -151,8 +165,10 @@ ROS 2ノード、Core、Snapshot、HTML観測UIとの構造的な役割分担は
 
 | 項目 | 選択肢 |
 | --- | --- |
-| 実行環境 | `実機`, `シミュレーション` |
+| 実行環境 | `実機`, `シミュレーション`, `机上確認` |
 | 走行モード | `手動走行`, `自律走行` |
+
+`机上確認`は、実機基盤（`ypspur_ros2`）・GPS（`rtk_gps_um982`）・Gazebo（`obstacle_route_sim`）のいずれも使わず、各profileのsimulator代替launchで疑似データ確認を行う実行環境である（3.7節参照）。
 
 プリセット適用後の挙動:
 
@@ -179,7 +195,7 @@ ROS 2ノード、Core、Snapshot、HTML観測UIとの構造的な役割分担は
 | 経路追従・走行制御 | `route_follower`, `drive_mode_manager`, `robot_navigator` |
 | 障害物 | `obstacle_monitor` |
 | 認識・監視 | `road_blockage_detector`, `traffic_signal_recognizer` |
-| 可視化 | `robot_console_rviz` |
+| 可視化 | `robot_console_rviz`, `route_markers`, `target_marker` |
 
 各profile行に表示する内容:
 
@@ -266,6 +282,12 @@ NTRIP passwordはGUIで編集しない。config内容を表示する場合もmas
 | `start_gazebo_gui` | CheckBox | `true` |
 | `use_sim_time` | CheckBox | `true` |
 
+#### route_planner
+
+| 項目 | UI | 既定 |
+| --- | --- | --- |
+| param file | YAML Combobox | `params/default.yaml` |
+
 #### route_manager
 
 | 項目 | UI | 内容 |
@@ -274,6 +296,12 @@ NTRIP passwordはGUIで編集しない。config内容を表示する場合もmas
 | start_label | waypoint ComboBox | routeから候補抽出 |
 | goal_label | waypoint ComboBox | routeから候補抽出 |
 | checkpoint_labels | multi-select list | 複数選択 |
+
+#### route_follower
+
+| 項目 | UI | 既定 |
+| --- | --- | --- |
+| param file | YAML Combobox | `params/default.yaml` |
 
 #### drive_mode_manager
 
@@ -289,6 +317,39 @@ NTRIP passwordはGUIで編集しない。config内容を表示する場合もmas
 | param file | YAML Combobox | `params/default.yaml` |
 | `cmd_vel_topic` | ComboBox | `/cmd_vel/autonomous` |
 | `odom_topic` | ComboBox | `/ypspur_ros/odom` |
+| Simulator代替を使用 | CheckBox | `false`（ONで`robot_simulator.launch.py`に切替。GPS/ypspur無しで自己位置・odomを疑似生成する） |
+
+#### obstacle_monitor
+
+| 項目 | UI | 既定 |
+| --- | --- | --- |
+| param file | YAML Combobox | `params/default.yaml` |
+| Simulator代替を使用 | CheckBox | `false`（ONで`laser_scan_simulator.launch.py`に切替。疑似LaserScanを配信する） |
+
+#### road_blockage_detector
+
+| 項目 | UI | 既定 |
+| --- | --- | --- |
+| `detector_param_file` | YAML Combobox | `params/default.yaml` |
+| PyTorch版YOLOを使用 | CheckBox | `false`（ONで`road_blockage_perception_yolo.launch.py`に切替） |
+| Simulator代替を使用 | CheckBox | `false`（ONで`yolo_detector/camera_simulator_node.launch.py`に切替。実カメラ無しで疑似画像を配信する） |
+
+#### traffic_signal_recognizer
+
+| 項目 | UI | 既定 |
+| --- | --- | --- |
+| `recognizer_param_file` | YAML Combobox | `params/default.yaml` |
+| Simulator代替を使用 | CheckBox | `false`（ONで`yolo_detector/camera_simulator_node.launch.py`に切替。実カメラ無しで疑似画像を配信する） |
+
+#### robot_console_rviz / route_markers / target_marker
+
+| profile | 項目 | UI | 既定 |
+| --- | --- | --- | --- |
+| `robot_console_rviz` | rviz config | readonly | `rviz/robot_console_view.rviz` |
+| `route_markers` | `active_route_topic` / `marker_topic` | readonly | `/active_route` / `/active_route/markers` |
+| `target_marker` | `active_target_topic` / `marker_topic` | readonly | `/active_target` / `/active_target/marker` |
+
+これら3profileは可視化専用であり、業務モードのプリセットには含めない。RViz確認やマーカー表示が必要な場合、起動候補ツリーからユーザーが個別に追加する。
 
 ### 4.8 起動内容プレビュー
 
@@ -475,7 +536,7 @@ Eventカードに置かないもの:
 
 ### 6.8 Node Healthカード
 
-Node Healthカードは、起動・設定タブで起動予定または起動済みになったprofile群の状態を一元監視する領域である。現時点の設計上、表示対象profileは以下の12件規模になる。
+Node Healthカードは、起動・設定タブで起動予定または起動済みになったprofile群の状態を一元監視する領域である。現時点の設計上、表示対象profileは以下の14件規模になる。
 
 | 分類 | profile |
 | --- | --- |
@@ -486,9 +547,9 @@ Node Healthカードは、起動・設定タブで起動予定または起動済
 | 経路追従・走行制御 | `route_follower`, `drive_mode_manager`, `robot_navigator` |
 | 障害物 | `obstacle_monitor` |
 | 認識・監視 | `road_blockage_detector`, `traffic_signal_recognizer` |
-| 可視化 | `robot_console_rviz` |
+| 可視化 | `robot_console_rviz`, `route_markers`, `target_marker` |
 
-12件全ての詳細を常時カード内に表示すると画面を圧迫するため、Node Healthカードは詳細表ではなく、異常優先のサマリビューとして設計する。
+14件全ての詳細を常時カード内に表示すると画面を圧迫するため、Node Healthカードは詳細表ではなく、異常優先のサマリビューとして設計する。
 
 表示方式:
 
@@ -677,10 +738,12 @@ HTML UIは読み取り専用であることを実装上も保証する。HTTP AP
 - GPS/GNSS表示のため、実装時には `rtk_gps_um982_msgs/msg/RtkStatus` の購読依存を追加する。
 - 自己位置は当面 `/localization/pose_enu` 互換表示を維持し、将来 `localization_fusion/pose_llh` を正sourceにする。
 - 起動管理対象の増減はprofile定義追加で扱い、UIコードの個別分岐を避ける。
+- 業務分類に机上確認（実センサ・Gazebo無し）を追加し、`robot_navigator`/`obstacle_monitor`/`road_blockage_detector`/`traffic_signal_recognizer`のsimulator代替launchと、可視化専用profile（`route_markers`/`target_marker`）を起動管理対象へ追加する。
 
 ## 13. 改版履歴
 
 | 日付 | 版 | 変更概要 |
 | --- | --- | --- |
+| 2026-08-29 | 0.3 | 業務分類に机上確認を追加。profile別設定（4.7節）に不足していた`route_planner`/`route_follower`/`obstacle_monitor`/`road_blockage_detector`/`traffic_signal_recognizer`/可視化系のカードとsimulator代替トグルを追加。起動候補ツリー・Node Healthカードに`route_markers`/`target_marker`を追加。 |
 | 2026-05-28 | 0.2 | 共通ステータスバーを廃止し、実業務フロー起点の正式画面仕様へ改訂。 |
 | 2026-05-27 | 0.1 | 次期GUIの画面構成、GPS表示、profile定義駆動の起動管理を初版として作成。 |
