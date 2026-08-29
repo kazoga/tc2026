@@ -20,6 +20,7 @@ from .freshness import (
     FreshnessMonitor,
     FreshnessThresholds,
 )
+from .image_store import ImageStore
 from .launch_manager import LaunchManager
 from .launch_profile import (
     LaunchProfile,
@@ -74,6 +75,7 @@ __all__ = [
     'FreshnessLevel',
     'FreshnessMonitor',
     'FreshnessThresholds',
+    'ImageStore',
     'LaunchManager',
     'LaunchProfile',
     'LaunchProfileError',

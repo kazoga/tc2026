@@ -52,6 +52,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.dashboard_tab.node_health_card.profile_selected.connect(
             self._on_node_health_profile_selected
         )
+        self.dashboard_tab.view_localization_sensor_requested.connect(
+            lambda: self.tab_widget.setCurrentWidget(self.localization_sensor_tab)
+        )
+        self.localization_sensor_tab.back_to_dashboard_requested.connect(
+            lambda: self.tab_widget.setCurrentWidget(self.dashboard_tab)
+        )
+        self.console_log_tab.back_to_dashboard_requested.connect(
+            lambda: self.tab_widget.setCurrentWidget(self.dashboard_tab)
+        )
 
     def _on_node_health_profile_selected(self, profile_id: str) -> None:
         """Node Healthカードのチップ選択を受け、コンソールログタブへ遷移する（9章 画面間導線）。"""

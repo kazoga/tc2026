@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt5 import QtWidgets
+from PyQt5 import QtCore, QtWidgets
 
 from robot_console.core.snapshot_model import ConsoleSnapshot
 
@@ -23,6 +23,8 @@ from .widgets.status_card import StatusCard, set_label_color
 
 class DashboardTab(QtWidgets.QWidget):
     """走行前確認・走行中監視の主画面（screen_function_design.md 6.2節レイアウト）。"""
+
+    view_localization_sensor_requested = QtCore.pyqtSignal()
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
@@ -109,6 +111,10 @@ class DashboardTab(QtWidgets.QWidget):
         self._gps_heading_label = card.add_value_row('Heading')
         self._localization_source_label = card.add_value_row('Localization source')
         self._pose_freshness_label = card.add_value_row('Pose freshness')
+
+        detail_button = QtWidgets.QPushButton('自己位置・センサ情報を見る')
+        detail_button.clicked.connect(self.view_localization_sensor_requested.emit)
+        card.form_layout.addRow('', detail_button)
         return card
 
     # ---------- Snapshot反映 ----------

@@ -82,3 +82,29 @@ def test_node_health_chip_click_navigates_to_console_log_tab(qt_app):
 
     assert window.tab_widget.currentWidget() is window.console_log_tab
     assert window.console_log_tab._selected_profile_id == 'obstacle_monitor'
+
+
+def test_gps_pose_detail_button_navigates_to_localization_sensor_tab(qt_app):
+    window = MainWindow()
+
+    window.dashboard_tab.view_localization_sensor_requested.emit()
+
+    assert window.tab_widget.currentWidget() is window.localization_sensor_tab
+
+
+def test_localization_sensor_tab_back_button_navigates_to_dashboard(qt_app):
+    window = MainWindow()
+    window.tab_widget.setCurrentWidget(window.localization_sensor_tab)
+
+    window.localization_sensor_tab.back_to_dashboard_requested.emit()
+
+    assert window.tab_widget.currentWidget() is window.dashboard_tab
+
+
+def test_console_log_tab_back_button_navigates_to_dashboard(qt_app):
+    window = MainWindow()
+    window.tab_widget.setCurrentWidget(window.console_log_tab)
+
+    window.console_log_tab.back_to_dashboard_requested.emit()
+
+    assert window.tab_widget.currentWidget() is window.dashboard_tab
