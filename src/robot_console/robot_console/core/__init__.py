@@ -1,0 +1,82 @@
+"""robot_console のUI非依存Core層。
+
+ROS 2 topic購読・publish、GUI描画から独立した状態集約・起動管理・ログ管理・
+Snapshot生成を提供する。PyQt5 UIおよびHTML UIは、本パッケージが提供する
+Snapshotのみを参照し、ROSメッセージ型を直接解釈しない。
+"""
+
+from .freshness import (
+    DEFAULT_LOST_SEC,
+    DEFAULT_STALE_SEC,
+    FreshnessLevel,
+    FreshnessMonitor,
+    FreshnessThresholds,
+)
+from .launch_manager import LaunchManager
+from .launch_profile import (
+    LaunchProfile,
+    LaunchProfileError,
+    LaunchProfileState,
+    LaunchProfileStore,
+    build_initial_states,
+)
+from .log_manager import LogLevelCounts, LogManager, detect_log_level
+from .metrics import (
+    Position3D,
+    TripMetrics,
+    TripSnapshot,
+    compute_progress_ratio,
+    euclidean_distance,
+    is_within_arrival_threshold,
+)
+from .snapshot_model import (
+    ConsoleSnapshot,
+    DriveModeStateView,
+    EventBanner,
+    FollowerView,
+    GpsStateView,
+    HealthSummaryView,
+    ImageReference,
+    LocalizationStateView,
+    ManualControlsView,
+    ObstacleStateView,
+    OperationStateView,
+    RouteView,
+    TargetView,
+)
+
+__all__ = [
+    'DEFAULT_LOST_SEC',
+    'DEFAULT_STALE_SEC',
+    'FreshnessLevel',
+    'FreshnessMonitor',
+    'FreshnessThresholds',
+    'LaunchManager',
+    'LaunchProfile',
+    'LaunchProfileError',
+    'LaunchProfileState',
+    'LaunchProfileStore',
+    'build_initial_states',
+    'LogLevelCounts',
+    'LogManager',
+    'detect_log_level',
+    'Position3D',
+    'TripMetrics',
+    'TripSnapshot',
+    'compute_progress_ratio',
+    'euclidean_distance',
+    'is_within_arrival_threshold',
+    'ConsoleSnapshot',
+    'DriveModeStateView',
+    'EventBanner',
+    'FollowerView',
+    'GpsStateView',
+    'HealthSummaryView',
+    'ImageReference',
+    'LocalizationStateView',
+    'ManualControlsView',
+    'ObstacleStateView',
+    'OperationStateView',
+    'RouteView',
+    'TargetView',
+]

@@ -23,6 +23,7 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         (f'share/{package_name}/launch', glob('launch/*.launch.py')),
+        (f'share/{package_name}/config', glob('config/*.yaml')),
         (f'share/{package_name}/config/node_params',
          glob('config/node_params/**/*.yaml', recursive=True)),
         (f'share/{package_name}/rviz', glob('rviz/*.rviz')),
