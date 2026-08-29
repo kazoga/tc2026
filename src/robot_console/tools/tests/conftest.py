@@ -4,13 +4,20 @@ ROS 2 環境が有効化されていない場合でも `robot_console` パッケ
 import できるよう、`sensor_msgs` / `numpy` / `PIL` の最小スタブを用意する。
 ROS 2 環境が有効な場合（`sensor_msgs` などが実際に import できる場合）は
 本モジュールは何もしない。
+
+また、`PyQt5` を使うテストがディスプレイの無い環境でも実行できるよう、他の
+モジュールが `PyQt5` をimportする前に `QT_QPA_PLATFORM=offscreen` を既定値
+として設定する。
 """
 
 from __future__ import annotations
 
+import os
 import sys
 import types
 from pathlib import Path
+
+os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
