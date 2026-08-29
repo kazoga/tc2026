@@ -40,6 +40,7 @@ setup(
     entry_points={
         'console_scripts': [
             'robot_console = robot_console.robot_console_node:main',
+            'robot_console_qt = robot_console.ui_qt_main:main',
         ],
     },
 )
