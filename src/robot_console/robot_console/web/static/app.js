@@ -1,11 +1,19 @@
 // robot_console HTML遠隔観測UI（閲覧専用）。
 //
-// /snapshot.json をポーリングして状態サマリ・GPS・センサ一覧・鮮度一覧を表示し、
-// /images/{panel_id} を別周期でポーリングして画像を更新する。
+// /snapshot.json をポーリングして状態サマリ・GPS・センサ一覧・鮮度一覧・地図
+// マーカーを更新し、/images/{panel_id} を別周期でポーリングして画像を更新する。
 // 本ページは観測専用であり、書き込み系のfetch（POST/PUT/DELETE）は行わない。
+// 地図はLeaflet + OpenStreetMapタイルを使うため、閲覧時にインターネット接続が
+// 必要（robot_console_ui_renewal_input.md 8.4節 候補A）。waypoint列・route
+// polylineはmap_model（未実装）が確定するまでの間表示できないため、現在位置・
+// 目標位置のマーカーのみ表示する。
 
 const SNAPSHOT_POLL_MS = 1000;
 const IMAGE_POLL_MS = 1500;
+
+const DEFAULT_LATITUDE = 36.083;
+const DEFAULT_LONGITUDE = 140.113;
+const DEFAULT_ZOOM = 18;
 
 const FRESHNESS_COLORS = {
   OK: '#2e7d32',
@@ -15,9 +23,71 @@ const FRESHNESS_COLORS = {
 };
 
 let knownPanelIds = [];
+let leafletMap = null;
+let currentPositionMarker = null;
+let targetPositionMarker = null;
+let hasCenteredMap = false;
 
 function freshnessColor(level) {
   return FRESHNESS_COLORS[level] || FRESHNESS_COLORS.UNKNOWN;
+}
+
+function initMap() {
+  leafletMap = L.map('leaflet-map').setView([DEFAULT_LATITUDE, DEFAULT_LONGITUDE], DEFAULT_ZOOM);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors',
+  }).addTo(leafletMap);
+
+  // グリッドレイアウト内では初期化時にコンテナの実寸がまだ確定していないことが
+  // あり、その場合Leafletがタイルを1枚も要求しない。少し遅らせてサイズを
+  // 再計算させることで確実にタイルを読み込ませる。
+  setTimeout(() => leafletMap.invalidateSize(), 0);
+  window.addEventListener('resize', () => leafletMap.invalidateSize());
+}
+
+function updateMapMarkers(snapshot) {
+  if (leafletMap === null) {
+    return;
+  }
+
+  const current = snapshot.localization;
+  if (current.latitude !== null && current.longitude !== null) {
+    const latlng = [current.latitude, current.longitude];
+    if (currentPositionMarker === null) {
+      currentPositionMarker = L.circleMarker(latlng, {
+        radius: 8,
+        color: '#4fc3f7',
+        fillColor: '#4fc3f7',
+        fillOpacity: 0.9,
+      })
+        .bindTooltip('現在位置')
+        .addTo(leafletMap);
+    } else {
+      currentPositionMarker.setLatLng(latlng);
+    }
+    if (!hasCenteredMap) {
+      leafletMap.setView(latlng, DEFAULT_ZOOM);
+      hasCenteredMap = true;
+    }
+  }
+
+  const target = snapshot.target;
+  if (target.latitude !== null && target.longitude !== null) {
+    const latlng = [target.latitude, target.longitude];
+    if (targetPositionMarker === null) {
+      targetPositionMarker = L.circleMarker(latlng, {
+        radius: 6,
+        color: '#f9a825',
+        fillColor: '#f9a825',
+        fillOpacity: 0.9,
+      })
+        .bindTooltip('目標waypoint')
+        .addTo(leafletMap);
+    } else {
+      targetPositionMarker.setLatLng(latlng);
+    }
+  }
 }
 
 function appendField(dl, label, value) {
@@ -59,7 +129,10 @@ function renderGpsSummary(snapshot) {
   appendField(fields, 'Localization freshness', snapshot.localization.freshness);
 }
 
-function renderSensorGrid(panels) {
+function renderSensorGrid(allPanels) {
+  // route_mapは専用のLeaflet地図で表示するため、センサ・画像パネルの
+  // グリッドには含めない（PyQt5側のlocalization_sensor_tab.pyと同様の扱い）。
+  const panels = allPanels.filter((panel) => panel.panel_id !== 'route_map');
   const grid = document.getElementById('sensor-grid');
   const panelIds = panels.map((panel) => panel.panel_id);
   const sameOrder =
@@ -136,6 +209,7 @@ async function pollSnapshot() {
       renderSummary(snapshot);
       renderGpsSummary(snapshot);
       renderMapCaption(snapshot);
+      updateMapMarkers(snapshot);
       renderSensorGrid(snapshot.sensor_panels);
       renderHealthTable(snapshot.health);
     }
@@ -148,8 +222,6 @@ async function pollSnapshot() {
 
 function pollImages() {
   const cacheBuster = Date.now();
-  const mapImage = document.getElementById('map-image');
-  mapImage.src = `/images/route_map?t=${cacheBuster}`;
   for (const panelId of knownPanelIds) {
     const img = document.getElementById(`panel-image-${panelId}`);
     if (img !== null) {
@@ -159,5 +231,6 @@ function pollImages() {
   setTimeout(pollImages, IMAGE_POLL_MS);
 }
 
+initMap();
 pollSnapshot();
 pollImages();

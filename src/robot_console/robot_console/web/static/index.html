@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>robot_console 遠隔観測</title>
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  crossorigin=""
+>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -25,7 +30,7 @@
 
   <section id="map" class="panel">
     <h2>地図 / Route Overlay</h2>
-    <img id="map-image" class="map-image" alt="Route Map">
+    <div id="leaflet-map" class="leaflet-map"></div>
     <p id="map-caption" class="caption">-</p>
   </section>
 
@@ -45,6 +50,7 @@
   </section>
 </main>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="app.js"></script>
 </body>
 </html>
