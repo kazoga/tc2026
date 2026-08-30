@@ -34,10 +34,21 @@ def pil_to_qpixmap(image: Image.Image) -> QtGui.QPixmap:
 
 
 class ImagePanel(QtWidgets.QGroupBox):
-    """1件のセンサ・画像パネル（`ImageReference` + 画像本体）を表示する。"""
+    """1件のセンサ・画像パネル（`ImageReference` + 画像本体）を表示する。
 
-    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+    カメラ画像やセンサビューアなど、元画像に意味のある固有アスペクト比が
+    ある場合は `preserve_aspect_ratio=True`（既定）で歪みなく表示する。
+    地図のようにパネル領域いっぱいに表示したい場合は `False` を指定する。
+    """
+
+    def __init__(
+        self,
+        parent: Optional[QtWidgets.QWidget] = None,
+        *,
+        preserve_aspect_ratio: bool = True,
+    ) -> None:
         super().__init__(parent)
+        self._preserve_aspect_ratio = preserve_aspect_ratio
 
         self._image_label = QtWidgets.QLabel(PLACEHOLDER_TEXT)
         self._image_label.setAlignment(QtCore.Qt.AlignCenter)
@@ -81,9 +92,14 @@ class ImagePanel(QtWidgets.QGroupBox):
     def _render_pixmap(self) -> None:
         if self._pixmap is None:
             return
+        aspect_mode = (
+            QtCore.Qt.KeepAspectRatio
+            if self._preserve_aspect_ratio
+            else QtCore.Qt.IgnoreAspectRatio
+        )
         scaled = self._pixmap.scaled(
             self._image_label.size(),
-            QtCore.Qt.KeepAspectRatio,
+            aspect_mode,
             QtCore.Qt.SmoothTransformation,
         )
         self._image_label.setPixmap(scaled)

@@ -34,7 +34,7 @@ def test_default_construction_shows_default_sensor_panels(qt_app):
     assert tab._grid_layout.count() == len(DEFAULT_SENSOR_PANELS)
 
 
-def test_update_snapshot_reflects_summary_and_localization_card(qt_app):
+def test_update_snapshot_reflects_summary(qt_app):
     tab = LocalizationSensorTab()
     snapshot = ConsoleSnapshot(
         operation_state=OperationStateView(
@@ -52,10 +52,8 @@ def test_update_snapshot_reflects_summary_and_localization_card(qt_app):
     assert tab._phase_label.text() == '走行中'
     assert tab._waypoint_label.text() == 'A-10 -> A-11'
     assert tab._progress_label.text() == '40.0%'
-    assert tab._loc_position_label.text() == 'x=1.50 y=2.50'
-    assert tab._loc_yaw_label.text() == '90.0 deg'
-    assert tab._gps_rtk_label.text() == 'RTK_FIX'
-    assert '到達' in tab._target_distance_label.text()
+    assert tab._gps_state_label.text() == 'RTK_FIX'
+    assert tab._localization_freshness_label.text() == 'OK'
 
 
 def test_sensor_panels_from_snapshot_replace_defaults(qt_app):

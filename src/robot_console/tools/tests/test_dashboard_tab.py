@@ -104,6 +104,7 @@ def test_dashboard_tab_phase_header_reflects_operation_state(qt_app):
     tab.update_snapshot(_sample_snapshot())
 
     assert tab._phase_label.text() == '走行中'
+    assert tab._phase_label.styleSheet() == 'color: #2e7d32;'
     assert tab._progress_label.text() == '25.0%'
     assert tab._waypoint_label.text() == 'A-10 -> A-11'
     assert tab._manual_start_label.text() == 'True'
@@ -167,6 +168,22 @@ def test_node_health_card_summary_counts_and_sort_order(qt_app):
     card = NodeHealthCard()
     card.update_snapshot(items)
     assert card._summary_label.text() == 'RUNNING 1 / STOPPED 1 / WARN 0 / ERROR 1'
+
+
+def test_node_health_card_summary_label_colors_red_when_error_present(qt_app):
+    card = NodeHealthCard()
+    card.update_snapshot(
+        [HealthSummaryView(profile_id='obstacle_monitor', status='ERROR', health=FreshnessLevel.LOST)]
+    )
+    assert card._summary_label.styleSheet() == 'color: #c62828;'
+
+
+def test_node_health_card_summary_label_colors_green_when_no_error(qt_app):
+    card = NodeHealthCard()
+    card.update_snapshot(
+        [HealthSummaryView(profile_id='route_manager', status='RUNNING', health=FreshnessLevel.OK)]
+    )
+    assert card._summary_label.styleSheet() == 'color: #2e7d32;'
 
 
 def test_node_health_card_emits_profile_selected_on_chip_click(qt_app):

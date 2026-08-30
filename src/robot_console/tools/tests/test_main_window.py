@@ -108,3 +108,38 @@ def test_console_log_tab_back_button_navigates_to_dashboard(qt_app):
     window.console_log_tab.back_to_dashboard_requested.emit()
 
     assert window.tab_widget.currentWidget() is window.dashboard_tab
+
+
+def test_launch_settings_plan_changes_propagate_to_dashboard_launch_control_card(qt_app):
+    window = MainWindow()
+
+    window.launch_settings_tab._environment_combo.setCurrentText('実機')
+    window.launch_settings_tab._drive_mode_combo.setCurrentText('自律走行')
+    window.launch_settings_tab._on_apply_preset_clicked()
+
+    card = window.dashboard_tab.launch_control_card
+    assert card._environment_combo.currentText() == '実機'
+    assert card._drive_mode_combo.currentText() == '自律走行'
+    assert card._ordered_profile_ids == window.launch_settings_tab.plan.ordered_profile_ids
+    assert card._node_combo.count() == len(window.launch_settings_tab.plan.ordered_profile_ids)
+
+
+def test_dashboard_apply_preset_updates_shared_launch_plan(qt_app):
+    """ダッシュボードでの業務モード選択・プリセット適用が起動・設定タブの
+    起動予定ノード一覧（唯一の実体）へ反映されることを確認する。"""
+
+    window = MainWindow()
+    card = window.dashboard_tab.launch_control_card
+    card._environment_combo.setCurrentText('シミュレーション')
+    card._drive_mode_combo.setCurrentText('手動走行')
+
+    card.apply_preset_requested.emit(
+        card._environment_combo.currentText(), card._drive_mode_combo.currentText()
+    )
+
+    assert window.launch_settings_tab.plan.ordered_profile_ids == [
+        'obstacle_route_sim',
+        'drive_mode_manager',
+    ]
+    # 適用結果が起動操作カードへも反映される（plan_changed経由）。
+    assert card._ordered_profile_ids == ['obstacle_route_sim', 'drive_mode_manager']

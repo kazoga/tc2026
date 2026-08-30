@@ -9,6 +9,7 @@ from PyQt5 import QtWidgets
 from robot_console.core.snapshot_model import EventBanner
 
 from .color_rules import severity_color
+from .typography import EVENT_HISTORY_FONT_POINT_SIZE, EVENT_PRIMARY_FONT_POINT_SIZE
 
 # robot_console_gui_screen_function_design.md 6.7節の優先順位。
 PRIORITY_ORDER = [
@@ -45,14 +46,18 @@ class EventBannerCard(QtWidgets.QGroupBox):
 
         self._primary_label = QtWidgets.QLabel('イベントなし')
         primary_font = self._primary_label.font()
-        primary_font.setPointSize(14)
+        primary_font.setPointSize(EVENT_PRIMARY_FONT_POINT_SIZE)
         primary_font.setBold(True)
         self._primary_label.setFont(primary_font)
         self._primary_label.setWordWrap(True)
 
+        history_font = self._primary_label.font()
+        history_font.setPointSize(EVENT_HISTORY_FONT_POINT_SIZE)
+        history_font.setBold(False)
         self._history_labels = [QtWidgets.QLabel('') for _ in range(HISTORY_DISPLAY_COUNT)]
         for label in self._history_labels:
             label.setWordWrap(True)
+            label.setFont(history_font)
 
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(self._primary_label)

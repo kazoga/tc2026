@@ -14,11 +14,13 @@ from PyQt5 import QtCore, QtWidgets
 
 from robot_console.core.snapshot_model import ConsoleSnapshot
 
-from .widgets.color_rules import freshness_color, rtk_state_color
+from .widgets.color_rules import freshness_color, phase_color, rtk_state_color
 from .widgets.event_banner_card import EventBannerCard, sort_by_priority
+from .widgets.launch_control_card import LaunchControlCard
 from .widgets.manual_ops_card import ManualOpsCard
 from .widgets.node_health_card import NodeHealthCard
 from .widgets.status_card import StatusCard, set_label_color
+from .widgets.typography import PHASE_DETAIL_FONT_POINT_SIZE, PHASE_STATUS_FONT_POINT_SIZE
 
 
 class DashboardTab(QtWidgets.QWidget):
@@ -30,6 +32,7 @@ class DashboardTab(QtWidgets.QWidget):
         super().__init__(parent)
 
         self._build_phase_header()
+        self.launch_control_card = LaunchControlCard()
         self.route_follower_card = self._build_route_follower_card()
         self.drive_cmd_vel_card = self._build_drive_cmd_vel_card()
         self.gps_pose_card = self._build_gps_pose_card()
@@ -37,14 +40,33 @@ class DashboardTab(QtWidgets.QWidget):
         self.manual_ops_card = ManualOpsCard()
         self.node_health_card = NodeHealthCard()
 
+        # 右列（起動操作→Node Health）と「操作が上・状態表示が下」の並びを
+        # 揃えるため、左列もManual Ops（操作）を上、Event（状態表示）を下に
+        # 縦積みする。EventはHISTORY表示までで内容量が決まり大きな領域を
+        # 必要としないため、余白はManual Opsの操作領域に充てる。
+        event_and_manual_ops_column = QtWidgets.QWidget()
+        event_and_manual_ops_layout = QtWidgets.QVBoxLayout(event_and_manual_ops_column)
+        event_and_manual_ops_layout.setContentsMargins(0, 0, 0, 0)
+        event_and_manual_ops_layout.addWidget(self.manual_ops_card, 1)
+        event_and_manual_ops_layout.addWidget(self.event_banner_card)
+
+        # 起動操作カードはノード起動・停止の操作、Node Healthカードはその結果
+        # としての稼働状況表示であり、機能的に対になる。そのため両者を同じ列に
+        # 縦積みし、起動操作カードを常に見えるコンパクトな高さに保ちつつ、
+        # 空いた高さはNode Healthカードのチップ表示領域に充てる。
+        launch_and_health_column = QtWidgets.QWidget()
+        launch_and_health_layout = QtWidgets.QVBoxLayout(launch_and_health_column)
+        launch_and_health_layout.setContentsMargins(0, 0, 0, 0)
+        launch_and_health_layout.addWidget(self.launch_control_card)
+        launch_and_health_layout.addWidget(self.node_health_card, 1)
+
         grid = QtWidgets.QGridLayout(self)
         grid.addWidget(self._phase_header_group, 0, 0, 1, 3)
         grid.addWidget(self.route_follower_card, 1, 0)
         grid.addWidget(self.drive_cmd_vel_card, 1, 1)
         grid.addWidget(self.gps_pose_card, 1, 2)
-        grid.addWidget(self.event_banner_card, 2, 0)
-        grid.addWidget(self.manual_ops_card, 2, 1)
-        grid.addWidget(self.node_health_card, 2, 2)
+        grid.addWidget(event_and_manual_ops_column, 2, 0)
+        grid.addWidget(launch_and_health_column, 2, 1, 1, 2)
         for column in range(3):
             grid.setColumnStretch(column, 1)
         grid.setRowStretch(1, 1)
@@ -54,26 +76,49 @@ class DashboardTab(QtWidgets.QWidget):
 
     # ---------- 運行フェーズ領域（6.3節） ----------
     def _build_phase_header(self) -> None:
+        """運行フェーズを最重要の一目情報として大きく表示するヘッダーを構築する。
+
+        走行中は数m離れた位置から状態を確認する運用を想定し、フェーズ本体を
+        大きな色付き文字で表示する。業務モードや進捗などの詳細は、その下に
+        小さめの1行にまとめる（近づいて確認する前提）。
+        """
+
         self._phase_header_group = QtWidgets.QGroupBox('運行フェーズ')
-        self._environment_label = QtWidgets.QLabel('-')
+
         self._phase_label = QtWidgets.QLabel('-')
+        phase_font = self._phase_label.font()
+        phase_font.setPointSize(PHASE_STATUS_FONT_POINT_SIZE)
+        phase_font.setBold(True)
+        self._phase_label.setFont(phase_font)
+
+        detail_font = self._phase_label.font()
+        detail_font.setPointSize(PHASE_DETAIL_FONT_POINT_SIZE)
+        detail_font.setBold(False)
+
+        self._environment_label = QtWidgets.QLabel('-')
         self._progress_label = QtWidgets.QLabel('-')
         self._waypoint_label = QtWidgets.QLabel('-')
         self._manual_start_label = QtWidgets.QLabel('-')
         self._top_event_label = QtWidgets.QLabel('-')
 
-        layout = QtWidgets.QHBoxLayout(self._phase_header_group)
+        detail_row = QtWidgets.QHBoxLayout()
         for title, value_label in (
             ('業務モード', self._environment_label),
-            ('運行フェーズ', self._phase_label),
             ('進捗', self._progress_label),
             ('WP', self._waypoint_label),
             ('manual_start', self._manual_start_label),
             ('重要イベント', self._top_event_label),
         ):
-            layout.addWidget(QtWidgets.QLabel(f'{title}:'))
-            layout.addWidget(value_label)
-        layout.addStretch(1)
+            title_label = QtWidgets.QLabel(f'{title}:')
+            title_label.setFont(detail_font)
+            value_label.setFont(detail_font)
+            detail_row.addWidget(title_label)
+            detail_row.addWidget(value_label)
+        detail_row.addStretch(1)
+
+        layout = QtWidgets.QVBoxLayout(self._phase_header_group)
+        layout.addWidget(self._phase_label)
+        layout.addLayout(detail_row)
 
     # ---------- Route / Followerカード（6.4節） ----------
     def _build_route_follower_card(self) -> StatusCard:
@@ -133,6 +178,7 @@ class DashboardTab(QtWidgets.QWidget):
         operation = snapshot.operation_state
         self._environment_label.setText(f'{operation.environment} / {operation.drive_mode}')
         self._phase_label.setText(operation.phase)
+        set_label_color(self._phase_label, phase_color(operation.phase))
         self._progress_label.setText(f'{operation.route_progress * 100.0:.1f}%')
         self._waypoint_label.setText(
             f'{operation.current_waypoint or "-"} -> {operation.next_waypoint or "-"}'

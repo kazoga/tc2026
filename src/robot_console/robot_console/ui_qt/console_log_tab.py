@@ -167,6 +167,8 @@ class ConsoleLogTab(QtWidgets.QWidget):
                 item = QtWidgets.QTableWidgetItem(value)
                 item.setData(PROFILE_ID_ROLE, profile_id)
                 self._profile_table.setItem(row, column, item)
+        for column in range(len(PROFILE_TABLE_COLUMNS) - 1):
+            self._profile_table.resizeColumnToContents(column)
         self._profile_table.blockSignals(False)
 
         if self._selected_profile_id:

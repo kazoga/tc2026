@@ -60,3 +60,28 @@ def test_update_panel_falls_back_to_panel_id_when_title_missing(qt_app):
     panel.update_panel(reference, None)
 
     assert panel.title() == 'front_camera'
+
+
+def test_preserve_aspect_ratio_false_fills_panel_without_letterbox(qt_app):
+    # 地図パネル向け: 領域いっぱいに引き伸ばし、アスペクト比を保持しない。
+    panel = ImagePanel(preserve_aspect_ratio=False)
+    panel.resize(400, 100)
+    reference = ImageReference(panel_id='route_map', title='Route Map')
+
+    panel.update_panel(reference, Image.new('RGB', (10, 10), color='green'))
+
+    scaled = panel._image_label.pixmap()
+    assert scaled.width() == panel._image_label.width()
+    assert scaled.height() == panel._image_label.height()
+
+
+def test_preserve_aspect_ratio_true_keeps_source_aspect_ratio(qt_app):
+    # 既定（カメラ・センサ画像向け）: アスペクト比を保ち、レターボックスを許容する。
+    panel = ImagePanel()
+    panel.resize(400, 100)
+    reference = ImageReference(panel_id='sensor_viewer', title='Sensor Viewer')
+
+    panel.update_panel(reference, Image.new('RGB', (10, 10), color='blue'))
+
+    scaled = panel._image_label.pixmap()
+    assert scaled.width() == scaled.height()

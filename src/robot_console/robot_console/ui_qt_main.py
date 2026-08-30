@@ -15,11 +15,13 @@ from typing import List, Optional
 from PyQt5 import QtWidgets
 
 from robot_console.ui_qt.main_window import MainWindow
+from robot_console.ui_qt.qt_environment import fix_qt_plugin_path_conflict
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     """PyQt5 UIを起動する。"""
 
+    fix_qt_plugin_path_conflict()
     app = QtWidgets.QApplication(argv if argv is not None else sys.argv)
     window = MainWindow()
     window.show()

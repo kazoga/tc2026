@@ -55,6 +55,21 @@ def severity_color(severity: str) -> str:
     return mapping.get(severity.lower(), COLOR_UNKNOWN)
 
 
+def phase_color(phase: str) -> str:
+    """運行フェーズ文字列から表示色を返す（6.3節の運行フェーズ列挙値）。"""
+
+    mapping = {
+        '走行中': COLOR_OK,
+        '走行準備完了': COLOR_NOTICE,
+        '起動確認中': COLOR_NOTICE,
+        '終了処理中': COLOR_NOTICE,
+        '一時停止': COLOR_WARN,
+        '異常': COLOR_ERROR,
+        '未起動': COLOR_UNKNOWN,
+    }
+    return mapping.get(phase, COLOR_UNKNOWN)
+
+
 def launch_status_color(status: NodeLaunchStatus) -> str:
     """NodeLaunchStatus からNode Healthチップの表示色を返す。"""
 

@@ -4,8 +4,10 @@
 起動予定ノード一覧、ノード設定編集パネル、起動内容プレビューで構成する
 （robot_console_gui_screen_function_design.md 4章）。
 
-QWidgetは`ros2 launch`プロセスを直接起動しない。起動・停止操作はすべて
-`pyqtSignal` で外部（将来の `ros/console_node.py` ⇔ `ConsoleCore`）へ通知する。
+本タブは純粋な設定タブであり、ノードの起動・停止操作は置かない。実際の
+起動・停止操作はダッシュボードタブの起動操作カード（`LaunchControlCard`）
+が担い、本タブが管理する起動予定ノード一覧（`LaunchPlan`）を`plan_changed`
+シグナルで参照する。
 """
 
 from __future__ import annotations
@@ -50,10 +52,7 @@ PROFILE_ID_ROLE = QtCore.Qt.UserRole
 class LaunchSettingsTab(QtWidgets.QWidget):
     """業務開始時に使う起動・設定画面。"""
 
-    launch_requested = QtCore.pyqtSignal(str)
-    stop_requested = QtCore.pyqtSignal(str)
-    launch_all_requested = QtCore.pyqtSignal(list)
-    stop_all_requested = QtCore.pyqtSignal(list)
+    plan_changed = QtCore.pyqtSignal()
 
     def __init__(
         self,
@@ -99,24 +98,30 @@ class LaunchSettingsTab(QtWidgets.QWidget):
         apply_preset_button = QtWidgets.QPushButton('プリセット適用')
         apply_preset_button.clicked.connect(self._on_apply_preset_clicked)
 
-        launch_all_button = QtWidgets.QPushButton('起動予定ノードを一斉起動')
-        launch_all_button.clicked.connect(
-            lambda: self.launch_all_requested.emit(list(self._plan.ordered_profile_ids))
-        )
-        stop_all_button = QtWidgets.QPushButton('起動予定ノードを停止')
-        stop_all_button.clicked.connect(
-            lambda: self.stop_all_requested.emit(list(self._plan.ordered_profile_ids))
-        )
-
         layout.addWidget(QtWidgets.QLabel('実行環境:'))
         layout.addWidget(self._environment_combo)
         layout.addWidget(QtWidgets.QLabel('走行モード:'))
         layout.addWidget(self._drive_mode_combo)
         layout.addWidget(apply_preset_button)
         layout.addStretch(1)
-        layout.addWidget(launch_all_button)
-        layout.addWidget(stop_all_button)
         return layout
+
+    def apply_preset(self, environment: str, drive_mode: str) -> None:
+        """指定した業務モードのプリセットを適用する（ダッシュボードからの呼び出し用）。
+
+        コンボボックスの選択をトップバーの「プリセット適用」ボタンと同じ値へ
+        揃えたうえで、同じ適用ロジック（`_on_apply_preset_clicked`）を呼ぶ。
+        起動予定ノード一覧（`LaunchPlan`）の更新経路を一本化し、ダッシュボード
+        側で別の実体を持たせないようにするための入口である。
+        """
+
+        environment_index = self._environment_combo.findText(environment)
+        if environment_index >= 0:
+            self._environment_combo.setCurrentIndex(environment_index)
+        drive_mode_index = self._drive_mode_combo.findText(drive_mode)
+        if drive_mode_index >= 0:
+            self._drive_mode_combo.setCurrentIndex(drive_mode_index)
+        self._on_apply_preset_clicked()
 
     def _on_apply_preset_clicked(self) -> None:
         if self._plan.ordered_profile_ids:
@@ -152,17 +157,8 @@ class LaunchSettingsTab(QtWidgets.QWidget):
         self._tree.setHeaderLabels(['Profile', '状態', 'Health'])
         self._tree.itemChanged.connect(self._on_tree_item_changed)
 
-        launch_button = QtWidgets.QPushButton('個別起動')
-        launch_button.clicked.connect(self._on_tree_individual_launch_clicked)
-        stop_button = QtWidgets.QPushButton('個別停止')
-        stop_button.clicked.connect(self._on_tree_individual_stop_clicked)
-        button_row = QtWidgets.QHBoxLayout()
-        button_row.addWidget(launch_button)
-        button_row.addWidget(stop_button)
-
         layout = QtWidgets.QVBoxLayout(group)
         layout.addWidget(self._tree)
-        layout.addLayout(button_row)
         return group
 
     def _rebuild_tree(self) -> None:
@@ -188,6 +184,8 @@ class LaunchSettingsTab(QtWidgets.QWidget):
                 self._tree_items[profile.profile_id] = leaf
             category_item.setExpanded(True)
 
+        for column in range(self._tree.columnCount()):
+            self._tree.resizeColumnToContents(column)
         self._tree.blockSignals(False)
 
     def _on_tree_item_changed(self, item: QtWidgets.QTreeWidgetItem, column: int) -> None:
@@ -209,28 +207,11 @@ class LaunchSettingsTab(QtWidgets.QWidget):
             item.setCheckState(0, state)
         self._tree.blockSignals(False)
 
-    def _on_tree_individual_launch_clicked(self) -> None:
-        profile_id = self._current_tree_profile_id()
-        if profile_id:
-            self.launch_requested.emit(profile_id)
-
-    def _on_tree_individual_stop_clicked(self) -> None:
-        profile_id = self._current_tree_profile_id()
-        if profile_id:
-            self.stop_requested.emit(profile_id)
-
-    def _current_tree_profile_id(self) -> Optional[str]:
-        item = self._tree.currentItem()
-        if item is None:
-            return None
-        return item.data(0, PROFILE_ID_ROLE)
-
     # ---------- 起動予定ノード一覧（4.5節） ----------
     def _build_plan_panel(self) -> QtWidgets.QGroupBox:
         group = QtWidgets.QGroupBox('起動予定ノード一覧')
         self._plan_table = QtWidgets.QTableWidget(0, len(PLAN_TABLE_COLUMNS))
         self._plan_table.setHorizontalHeaderLabels(PLAN_TABLE_COLUMNS)
-        self._plan_table.horizontalHeader().setStretchLastSection(True)
         self._plan_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self._plan_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self._plan_table.itemSelectionChanged.connect(self._on_plan_selection_changed)
@@ -281,8 +262,12 @@ class LaunchSettingsTab(QtWidgets.QWidget):
                 item = self._plan_table.item(row, column)
                 if item is not None:
                     item.setData(PROFILE_ID_ROLE, profile_id)
+        for column in range(7):
+            self._plan_table.resizeColumnToContents(column)
+        self._plan_table.setColumnWidth(7, 140)
         self._plan_table.blockSignals(False)
         self._update_config_panel()
+        self.plan_changed.emit()
 
     def _on_remove_from_plan_clicked(self, profile_id: str) -> None:
         self._plan.remove(profile_id)
@@ -496,6 +481,24 @@ class LaunchSettingsTab(QtWidgets.QWidget):
         """起動予定ノード一覧（`LaunchPlan`）を返す。"""
 
         return self._plan
+
+    @property
+    def profiles_by_id(self) -> Dict[str, LaunchProfile]:
+        """profile_idをキーとした`LaunchProfile`辞書を返す。"""
+
+        return dict(self._profiles_by_id)
+
+    @property
+    def environment(self) -> str:
+        """現在選択中の実行環境を返す。"""
+
+        return self._environment_combo.currentText()
+
+    @property
+    def drive_mode(self) -> str:
+        """現在選択中の走行モードを返す。"""
+
+        return self._drive_mode_combo.currentText()
 
     def state_for(self, profile_id: str) -> Optional[LaunchProfileState]:
         """指定profileの現在の編集状態を返す。"""

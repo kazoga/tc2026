@@ -13,8 +13,9 @@ ROS 2 環境が有効な場合（`sensor_msgs` などが実際に import でき�
 Qtプラグイン（cv2/qt/plugins、PyQt5と異なるQtビルド）へ書き換える。同一プロセス
 内でPyQt5のQApplicationがこのパスからプラットフォームプラグインを読み込むと、
 Qtライブラリのバージョン不整合により（タイミング依存で）セグメンテーション
-フォルトを起こすことを確認したため、`cv2` の読み込み後にPyQt5自身のプラグイン
-パスへ明示的に戻す。
+フォルトを起こすことを確認したため、`robot_console.ui_qt.qt_environment` の
+`fix_qt_plugin_path_conflict()` でPyQt5自身のプラグインパスへ明示的に戻す
+（実運用のentry point `ui_qt_main.py` でも同じ関数を使用する）。
 """
 
 from __future__ import annotations
@@ -31,17 +32,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 try:
-    import cv2  # noqa: F401  QT_QPA_PLATFORM_PLUGIN_PATH 書き換えを先に発生させる
-except ImportError:
-    pass
+    from robot_console.ui_qt.qt_environment import fix_qt_plugin_path_conflict
 
-try:
-    from PyQt5 import QtCore
-
-    _qt_plugin_root = QtCore.QLibraryInfo.location(QtCore.QLibraryInfo.PluginsPath)
-    if _qt_plugin_root:
-        os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = os.path.join(_qt_plugin_root, 'platforms')
-        os.environ['QT_PLUGIN_PATH'] = _qt_plugin_root
+    fix_qt_plugin_path_conflict()
 except ImportError:
     pass
 

@@ -10,6 +10,8 @@ from robot_console.core.freshness import FreshnessLevel
 from robot_console.core.snapshot_model import HealthSummaryView
 
 from .color_rules import COLOR_ERROR, COLOR_NOTICE, COLOR_OK, COLOR_UNKNOWN, COLOR_WARN
+from .status_card import set_label_color
+from .typography import NODE_HEALTH_SUMMARY_FONT_POINT_SIZE
 
 CHIP_COLUMNS = 3
 
@@ -50,6 +52,10 @@ class NodeHealthCard(QtWidgets.QGroupBox):
         super().__init__('Node Health', parent)
 
         self._summary_label = QtWidgets.QLabel('RUNNING 0 / STOPPED 0 / WARN 0 / ERROR 0')
+        summary_font = self._summary_label.font()
+        summary_font.setPointSize(NODE_HEALTH_SUMMARY_FONT_POINT_SIZE)
+        summary_font.setBold(True)
+        self._summary_label.setFont(summary_font)
 
         self._chip_area = QtWidgets.QWidget()
         self._chip_layout = QtWidgets.QGridLayout(self._chip_area)
@@ -81,11 +87,16 @@ class NodeHealthCard(QtWidgets.QGroupBox):
         self._summary_label.setText(
             f'RUNNING {running} / STOPPED {stopped} / WARN {warn} / ERROR {error}'
         )
+        set_label_color(self._summary_label, COLOR_ERROR if error > 0 else COLOR_OK)
 
         while self._chip_layout.count():
             taken = self._chip_layout.takeAt(0)
             widget = taken.widget()
             if widget is not None:
+                # setParent(None) で即座に親子関係を解除し描画から外す。
+                # deleteLater() だけでは次のイベントループまで旧Widgetが
+                # 画面に残り、新Widgetと重なって表示される。
+                widget.setParent(None)
                 widget.deleteLater()
 
         for index, item in enumerate(sort_health_summaries(health)):

@@ -90,6 +90,16 @@ def test_apply_preset_with_existing_plan_requires_confirmation(qt_app, monkeypat
     assert tab.plan.ordered_profile_ids == ['route_manager']
 
 
+def test_apply_preset_public_method_sets_combos_and_applies(qt_app):
+    tab = _make_tab()
+
+    tab.apply_preset('シミュレーション', '手動走行')
+
+    assert tab._environment_combo.currentText() == 'シミュレーション'
+    assert tab._drive_mode_combo.currentText() == '手動走行'
+    assert tab.plan.ordered_profile_ids == ['obstacle_route_sim', 'drive_mode_manager']
+
+
 def test_desktop_check_preset_sets_simulator_enabled_and_joy_input(qt_app):
     tab = _make_tab()
     tab._environment_combo.setCurrentText('机上確認')
@@ -185,39 +195,50 @@ def test_move_up_and_down_reorders_plan(qt_app):
     assert tab.plan.ordered_profile_ids == ['route_planner', 'route_follower', 'route_manager']
 
 
-def test_launch_and_stop_signals_from_tree_buttons(qt_app):
+def test_tab_has_no_launch_or_stop_signals(qt_app):
+    """起動・設定タブは純粋な設定タブであり、起動・停止操作は持たない。"""
+
     tab = _make_tab()
-    tab._tree.setCurrentItem(tab._tree_items['route_manager'])
-
-    launched = []
-    stopped = []
-    tab.launch_requested.connect(launched.append)
-    tab.stop_requested.connect(stopped.append)
-
-    tab._on_tree_individual_launch_clicked()
-    tab._on_tree_individual_stop_clicked()
-
-    assert launched == ['route_manager']
-    assert stopped == ['route_manager']
+    for removed_signal in ('launch_requested', 'stop_requested', 'launch_all_requested', 'stop_all_requested'):
+        assert not hasattr(tab, removed_signal)
 
 
-def test_launch_all_and_stop_all_signals_carry_plan_order(qt_app):
+def test_plan_changed_emitted_on_checkbox_toggle(qt_app):
+    tab = _make_tab()
+    received = []
+    tab.plan_changed.connect(lambda: received.append(True))
+
+    tab._tree_items['route_manager'].setCheckState(0, QtCore.Qt.Checked)
+
+    assert received == [True]
+
+
+def test_plan_changed_emitted_on_apply_preset(qt_app):
     tab = _make_tab()
     tab._environment_combo.setCurrentText('シミュレーション')
     tab._drive_mode_combo.setCurrentText('手動走行')
+
+    received = []
+    tab.plan_changed.connect(lambda: received.append(True))
     tab._on_apply_preset_clicked()
 
-    launched_all = []
-    stopped_all = []
-    tab.launch_all_requested.connect(launched_all.append)
-    tab.stop_all_requested.connect(stopped_all.append)
+    assert received == [True]
+    assert tab.plan.ordered_profile_ids == ['obstacle_route_sim', 'drive_mode_manager']
 
-    # ツールバーのボタンを直接押す代わりにシグナル発火経路を再現する。
-    tab.launch_all_requested.emit(list(tab.plan.ordered_profile_ids))
-    tab.stop_all_requested.emit(list(tab.plan.ordered_profile_ids))
 
-    assert launched_all == [['obstacle_route_sim', 'drive_mode_manager']]
-    assert stopped_all == [['obstacle_route_sim', 'drive_mode_manager']]
+def test_environment_and_drive_mode_properties_reflect_combo_selection(qt_app):
+    tab = _make_tab()
+    tab._environment_combo.setCurrentText('シミュレーション')
+    tab._drive_mode_combo.setCurrentText('手動走行')
+
+    assert tab.environment == 'シミュレーション'
+    assert tab.drive_mode == '手動走行'
+
+
+def test_profiles_by_id_exposes_loaded_profiles(qt_app):
+    tab = _make_tab()
+
+    assert tab.profiles_by_id['rtk_gps_um982'].display_name == 'RTK GPS UM982'
 
 
 def test_update_launch_states_reflects_status_in_tree_and_table(qt_app):
