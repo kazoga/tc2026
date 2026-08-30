@@ -20,6 +20,7 @@ setup(
     name=package_name,
     version='0.1.0',
     packages=find_packages(include=[package_name, f'{package_name}.*']),
+    package_data={package_name: ['web/static/*']},
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         (f'share/{package_name}/launch', glob('launch/*.launch.py')),
@@ -41,6 +42,7 @@ setup(
         'console_scripts': [
             'robot_console = robot_console.robot_console_node:main',
             'robot_console_qt = robot_console.ui_qt_main:main',
+            'robot_console_web = robot_console.web_main:main',
         ],
     },
 )
