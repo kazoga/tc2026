@@ -8,9 +8,10 @@ function_design.md 7章）。走行中の通常監視はダッシュボード、
 詳細数値カード（ダッシュボードのGPS/Poseカードと重複する内容）は置かず、
 空いた領域を地図表示の拡大に充てる。
 
-地図表示は `robot_console_ui_renewal_input.md` 8.4節の候補C（初期実装では
-既存route map画像を表示し、後続フェーズでOSM重畳へ発展させる）を採用する。
-OpenStreetMap上へのwaypoint重畳は本フェーズの対象外である。
+地図表示は `robot_console_ui_renewal_input.md` 8.4節の候補A（QWebEngineViewで
+地図HTMLを埋め込み、Leaflet+OSMタイルで自己位置・目標waypointを重畳表示する）
+を採用する。waypoint列・route区間の重畳はmap_model（未実装）が確定するまでの
+間表示できないため、現在位置・目標waypointのマーカーのみ表示する。
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from robot_console.core.snapshot_model import ConsoleSnapshot, ImageReference
 
 from .widgets.color_rules import freshness_color
 from .widgets.image_panel import ImagePanel
+from .widgets.map_view import MapView
 from .widgets.status_card import set_label_color
 
 ROUTE_MAP_PANEL_ID = 'route_map'
@@ -113,11 +115,9 @@ class LocalizationSensorTab(QtWidgets.QWidget):
     # ---------- 地図 / route overlay（7.2節左カラム、7.4節） ----------
     def _build_route_overlay_panel(self) -> QtWidgets.QGroupBox:
         self._route_overlay_group = QtWidgets.QGroupBox('地図 / Route Overlay')
-        # 地図はカメラ画像と異なり、パネル形状に合わせて領域いっぱいに表示する
-        # （アスペクト比維持によるレターボックスは行わない）。
-        self._route_map_panel = ImagePanel(preserve_aspect_ratio=False)
+        self._map_view = MapView()
         layout = QtWidgets.QVBoxLayout(self._route_overlay_group)
-        layout.addWidget(self._route_map_panel)
+        layout.addWidget(self._map_view)
         return self._route_overlay_group
 
     # ---------- センサ・画像パネル（7.5節） ----------
@@ -132,6 +132,7 @@ class LocalizationSensorTab(QtWidgets.QWidget):
         """`ConsoleSnapshot` の内容を反映する。"""
 
         self._update_summary(snapshot)
+        self._update_route_overlay(snapshot)
         self._update_sensor_panels(snapshot)
 
     def _update_summary(self, snapshot: ConsoleSnapshot) -> None:
@@ -166,18 +167,15 @@ class LocalizationSensorTab(QtWidgets.QWidget):
             return 'OK'
         return 'UNKNOWN'
 
+    def _update_route_overlay(self, snapshot: ConsoleSnapshot) -> None:
+        self._map_view.update_map(snapshot.localization_state, snapshot.target_state)
+
     def _update_sensor_panels(self, snapshot: ConsoleSnapshot) -> None:
         panels = list(snapshot.sensor_panels) or list(DEFAULT_SENSOR_PANELS)
         panels_by_id: Dict[str, ImageReference] = {panel.panel_id: panel for panel in panels}
-
-        route_map_reference = panels_by_id.pop(
-            ROUTE_MAP_PANEL_ID,
-            ImageReference(panel_id=ROUTE_MAP_PANEL_ID, title='Route Map', topic='/active_route'),
-        )
-        self._route_map_panel.update_panel(
-            route_map_reference,
-            self._image_store.get(route_map_reference.image_id or ROUTE_MAP_PANEL_ID),
-        )
+        # route_mapは地図パネル（MapView）専用のため、センサ・画像パネルの
+        # グリッドには含めない（HTML UI側のapp.js::renderSensorGridと同様の扱い）。
+        panels_by_id.pop(ROUTE_MAP_PANEL_ID, None)
 
         self._rebuild_grid(list(panels_by_id.values()))
 

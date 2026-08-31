@@ -1,11 +1,9 @@
 """LocalizationSensorTab の単体テスト（`QT_QPA_PLATFORM=offscreen` 前提）。"""
 
 import pytest
-from PIL import Image
 from PyQt5 import QtWidgets
 
 from robot_console.core.freshness import FreshnessLevel
-from robot_console.core.image_store import ImageStore
 from robot_console.core.snapshot_model import (
     ConsoleSnapshot,
     GpsStateView,
@@ -18,6 +16,7 @@ from robot_console.ui_qt.localization_sensor_tab import (
     DEFAULT_SENSOR_PANELS,
     LocalizationSensorTab,
 )
+from robot_console.ui_qt.widgets.map_view import MapView
 
 
 @pytest.fixture(scope='module')
@@ -30,7 +29,7 @@ def test_default_construction_shows_default_sensor_panels(qt_app):
     tab = LocalizationSensorTab()
 
     assert tab._route_overlay_group.title() == '地図 / Route Overlay'
-    assert tab._route_map_panel.title() == 'Route Map'
+    assert isinstance(tab._map_view, MapView)
     assert tab._grid_layout.count() == len(DEFAULT_SENSOR_PANELS)
 
 
@@ -71,14 +70,17 @@ def test_sensor_panels_from_snapshot_replace_defaults(qt_app):
     assert tab._grid_layout.count() == 1
 
 
-def test_image_store_image_is_rendered_in_route_map_panel(qt_app):
-    store = ImageStore()
-    store.set('route_map', Image.new('RGB', (8, 8), color='red'))
-    tab = LocalizationSensorTab(image_store=store)
+def test_update_snapshot_pushes_localization_and_target_to_map_view(qt_app):
+    tab = LocalizationSensorTab()
+    calls = []
+    tab._map_view.update_map = lambda localization, target: calls.append((localization, target))
+    localization_state = LocalizationStateView(latitude=36.083, longitude=140.113)
+    target_state = TargetView(latitude=36.0832, longitude=140.1132)
+    snapshot = ConsoleSnapshot(localization_state=localization_state, target_state=target_state)
 
-    tab.update_snapshot(ConsoleSnapshot())
+    tab.update_snapshot(snapshot)
 
-    assert tab._route_map_panel._image_label.text() == ''
+    assert calls == [(localization_state, target_state)]
 
 
 def test_back_to_dashboard_signal_emitted_on_button_click(qt_app):

@@ -16,6 +16,24 @@ Qtライブラリのバージョン不整合により（タイミング依存で
 フォルトを起こすことを確認したため、`robot_console.ui_qt.qt_environment` の
 `fix_qt_plugin_path_conflict()` でPyQt5自身のプラグインパスへ明示的に戻す
 （実運用のentry point `ui_qt_main.py` でも同じ関数を使用する）。
+
+`ui_qt.widgets.map_view.MapView`（`QWebEngineView`）はQApplication生成前に
+`Qt::AA_ShareOpenGLContexts` 属性が設定されていないと動作しないため、
+`enable_qtwebengine_shared_opengl_contexts()` も同様にQApplication生成前へ
+配置する（`ui_qt_main.py` でも同じ関数を使用する）。
+
+さらに、同一プロセス内で複数の `QWebEngineView` を跨いでテストを実行すると、
+QtWebEngine内部の状態（プロファイル初期化まわり）が汚染され、テストの実行順序
+次第でセグメンテーションフォルトを起こすことを確認した。`QWebEngineView` を
+実際に生成するテストだけを `pytest.mark.forked` で個別隔離する案も試したが、
+それより前に実行される他のテスト（`launch_manager` のリーダースレッドや
+`ThreadingHTTPServer` などバックグラウンドスレッドを作るテストを含む）が同一
+プロセス内で先に走った状態から `os.fork()` すると、フォーク時に他スレッドが
+保持していたロックが子プロセスへ引き継がれずデッドロックすることを確認した。
+そのため、本ディレクトリ配下の全テストを一律 `pytest.mark.forked` 対象にする
+（`pytest_collection_modifyitems()` 参照、要 `python3-pytest-forked`）。
+ワークスペース全体の `pytest` 実行時も、本ディレクトリ配下のテストのみが
+フォーク対象になり、他パッケージのテストには影響しない。
 """
 
 from __future__ import annotations
@@ -25,6 +43,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,9 +52,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 try:
-    from robot_console.ui_qt.qt_environment import fix_qt_plugin_path_conflict
+    from robot_console.ui_qt.qt_environment import (
+        enable_qtwebengine_shared_opengl_contexts,
+        fix_qt_plugin_path_conflict,
+    )
 
     fix_qt_plugin_path_conflict()
+    enable_qtwebengine_shared_opengl_contexts()
 except ImportError:
     pass
 
@@ -124,3 +148,19 @@ try:
     import PIL  # noqa: F401
 except ImportError:
     _install_pil_stub()
+
+
+_THIS_DIR = Path(__file__).resolve().parent
+
+
+def pytest_collection_modifyitems(items: list) -> None:
+    """本ディレクトリ配下の全テストを `pytest.mark.forked` 対象にする。
+
+    `python3-pytest-forked` が未導入の環境では `forked` マーカーは効果を持たず
+    通常通り実行される（QtWebEngine関連テストはその場合クラッシュし得る）。
+    """
+
+    for item in items:
+        item_path = Path(str(item.fspath)).resolve()
+        if item_path.parent == _THIS_DIR:
+            item.add_marker(pytest.mark.forked)
