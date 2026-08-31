@@ -34,6 +34,11 @@ QtWebEngine内部の状態（プロファイル初期化まわり）が汚染さ
 （`pytest_collection_modifyitems()` 参照、要 `python3-pytest-forked`）。
 ワークスペース全体の `pytest` 実行時も、本ディレクトリ配下のテストのみが
 フォーク対象になり、他パッケージのテストには影響しない。
+
+このワークスペースはnumpy/opencv等のバージョン固定のためPython venv
+（`--system-site-packages`）の使用を前提とする（CLAUDE.md「実行環境」参照）。
+venvが有効化されていない場合、pytest自体は動作し得るが依存関係の
+バージョンが想定と異なる可能性があるため、収集時に警告のみ出す。
 """
 
 from __future__ import annotations
@@ -46,6 +51,16 @@ from pathlib import Path
 import pytest
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+
+if not os.environ.get('VIRTUAL_ENV'):
+    import warnings
+
+    warnings.warn(
+        'venvが有効化されていません。'
+        'このワークスペースはPython venv(--system-site-packages)の使用を'
+        '前提としています。意図しない場合は有効化してから再実行してください。',
+        stacklevel=1,
+    )
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:

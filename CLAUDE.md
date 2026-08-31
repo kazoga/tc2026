@@ -71,6 +71,20 @@ GitHub リポジトリに登録し、開発メンバ間で共通利用するこ�
 
 ---
 
+# 実行環境（Python venv）
+
+ROS関連Pythonパッケージ（rclpy, python3-pyqt5等）はaptでシステムPythonへ
+入る一方、requirements.txtのpipパッケージはUbuntu 24.04のPEP 668制約により
+システムPythonへ直接pip installできない。そのため `--system-site-packages`
+を有効にしたPython venvの使用を前提とする。配置場所は開発者ごとに異なって
+よく、本ファイルやリポジトリ内のスクリプトで特定の絶対パスを前提にしない。
+
+- Python/pytest/colcon等を実行する前に、venvが有効化されているか
+  （`$VIRTUAL_ENV`が設定されているか）を確認する。
+- 有効化方法が不明な場合はパスを推測せず、ユーザーに確認する。
+
+---
+
 # Python Instructions
 
 ## Style
