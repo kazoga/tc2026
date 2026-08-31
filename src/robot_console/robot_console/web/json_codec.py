@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from ..core.snapshot_model import ConsoleSnapshot, HealthSummaryView, ImageReference
+from ..core.snapshot_model import ConsoleSnapshot, HealthSummaryView, ImageReference, RouteWaypointView
 
 
 def _iso(value: Optional[datetime]) -> Optional[str]:
@@ -27,6 +27,14 @@ def _panel_payload(panel: ImageReference) -> Dict[str, Any]:
         'height': panel.height,
         'updated_at': _iso(panel.updated_at),
         'freshness': panel.freshness.value,
+    }
+
+
+def _waypoint_payload(waypoint: RouteWaypointView) -> Dict[str, Any]:
+    return {
+        'index': waypoint.index,
+        'latitude': waypoint.latitude,
+        'longitude': waypoint.longitude,
     }
 
 
@@ -95,6 +103,7 @@ def build_snapshot_payload(snapshot: ConsoleSnapshot) -> Dict[str, Any]:
             'total_waypoints': route.total_waypoints,
             'progress_ratio': route.progress_ratio,
             'coordinate_kind': route.coordinate_kind,
+            'waypoints': [_waypoint_payload(waypoint) for waypoint in route.waypoints],
         },
         'follower': {
             'state': follower.state,
@@ -117,11 +126,11 @@ def build_snapshot_payload(snapshot: ConsoleSnapshot) -> Dict[str, Any]:
 
 
 def build_map_state_payload(snapshot: ConsoleSnapshot) -> Dict[str, Any]:
-    """`GET /map_state.json` のペイロードを組み立てる。
+    """`GET /map_state.json` のペイロードを組み立てる（8.4節・16.3節）。
 
-    waypoint列・route polylineは `map_model`（座標変換・地図重畳の共通実装、
-    未実装）が確定するまでの間提供できないため、現在自己位置・目標位置・
-    進捗のみを提供する（robot_console_ui_renewal_input.md 8.4節・16.3節）。
+    waypoint列は `route.waypoints`（`geo_pose` を持つもののみ緯度経度が入る）
+    として提供する。走行済み/未走行の判定は `route_progress.current_index`
+    との比較で行う。
     """
 
     localization = snapshot.localization_state
@@ -149,6 +158,9 @@ def build_map_state_payload(snapshot: ConsoleSnapshot) -> Dict[str, Any]:
             'current_index': route.current_index,
             'total_waypoints': route.total_waypoints,
             'progress_ratio': route.progress_ratio,
+        },
+        'route': {
+            'waypoints': [_waypoint_payload(waypoint) for waypoint in route.waypoints],
         },
     }
 

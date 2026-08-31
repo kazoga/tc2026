@@ -9,9 +9,8 @@ function_design.md 7章）。走行中の通常監視はダッシュボード、
 空いた領域を地図表示の拡大に充てる。
 
 地図表示は `robot_console_ui_renewal_input.md` 8.4節の候補A（QWebEngineViewで
-地図HTMLを埋め込み、Leaflet+OSMタイルで自己位置・目標waypointを重畳表示する）
-を採用する。waypoint列・route区間の重畳はmap_model（未実装）が確定するまでの
-間表示できないため、現在位置・目標waypointのマーカーのみ表示する。
+地図HTMLを埋め込み、Leaflet+OSMタイルで自己位置・目標waypoint・route waypoint列を
+重畳表示する）を採用する。
 """
 
 from __future__ import annotations
@@ -169,6 +168,7 @@ class LocalizationSensorTab(QtWidgets.QWidget):
 
     def _update_route_overlay(self, snapshot: ConsoleSnapshot) -> None:
         self._map_view.update_map(snapshot.localization_state, snapshot.target_state)
+        self._map_view.update_route(snapshot.route_state)
 
     def _update_sensor_panels(self, snapshot: ConsoleSnapshot) -> None:
         panels = list(snapshot.sensor_panels) or list(DEFAULT_SENSOR_PANELS)

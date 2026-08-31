@@ -9,6 +9,8 @@ from robot_console.core.snapshot_model import (
     LocalizationStateView,
     ManualControlsView,
     OperationStateView,
+    RouteView,
+    RouteWaypointView,
     TargetView,
 )
 from robot_console.web.json_codec import (
@@ -30,6 +32,15 @@ def _sample_snapshot() -> ConsoleSnapshot:
             source='pose_enu', x_m=1.0, y_m=2.0, freshness=FreshnessLevel.OK
         ),
         target_state=TargetView(distance_m=3.5, within_arrival_threshold=False),
+        route_state=RouteView(
+            current_index=1,
+            total_waypoints=3,
+            waypoints=[
+                RouteWaypointView(index=0, latitude=36.083, longitude=140.113),
+                RouteWaypointView(index=1, latitude=36.0831, longitude=140.1131),
+                RouteWaypointView(index=2, latitude=None, longitude=None),
+            ],
+        ),
         manual_controls=ManualControlsView(manual_start_value=True),
         sensor_panels=[
             ImageReference(
@@ -86,6 +97,23 @@ def test_map_state_payload_uses_localization_and_target():
     assert payload['current_position']['x_m'] == 1.0
     assert payload['target_position']['x_m'] is None  # サンプルではx_m未設定
     assert payload['route_progress']['progress_ratio'] == 0.0  # RouteViewは既定値
+
+
+def test_snapshot_payload_route_includes_waypoints_with_null_coordinates():
+    payload = build_snapshot_payload(_sample_snapshot())
+
+    waypoints = payload['route']['waypoints']
+    assert len(waypoints) == 3
+    assert waypoints[0] == {'index': 0, 'latitude': 36.083, 'longitude': 140.113}
+    assert waypoints[2] == {'index': 2, 'latitude': None, 'longitude': None}
+
+
+def test_map_state_payload_route_includes_waypoints():
+    payload = build_map_state_payload(_sample_snapshot())
+
+    waypoints = payload['route']['waypoints']
+    assert len(waypoints) == 3
+    assert waypoints[1] == {'index': 1, 'latitude': 36.0831, 'longitude': 140.1131}
 
 
 def test_sensor_panels_payload_matches_snapshot_panels():

@@ -5,7 +5,12 @@ import json
 import pytest
 from PyQt5 import QtWidgets
 
-from robot_console.core.snapshot_model import LocalizationStateView, TargetView
+from robot_console.core.snapshot_model import (
+    LocalizationStateView,
+    RouteView,
+    RouteWaypointView,
+    TargetView,
+)
 from robot_console.ui_qt.widgets.map_view import (
     DEFAULT_LATITUDE,
     DEFAULT_LONGITUDE,
@@ -13,6 +18,7 @@ from robot_console.ui_qt.widgets.map_view import (
     MapView,
     build_map_html,
     build_update_markers_script,
+    build_update_route_script,
 )
 
 
@@ -58,9 +64,43 @@ def test_build_update_markers_script_handles_missing_position():
     assert json.dumps({'latitude': None, 'longitude': None}) in script
 
 
+def test_build_update_route_script_serializes_waypoints_and_current_index():
+    route = RouteView(
+        current_index=1,
+        waypoints=[
+            RouteWaypointView(index=0, latitude=36.083, longitude=140.113),
+            RouteWaypointView(index=1, latitude=36.0831, longitude=140.1131),
+        ],
+    )
+
+    script = build_update_route_script(route)
+
+    assert script.startswith('updateRoute(')
+    assert json.dumps({'index': 0, 'latitude': 36.083, 'longitude': 140.113}) in script
+    assert script.endswith('1);')
+
+
+def test_build_update_route_script_handles_empty_waypoints():
+    route = RouteView()
+
+    script = build_update_route_script(route)
+
+    assert script == 'updateRoute([], 0);'
+
+
 def test_map_view_update_map_does_not_raise(qt_app):
     view = MapView()
     localization = LocalizationStateView(latitude=36.083, longitude=140.113)
     target = TargetView(latitude=36.0832, longitude=140.1132)
 
     view.update_map(localization, target)
+
+
+def test_map_view_update_route_does_not_raise(qt_app):
+    view = MapView()
+    route = RouteView(
+        current_index=0,
+        waypoints=[RouteWaypointView(index=0, latitude=36.083, longitude=140.113)],
+    )
+
+    view.update_route(route)

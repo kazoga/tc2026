@@ -1,10 +1,10 @@
 """PyQt5側の地図表示Widget（`robot_console_ui_renewal_input.md` 8.4節 候補A）。
 
 `QWebEngineView` にLeaflet + OpenStreetMapタイルの地図HTMLを埋め込み、現在位置・
-目標waypointをマーカー表示する。HTML遠隔観測UI（`web/static/app.js`）と同じ
-Leaflet 1.9.4 + OSMタイルを用いて表示内容を揃える。waypoint列・route区間の重畳は
-map_model（未実装）が確定するまでの間表示できないため、現在位置・目標waypointの
-マーカーのみ表示する。
+目標waypoint・route waypoint列を表示する。HTML遠隔観測UI（`web/static/app.js`）と
+同じLeaflet 1.9.4 + OSMタイルを用いて表示内容を揃える。waypoint列は
+`RouteView.waypoints`（緯度経度を持つもののみ）から描画し、`current_index`を
+境に走行済み/未走行を色分けする。
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from typing import Optional
 from PyQt5 import QtWidgets
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 
-from robot_console.core.snapshot_model import LocalizationStateView, TargetView
+from robot_console.core.snapshot_model import LocalizationStateView, RouteView, TargetView
 
 DEFAULT_LATITUDE = 36.083
 DEFAULT_LONGITUDE = 140.113
@@ -44,6 +44,57 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 var currentMarker = null;
 var targetMarker = null;
 var hasCentered = false;
+
+var routeWaypointMarkers = [];
+var routeTraveledPolyline = null;
+var routeUntraveledPolyline = null;
+var knownRouteWaypointCount = -1;
+var ROUTE_TRAVELED_COLOR = '#757575';
+var ROUTE_UNTRAVELED_COLOR = '#66bb6a';
+
+function updateRoute(waypoints, currentIndex) {
+  var validWaypoints = waypoints.filter(function (waypoint) {
+    return waypoint.latitude !== null && waypoint.longitude !== null;
+  });
+
+  if (validWaypoints.length !== knownRouteWaypointCount) {
+    for (var i = 0; i < routeWaypointMarkers.length; i += 1) {
+      map.removeLayer(routeWaypointMarkers[i]);
+    }
+    routeWaypointMarkers = validWaypoints.map(function (waypoint) {
+      return L.circleMarker([waypoint.latitude, waypoint.longitude], {
+        radius: 3, weight: 1, fillOpacity: 0.9,
+      }).addTo(map);
+    });
+    knownRouteWaypointCount = validWaypoints.length;
+  }
+
+  for (var j = 0; j < validWaypoints.length; j += 1) {
+    var waypoint = validWaypoints[j];
+    var traveled = waypoint.index < currentIndex;
+    var color = traveled ? ROUTE_TRAVELED_COLOR : ROUTE_UNTRAVELED_COLOR;
+    routeWaypointMarkers[j].setLatLng([waypoint.latitude, waypoint.longitude]);
+    routeWaypointMarkers[j].setStyle({ color: color, fillColor: color });
+  }
+
+  if (routeTraveledPolyline === null) {
+    routeTraveledPolyline = L.polyline([], {
+      color: ROUTE_TRAVELED_COLOR, weight: 3,
+    }).addTo(map);
+    routeUntraveledPolyline = L.polyline([], {
+      color: ROUTE_UNTRAVELED_COLOR, weight: 3,
+    }).addTo(map);
+  }
+
+  var traveledLatLngs = validWaypoints
+    .filter(function (waypoint) { return waypoint.index <= currentIndex; })
+    .map(function (waypoint) { return [waypoint.latitude, waypoint.longitude]; });
+  var untraveledLatLngs = validWaypoints
+    .filter(function (waypoint) { return waypoint.index >= currentIndex; })
+    .map(function (waypoint) { return [waypoint.latitude, waypoint.longitude]; });
+  routeTraveledPolyline.setLatLngs(traveledLatLngs);
+  routeUntraveledPolyline.setLatLngs(untraveledLatLngs);
+}
 
 function updateMarkers(current, target) {
   if (current && current.latitude !== null && current.longitude !== null) {
@@ -112,6 +163,16 @@ def build_update_markers_script(
     return 'updateMarkers({}, {});'.format(json.dumps(current_payload), json.dumps(target_payload))
 
 
+def build_update_route_script(route: RouteView) -> str:
+    """route waypoint列をLeaflet地図へ反映するJavaScriptを組み立てる。"""
+
+    waypoints_payload = [
+        {'index': waypoint.index, 'latitude': waypoint.latitude, 'longitude': waypoint.longitude}
+        for waypoint in route.waypoints
+    ]
+    return 'updateRoute({}, {});'.format(json.dumps(waypoints_payload), json.dumps(route.current_index))
+
+
 class MapView(QWebEngineView):
     """LeafletベースのOSM地図をPyQt5画面へ埋め込むWidget。"""
 
@@ -123,3 +184,8 @@ class MapView(QWebEngineView):
         """`ConsoleSnapshot` の自己位置・目標waypointをマーカーへ反映する。"""
 
         self.page().runJavaScript(build_update_markers_script(localization, target))
+
+    def update_route(self, route: RouteView) -> None:
+        """`ConsoleSnapshot` のroute waypoint列をLeaflet地図へ反映する。"""
+
+        self.page().runJavaScript(build_update_route_script(route))

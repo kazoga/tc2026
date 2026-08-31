@@ -4,9 +4,9 @@
 // マーカーを更新し、/images/{panel_id} を別周期でポーリングして画像を更新する。
 // 本ページは観測専用であり、書き込み系のfetch（POST/PUT/DELETE）は行わない。
 // 地図はLeaflet + OpenStreetMapタイルを使うため、閲覧時にインターネット接続が
-// 必要（robot_console_ui_renewal_input.md 8.4節 候補A）。waypoint列・route
-// polylineはmap_model（未実装）が確定するまでの間表示できないため、現在位置・
-// 目標位置のマーカーのみ表示する。
+// 必要（robot_console_ui_renewal_input.md 8.4節 候補A）。waypoint列は
+// snapshot.route.waypoints（緯度経度を持つもののみ）から描画し、
+// snapshot.route.current_index を境に走行済み/未走行を色分けする。
 
 const SNAPSHOT_POLL_MS = 1000;
 const IMAGE_POLL_MS = 1500;
@@ -27,6 +27,13 @@ let leafletMap = null;
 let currentPositionMarker = null;
 let targetPositionMarker = null;
 let hasCenteredMap = false;
+let routeWaypointMarkers = [];
+let routeTraveledPolyline = null;
+let routeUntraveledPolyline = null;
+let knownRouteWaypointCount = -1;
+
+const ROUTE_TRAVELED_COLOR = '#757575';
+const ROUTE_UNTRAVELED_COLOR = '#66bb6a';
 
 function freshnessColor(level) {
   return FRESHNESS_COLORS[level] || FRESHNESS_COLORS.UNKNOWN;
@@ -88,6 +95,62 @@ function updateMapMarkers(snapshot) {
       targetPositionMarker.setLatLng(latlng);
     }
   }
+}
+
+function updateRouteOverlay(snapshot) {
+  if (leafletMap === null) {
+    return;
+  }
+
+  const route = snapshot.route || {};
+  const currentIndex = route.current_index || 0;
+  const validWaypoints = (route.waypoints || []).filter(
+    (waypoint) => waypoint.latitude !== null && waypoint.longitude !== null,
+  );
+
+  // waypoint数が変わった場合のみマーカーを作り直す。緯度経度・走行状態の
+  // 更新は既存マーカーのsetLatLng/setStyleで行い、DOM再生成を避ける。
+  if (validWaypoints.length !== knownRouteWaypointCount) {
+    for (const marker of routeWaypointMarkers) {
+      leafletMap.removeLayer(marker);
+    }
+    routeWaypointMarkers = validWaypoints.map((waypoint) =>
+      L.circleMarker([waypoint.latitude, waypoint.longitude], {
+        radius: 3,
+        weight: 1,
+        fillOpacity: 0.9,
+      }).addTo(leafletMap),
+    );
+    knownRouteWaypointCount = validWaypoints.length;
+  }
+
+  for (let i = 0; i < validWaypoints.length; i += 1) {
+    const waypoint = validWaypoints[i];
+    const traveled = waypoint.index < currentIndex;
+    const color = traveled ? ROUTE_TRAVELED_COLOR : ROUTE_UNTRAVELED_COLOR;
+    routeWaypointMarkers[i].setLatLng([waypoint.latitude, waypoint.longitude]);
+    routeWaypointMarkers[i].setStyle({ color, fillColor: color });
+  }
+
+  if (routeTraveledPolyline === null) {
+    routeTraveledPolyline = L.polyline([], {
+      color: ROUTE_TRAVELED_COLOR,
+      weight: 3,
+    }).addTo(leafletMap);
+    routeUntraveledPolyline = L.polyline([], {
+      color: ROUTE_UNTRAVELED_COLOR,
+      weight: 3,
+    }).addTo(leafletMap);
+  }
+
+  const traveledLatLngs = validWaypoints
+    .filter((waypoint) => waypoint.index <= currentIndex)
+    .map((waypoint) => [waypoint.latitude, waypoint.longitude]);
+  const untraveledLatLngs = validWaypoints
+    .filter((waypoint) => waypoint.index >= currentIndex)
+    .map((waypoint) => [waypoint.latitude, waypoint.longitude]);
+  routeTraveledPolyline.setLatLngs(traveledLatLngs);
+  routeUntraveledPolyline.setLatLngs(untraveledLatLngs);
 }
 
 function appendField(dl, label, value) {
@@ -209,6 +272,7 @@ async function pollSnapshot() {
       renderSummary(snapshot);
       renderGpsSummary(snapshot);
       renderMapCaption(snapshot);
+      updateRouteOverlay(snapshot);
       updateMapMarkers(snapshot);
       renderSensorGrid(snapshot.sensor_panels);
       renderHealthTable(snapshot.health);

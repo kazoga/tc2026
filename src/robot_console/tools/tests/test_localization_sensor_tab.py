@@ -10,6 +10,8 @@ from robot_console.core.snapshot_model import (
     ImageReference,
     LocalizationStateView,
     OperationStateView,
+    RouteView,
+    RouteWaypointView,
     TargetView,
 )
 from robot_console.ui_qt.localization_sensor_tab import (
@@ -81,6 +83,24 @@ def test_update_snapshot_pushes_localization_and_target_to_map_view(qt_app):
     tab.update_snapshot(snapshot)
 
     assert calls == [(localization_state, target_state)]
+
+
+def test_update_snapshot_pushes_route_waypoints_to_map_view(qt_app):
+    tab = LocalizationSensorTab()
+    calls = []
+    tab._map_view.update_route = lambda route: calls.append(route)
+    route_state = RouteView(
+        current_index=1,
+        waypoints=[
+            RouteWaypointView(index=0, latitude=36.083, longitude=140.113),
+            RouteWaypointView(index=1, latitude=36.0831, longitude=140.1131),
+        ],
+    )
+    snapshot = ConsoleSnapshot(route_state=route_state)
+
+    tab.update_snapshot(snapshot)
+
+    assert calls == [route_state]
 
 
 def test_back_to_dashboard_signal_emitted_on_button_click(qt_app):

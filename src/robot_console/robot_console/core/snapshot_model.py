@@ -55,6 +55,20 @@ class OperationStateView:
 
 
 @dataclass
+class RouteWaypointView:
+    """地図重畳用のwaypoint 1点分の表示データ（8.4節 waypoint列表示）。
+
+    `tc_route_msgs/Waypoint` の `geo_pose`（`has_geo_pose=True` の場合）に
+    対応する。緯度経度が無い場合（ENUのみでLLH未確定の場合）は地図上には
+    描画しない。
+    """
+
+    index: int = 0
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+@dataclass
 class RouteView:
     """route_manager 由来の運行状態（Route/Followerカードのroute_manager部分）。"""
 
@@ -66,6 +80,7 @@ class RouteView:
     total_waypoints: int = 0
     progress_ratio: float = 0.0
     coordinate_kind: str = 'enu'  # enu / llh
+    waypoints: List[RouteWaypointView] = field(default_factory=list)
     updated_at: Optional[datetime] = None
 
 
