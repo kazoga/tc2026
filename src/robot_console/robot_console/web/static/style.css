@@ -36,8 +36,41 @@ header h1 {
 
 main {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: 1fr;
   gap: 16px;
+}
+
+/* 768px以上（タブレット・PC・横向きスマホ）では、状態サマリ+GPSを左列に縦積みし、
+   地図を右側に大きく固定配置する。768px未満はDOM順の1列表示のまま。 */
+@media (min-width: 768px) {
+  main {
+    grid-template-columns: minmax(240px, 1fr) minmax(280px, 1fr) minmax(280px, 1fr);
+    grid-template-areas:
+      "summary map map"
+      "gps-summary map map"
+      "sensors sensors sensors"
+      "health health health";
+  }
+
+  #summary {
+    grid-area: summary;
+  }
+
+  #gps-summary {
+    grid-area: gps-summary;
+  }
+
+  #map {
+    grid-area: map;
+  }
+
+  #sensors {
+    grid-area: sensors;
+  }
+
+  #health {
+    grid-area: health;
+  }
 }
 
 .panel {
