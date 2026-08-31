@@ -178,14 +178,32 @@ class MapView(QWebEngineView):
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
+        self._page_loaded = False
+        self.loadFinished.connect(self._on_load_finished)
         self.setHtml(build_map_html())
+
+    def _on_load_finished(self, ok: bool) -> None:
+        """`setHtml()` の非同期読み込み完了を記録する。
+
+        読み込み完了前に`update_map`/`update_route`が呼ばれると、Leaflet側の
+        `updateMarkers`/`updateRoute`関数がまだ定義されておらず
+        `ReferenceError`になるため、完了までは更新を無視する
+        （次回のQTimerポーリングで改めて反映される）。
+        """
+
+        self._page_loaded = bool(ok)
 
     def update_map(self, localization: LocalizationStateView, target: TargetView) -> None:
         """`ConsoleSnapshot` の自己位置・目標waypointをマーカーへ反映する。"""
 
+        if not self._page_loaded:
+            return
         self.page().runJavaScript(build_update_markers_script(localization, target))
 
     def update_route(self, route: RouteView) -> None:
         """`ConsoleSnapshot` のroute waypoint列をLeaflet地図へ反映する。"""
+
+        if not self._page_loaded:
+            return
 
         self.page().runJavaScript(build_update_route_script(route))

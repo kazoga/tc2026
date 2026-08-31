@@ -13,6 +13,7 @@ from .business_mode import (
     LaunchPresetEntry,
     get_preset,
 )
+from .console_core import ConsoleCore
 from .freshness import (
     DEFAULT_LOST_SEC,
     DEFAULT_STALE_SEC,
@@ -60,6 +61,7 @@ from .snapshot_model import (
     ObstacleStateView,
     OperationStateView,
     RouteView,
+    RouteWaypointView,
     TargetView,
 )
 
@@ -70,6 +72,7 @@ __all__ = [
     'LaunchPlan',
     'LaunchPresetEntry',
     'get_preset',
+    'ConsoleCore',
     'DEFAULT_LOST_SEC',
     'DEFAULT_STALE_SEC',
     'FreshnessLevel',
@@ -108,5 +111,6 @@ __all__ = [
     'ObstacleStateView',
     'OperationStateView',
     'RouteView',
+    'RouteWaypointView',
     'TargetView',
 ]

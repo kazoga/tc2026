@@ -1,9 +1,9 @@
 """HTML遠隔観測UIのスタンドアロン起動エントリポイント。
 
-Phase7時点ではROS 2ノードとの統合を行わず、既定（空）の`ConsoleSnapshot`を
-返すサーバのみを起動する。ROS統合は後続フェーズで `ros/console_node.py` から
-本サーバへSnapshot/ImageStoreを供給する構成へ拡張する
-（robot_console_gui_architecture_design.md 3章・15章）。
+`ConsoleCore` を生成し、`ros/console_node.py::start_ros_thread()` でHTTP
+サーバスレッドとは別のrclpy executorスレッドを起動する
+（robot_console_gui_architecture_design.md 3章・15章）。`WebObservationServer`
+の`snapshot_provider`/`image_store`は`ConsoleCore`が保持するものを直接使う。
 """
 
 from __future__ import annotations
@@ -13,7 +13,8 @@ import sys
 import time
 from typing import List, Optional
 
-from robot_console.core.snapshot_model import ConsoleSnapshot
+from robot_console.core.console_core import ConsoleCore
+from robot_console.ros.console_node import start_ros_thread
 from robot_console.web.server import DEFAULT_HOST, DEFAULT_PORT, WebObservationServer
 
 
@@ -32,7 +33,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     """HTML遠隔観測UIサーバを起動し、Ctrl+Cまでブロックする。"""
 
     args = _parse_args(argv if argv is not None else sys.argv[1:])
-    server = WebObservationServer(lambda: ConsoleSnapshot(), host=args.host, port=args.port)
+
+    core = ConsoleCore()
+    ros_handle = start_ros_thread(core, node_name='robot_console_web')
+
+    server = WebObservationServer(
+        core.build_snapshot, core.image_store, host=args.host, port=args.port
+    )
     server.start()
     address = server.address
     if address is not None:
@@ -44,6 +51,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         pass
     finally:
         server.stop()
+        ros_handle.stop()
     return 0
 
 

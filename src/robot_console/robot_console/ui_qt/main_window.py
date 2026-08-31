@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional
 
 from PyQt5 import QtWidgets
 
+from ..core.console_core import ConsoleCore
+from ..core.snapshot_model import ConsoleSnapshot
 from .console_log_tab import ConsoleLogTab
 from .dashboard_tab import DashboardTab
 from .launch_settings_tab import LaunchSettingsTab
@@ -31,8 +33,14 @@ class MainWindow(QtWidgets.QMainWindow):
     アプリ内コンテンツ領域全体を16:9の論理キャンバスとして拡縮する。
     """
 
-    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+    def __init__(
+        self,
+        parent: Optional[QtWidgets.QWidget] = None,
+        *,
+        core: Optional[ConsoleCore] = None,
+    ) -> None:
         super().__init__(parent)
+        self._core = core
         self._apply_base_font()
         self.setWindowTitle(WINDOW_TITLE)
         self.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
@@ -68,6 +76,61 @@ class MainWindow(QtWidgets.QMainWindow):
             self.launch_settings_tab.apply_preset
         )
         self._on_launch_plan_changed()
+
+        if self._core is not None:
+            self.dashboard_tab.launch_control_card.launch_requested.connect(
+                self._core.request_launch
+            )
+            self.dashboard_tab.launch_control_card.stop_requested.connect(
+                self._core.request_stop
+            )
+            self.dashboard_tab.launch_control_card.launch_all_requested.connect(
+                self._on_launch_all_requested
+            )
+            self.dashboard_tab.launch_control_card.stop_all_requested.connect(
+                self._on_stop_all_requested
+            )
+            self.dashboard_tab.manual_ops_card.manual_start_requested.connect(
+                self._core.send_manual_start
+            )
+            self.dashboard_tab.manual_ops_card.sig_recog_requested.connect(
+                self._core.send_sig_recog
+            )
+            self.dashboard_tab.manual_ops_card.road_blocked_requested.connect(
+                self._core.send_road_blocked
+            )
+            self.dashboard_tab.manual_ops_card.obstacle_hint_override_requested.connect(
+                self._core.send_obstacle_hint_override
+            )
+            self.dashboard_tab.manual_ops_card.obstacle_hint_stop_requested.connect(
+                self._core.send_obstacle_hint_stop
+            )
+            self.dashboard_tab.manual_ops_card.frame_image_requested.connect(
+                self._core.send_frame_image_request
+            )
+
+    def update_snapshot(self, snapshot: ConsoleSnapshot) -> None:
+        """`ConsoleSnapshot` を各タブへ配布する（QTimer駆動でConsoleCoreから呼ばれる）。"""
+
+        self.dashboard_tab.update_snapshot(snapshot)
+        self.localization_sensor_tab.update_snapshot(snapshot)
+        self.console_log_tab.update_snapshot(snapshot)
+
+    def _on_launch_all_requested(self, profile_ids: List[str]) -> None:
+        """起動予定ノード一覧（プラン）の一括起動要求を反映する。"""
+
+        if self._core is None:
+            return
+        for profile_id in profile_ids:
+            self._core.request_launch(profile_id)
+
+    def _on_stop_all_requested(self, profile_ids: List[str]) -> None:
+        """起動予定ノード一覧（プラン）の一括停止要求を反映する。"""
+
+        if self._core is None:
+            return
+        for profile_id in profile_ids:
+            self._core.request_stop(profile_id)
 
     def _on_node_health_profile_selected(self, profile_id: str) -> None:
         """Node Healthカードのチップ選択を受け、コンソールログタブへ遷移する（9章 画面間導線）。"""

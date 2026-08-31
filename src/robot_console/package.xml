@@ -24,6 +24,8 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>visualization_msgs</exec_depend>
   <exec_depend>tc_route_msgs</exec_depend>
+  <exec_depend>tc_geo_msgs</exec_depend>
+  <exec_depend>rtk_gps_um982_msgs</exec_depend>
   <test_depend>python3-pytest-forked</test_depend>
 
   <export>
