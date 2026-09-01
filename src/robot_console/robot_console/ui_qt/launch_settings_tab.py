@@ -53,6 +53,10 @@ class LaunchSettingsTab(QtWidgets.QWidget):
     """業務開始時に使う起動・設定画面。"""
 
     plan_changed = QtCore.pyqtSignal()
+    param_changed = QtCore.pyqtSignal(str, str)
+    alternate_toggled = QtCore.pyqtSignal(str, bool)
+    simulator_toggled = QtCore.pyqtSignal(str, bool)
+    argument_changed = QtCore.pyqtSignal(str, str, str)
 
     def __init__(
         self,
@@ -413,6 +417,7 @@ class LaunchSettingsTab(QtWidgets.QWidget):
             return
         state.selected_param = text or None
         self._refresh_plan_table()
+        self.param_changed.emit(profile_id, text)
 
     def _on_alternate_toggled(self, profile_id: str, checked: bool) -> None:
         state = self._states.get(profile_id)
@@ -420,6 +425,7 @@ class LaunchSettingsTab(QtWidgets.QWidget):
             return
         state.use_alternate_launch = checked
         self._update_preview()
+        self.alternate_toggled.emit(profile_id, checked)
 
     def _on_simulator_toggled(self, profile_id: str, checked: bool) -> None:
         state = self._states.get(profile_id)
@@ -427,6 +433,7 @@ class LaunchSettingsTab(QtWidgets.QWidget):
             return
         state.simulator_enabled = checked
         self._update_preview()
+        self.simulator_toggled.emit(profile_id, checked)
 
     def _on_argument_changed(self, profile_id: str, argument_name: str, value: str) -> None:
         state = self._states.get(profile_id)
@@ -434,6 +441,7 @@ class LaunchSettingsTab(QtWidgets.QWidget):
             return
         state.override_inputs[argument_name] = value
         self._refresh_plan_table()
+        self.argument_changed.emit(profile_id, argument_name, value)
 
     # ---------- 起動内容プレビュー（4.8節） ----------
     def _build_preview_panel(self) -> QtWidgets.QGroupBox:

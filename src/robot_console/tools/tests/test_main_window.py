@@ -8,7 +8,9 @@ import pytest
 from PyQt5 import QtWidgets
 
 from robot_console.core.freshness import FreshnessLevel
+from robot_console.core.launch_profile import LaunchProfileState
 from robot_console.core.snapshot_model import ConsoleSnapshot, HealthSummaryView
+from robot_console.utils import NodeLaunchStatus
 from robot_console.ui_qt.main_window import (
     TAB_TITLE_CONSOLE_LOG,
     TAB_TITLE_DASHBOARD,
@@ -136,6 +138,25 @@ def test_update_snapshot_fans_out_to_dashboard_and_localization_and_log_tabs(qt_
     assert window.localization_sensor_tab._phase_label.text() == snapshot.operation_state.phase
 
 
+def test_update_snapshot_reflects_launch_states_into_launch_settings_tab(qt_app):
+    window = MainWindow()
+    snapshot = ConsoleSnapshot(
+        launch_profiles={
+            'route_manager': LaunchProfileState(
+                profile_id='route_manager',
+                status=NodeLaunchStatus.RUNNING,
+                process_id=4242,
+            )
+        }
+    )
+
+    window.update_snapshot(snapshot)
+
+    state = window.launch_settings_tab.state_for('route_manager')
+    assert state.status == NodeLaunchStatus.RUNNING
+    assert state.process_id == 4242
+
+
 class _FakeConsoleCore:
     """LaunchControlCard/ManualOpsCardのシグナル配線確認用の簡易ダブル。"""
 
@@ -148,6 +169,10 @@ class _FakeConsoleCore:
         self.obstacle_hint_override_calls: list = []
         self.obstacle_hint_stop_calls = 0
         self.frame_image_calls: list = []
+        self.selected_param_calls: list = []
+        self.use_alternate_launch_calls: list = []
+        self.simulator_enabled_calls: list = []
+        self.launch_override_calls: list = []
 
     def request_launch(self, profile_id: str) -> None:
         self.launched.append(profile_id)
@@ -174,6 +199,18 @@ class _FakeConsoleCore:
 
     def send_frame_image_request(self, path: str) -> None:
         self.frame_image_calls.append(path)
+
+    def update_selected_param(self, profile_id: str, param_path) -> None:
+        self.selected_param_calls.append((profile_id, param_path))
+
+    def update_use_alternate_launch(self, profile_id: str, enabled: bool) -> None:
+        self.use_alternate_launch_calls.append((profile_id, enabled))
+
+    def update_simulator_enabled(self, profile_id: str, enabled: bool) -> None:
+        self.simulator_enabled_calls.append((profile_id, enabled))
+
+    def update_launch_override(self, profile_id: str, key: str, value: str) -> None:
+        self.launch_override_calls.append((profile_id, key, value))
 
 
 def test_launch_requested_signal_calls_core_request_launch(qt_app):
@@ -217,6 +254,44 @@ def test_launch_signals_are_not_connected_when_core_is_none(qt_app):
 
     # coreが無い場合でも例外を送出しないことのみ確認する。
     window.dashboard_tab.launch_control_card.launch_requested.emit('rtk_gps_um982')
+
+
+def test_launch_settings_tab_param_changed_signal_calls_core_update_selected_param(qt_app):
+    core = _FakeConsoleCore()
+    window = MainWindow(core=core)
+
+    window.launch_settings_tab.param_changed.emit('route_planner', 'params/tsukuba.yaml')
+
+    assert core.selected_param_calls == [('route_planner', 'params/tsukuba.yaml')]
+
+
+def test_launch_settings_tab_param_changed_signal_converts_empty_text_to_none(qt_app):
+    core = _FakeConsoleCore()
+    window = MainWindow(core=core)
+
+    window.launch_settings_tab.param_changed.emit('route_planner', '')
+
+    assert core.selected_param_calls == [('route_planner', None)]
+
+
+def test_launch_settings_tab_alternate_and_simulator_toggles_call_core(qt_app):
+    core = _FakeConsoleCore()
+    window = MainWindow(core=core)
+
+    window.launch_settings_tab.alternate_toggled.emit('robot_navigator', True)
+    window.launch_settings_tab.simulator_toggled.emit('robot_navigator', True)
+
+    assert core.use_alternate_launch_calls == [('robot_navigator', True)]
+    assert core.simulator_enabled_calls == [('robot_navigator', True)]
+
+
+def test_launch_settings_tab_argument_changed_signal_calls_core_update_launch_override(qt_app):
+    core = _FakeConsoleCore()
+    window = MainWindow(core=core)
+
+    window.launch_settings_tab.argument_changed.emit('drive_mode_manager', 'joy_input', 'ps3_joy_sim')
+
+    assert core.launch_override_calls == [('drive_mode_manager', 'joy_input', 'ps3_joy_sim')]
 
 
 def test_manual_ops_card_signals_are_connected_to_core(qt_app):

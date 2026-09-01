@@ -275,6 +275,33 @@ def resolve_effective_overrides(
     return effective
 
 
+def resolve_param_path(profile: LaunchProfile, param_path: Optional[str]) -> Optional[str]:
+    """`param_path` をパッケージ共有ディレクトリ基準の絶対パスへ解決する。
+
+    `LaunchProfile.default_param` / `LaunchProfileState.selected_param` は
+    `'params/tsukuba.yaml'` のようなパッケージ相対のフラグメントで保持される。
+    `ros2 launch` の各launchファイルはこの文字列をそのまま
+    `Node(parameters=[...])` や独自の `open()` へ渡すため、相対パスのままでは
+    サブプロセスの作業ディレクトリ次第で解決に失敗する。実際に起動する直前に
+    本関数で絶対パスへ解決する。
+
+    既に絶対パスの場合、`param_path` が未指定の場合、または
+    `ament_index_python`/対象パッケージが利用できない場合は、
+    `param_path` をそのまま返す（呼び出し元やlaunchファイル側の既定解決に委ねる）。
+    """
+
+    if not param_path or Path(param_path).is_absolute():
+        return param_path
+    if get_package_share_directory is None:
+        return param_path
+    package_name = profile.param_package or profile.package
+    try:
+        share_dir = Path(get_package_share_directory(package_name))
+    except PackageNotFoundError:
+        return param_path
+    return str(share_dir / param_path)
+
+
 def build_launch_args(
     profile: LaunchProfile,
     *,

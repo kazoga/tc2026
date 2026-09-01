@@ -86,6 +86,50 @@ def test_request_launch_ignores_unknown_profile_id():
     core.request_launch('unknown_profile')  # 例外を送出しないことのみ確認
 
 
+def test_request_launch_uses_state_updated_by_launch_settings_setters():
+    core = _make_core()
+    profile_id = 'route_planner'
+    calls: list = []
+    core.launch_manager.launch = lambda profile, **kwargs: calls.append((profile, kwargs))
+
+    core.update_selected_param(profile_id, 'params/tsukuba.yaml')
+    core.update_use_alternate_launch(profile_id, True)
+    core.update_simulator_enabled(profile_id, True)
+
+    core.request_launch(profile_id)
+
+    assert len(calls) == 1
+    profile, kwargs = calls[0]
+    assert profile.profile_id == profile_id
+    assert kwargs['param_path'] == 'params/tsukuba.yaml'
+    assert kwargs['use_alternate'] is True
+    assert kwargs['simulator_enabled'] is True
+
+
+def test_request_launch_explicit_kwargs_override_state():
+    core = _make_core()
+    profile_id = 'route_planner'
+    calls: list = []
+    core.launch_manager.launch = lambda profile, **kwargs: calls.append((profile, kwargs))
+
+    core.update_simulator_enabled(profile_id, True)
+    core.request_launch(profile_id, simulator_enabled=False)
+
+    assert calls[0][1]['simulator_enabled'] is False
+
+
+def test_update_launch_override_reflects_in_request_launch_overrides():
+    core = _make_core()
+    profile_id = 'drive_mode_manager'
+    calls: list = []
+    core.launch_manager.launch = lambda profile, **kwargs: calls.append((profile, kwargs))
+
+    core.update_launch_override(profile_id, 'joy_input', 'ps3_joy_sim')
+    core.request_launch(profile_id)
+
+    assert calls[0][1]['overrides'].get('joy_input') == 'ps3_joy_sim'
+
+
 def _waypoint(index, *, has_geo_pose=False, latitude=None, longitude=None):
     geo_pose = SimpleNamespace(point=SimpleNamespace(latitude=latitude, longitude=longitude))
     return SimpleNamespace(index=index, has_geo_pose=has_geo_pose, geo_pose=geo_pose)

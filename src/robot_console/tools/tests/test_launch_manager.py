@@ -7,6 +7,9 @@
 import queue
 import subprocess
 import threading
+from pathlib import Path
+
+from ament_index_python.packages import get_package_share_directory
 
 from robot_console.core.launch_manager import LaunchManager
 from robot_console.core.launch_profile import LaunchProfile
@@ -107,7 +110,13 @@ def test_launch_builds_expected_command(monkeypatch):
     assert len(recorded) == 1
     args = recorded[0].args
     assert args[:4] == ['ros2', 'launch', 'robot_navigator', 'robot_navigator.launch.py']
-    assert 'param_file:=params/custom.yaml' in args
+    # param_pathはパッケージ相対のフラグメントのため、起動直前にパッケージ共有
+    # ディレクトリ基準の絶対パスへ解決される（相対のままだとサブプロセスの
+    # 作業ディレクトリ次第で解決に失敗するため）。
+    expected_param_path = str(
+        Path(get_package_share_directory('robot_navigator')) / 'params/custom.yaml'
+    )
+    assert f'param_file:={expected_param_path}' in args
     assert 'cmd_vel_topic:=/cmd_vel/autonomous' in args
 
     status_id, status, _pid, _error = events.get(timeout=1.0)

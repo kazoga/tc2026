@@ -108,6 +108,20 @@ class MainWindow(QtWidgets.QMainWindow):
             self.dashboard_tab.manual_ops_card.frame_image_requested.connect(
                 self._core.send_frame_image_request
             )
+            self.launch_settings_tab.param_changed.connect(
+                lambda profile_id, text: self._core.update_selected_param(
+                    profile_id, text or None
+                )
+            )
+            self.launch_settings_tab.alternate_toggled.connect(
+                self._core.update_use_alternate_launch
+            )
+            self.launch_settings_tab.simulator_toggled.connect(
+                self._core.update_simulator_enabled
+            )
+            self.launch_settings_tab.argument_changed.connect(
+                self._core.update_launch_override
+            )
 
     def update_snapshot(self, snapshot: ConsoleSnapshot) -> None:
         """`ConsoleSnapshot` を各タブへ配布する（QTimer駆動でConsoleCoreから呼ばれる）。"""
@@ -115,6 +129,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.dashboard_tab.update_snapshot(snapshot)
         self.localization_sensor_tab.update_snapshot(snapshot)
         self.console_log_tab.update_snapshot(snapshot)
+        self.launch_settings_tab.update_launch_states(snapshot.launch_profiles)
 
     def _on_launch_all_requested(self, profile_ids: List[str]) -> None:
         """起動予定ノード一覧（プラン）の一括起動要求を反映する。"""

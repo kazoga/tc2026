@@ -16,7 +16,12 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Union
 
 from ..utils import NodeLaunchStatus
-from .launch_profile import LaunchProfile, build_launch_args, build_simulator_launch_args
+from .launch_profile import (
+    LaunchProfile,
+    build_launch_args,
+    build_simulator_launch_args,
+    resolve_param_path,
+)
 
 StatusCallback = Callable[[str, NodeLaunchStatus, Optional[int], Optional[str]], None]
 LogCallback = Callable[[str, str], None]
@@ -72,7 +77,7 @@ class LaunchManager:
 
             args = build_launch_args(
                 profile,
-                param_path=param_path,
+                param_path=resolve_param_path(profile, param_path),
                 use_alternate=use_alternate,
                 overrides=overrides,
             )

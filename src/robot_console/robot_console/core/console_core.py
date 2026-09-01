@@ -28,6 +28,7 @@ from .launch_profile import (
     LaunchProfileState,
     LaunchProfileStore,
     build_initial_states,
+    resolve_effective_overrides,
 )
 from .localization_adapter import (
     gps_view_from_rtk_status_msg,
@@ -233,29 +234,77 @@ class ConsoleCore:
         self,
         profile_id: str,
         *,
-        use_alternate: bool = False,
-        simulator_enabled: bool = False,
+        use_alternate: Optional[bool] = None,
+        simulator_enabled: Optional[bool] = None,
         overrides: Optional[Dict[str, str]] = None,
     ) -> None:
-        """指定profileの起動を要求する。未知のprofile_idは無視する。"""
+        """指定profileの起動を要求する。未知のprofile_idは無視する。
+
+        `use_alternate` / `simulator_enabled` / `overrides` を省略した場合は、
+        `update_selected_param()` 等で更新済みの `LaunchProfileState` の現在値を使う。
+        """
 
         profile = self._profile_store.get(profile_id)
         if profile is None:
             return
         state = self._launch_states.get(profile_id)
         param_path = state.selected_param if state else profile.default_param
+        resolved_use_alternate = (
+            use_alternate if use_alternate is not None
+            else (state.use_alternate_launch if state else False)
+        )
+        resolved_simulator_enabled = (
+            simulator_enabled if simulator_enabled is not None
+            else (state.simulator_enabled if state else False)
+        )
+        resolved_overrides = (
+            overrides if overrides is not None
+            else (resolve_effective_overrides(profile, state) if state else None)
+        )
         self.launch_manager.launch(
             profile,
             param_path=param_path,
-            use_alternate=use_alternate,
-            simulator_enabled=simulator_enabled,
-            overrides=overrides,
+            use_alternate=resolved_use_alternate,
+            simulator_enabled=resolved_simulator_enabled,
+            overrides=resolved_overrides,
         )
 
     def request_stop(self, profile_id: str) -> None:
         """指定profileの停止を要求する。"""
 
         self.launch_manager.stop(profile_id)
+
+    def update_selected_param(self, profile_id: str, param_path: Optional[str]) -> None:
+        """起動・設定タブで選択されたパラメータパスを反映する。"""
+
+        with self._lock:
+            state = self._launch_states.get(profile_id)
+            if state is not None:
+                state.selected_param = param_path
+
+    def update_use_alternate_launch(self, profile_id: str, enabled: bool) -> None:
+        """起動・設定タブの代替launch切替を反映する。"""
+
+        with self._lock:
+            state = self._launch_states.get(profile_id)
+            if state is not None:
+                state.use_alternate_launch = enabled
+
+    def update_simulator_enabled(self, profile_id: str, enabled: bool) -> None:
+        """起動・設定タブのsimulator切替を反映する。"""
+
+        with self._lock:
+            state = self._launch_states.get(profile_id)
+            if state is not None:
+                state.simulator_enabled = enabled
+
+    def update_launch_override(self, profile_id: str, key: str, value: str) -> None:
+        """起動・設定タブの引数override入力を反映する。"""
+
+        with self._lock:
+            state = self._launch_states.get(profile_id)
+            if state is not None:
+                state.override_inputs[key] = value
 
     def request_launch_all(self) -> None:
         """`launch_order` 順に全profileの起動を要求する。"""

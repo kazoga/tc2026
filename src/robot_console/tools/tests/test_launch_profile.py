@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from ament_index_python.packages import get_package_share_directory
+
 from robot_console.core.launch_profile import (
     LaunchProfile,
     LaunchProfileState,
@@ -10,6 +12,7 @@ from robot_console.core.launch_profile import (
     build_launch_args,
     build_simulator_launch_args,
     resolve_effective_overrides,
+    resolve_param_path,
 )
 from robot_console.utils import NodeLaunchStatus
 
@@ -215,6 +218,81 @@ def test_resolve_effective_overrides_prefers_state_input_over_default():
     # cmd_vel_topicはstate入力を優先、odom_topicはprofile既定値へfallback、
     # pose_enu_topicはどちらも無いため含めない。
     assert overrides == {'cmd_vel_topic': '/cmd_vel/manual', 'odom_topic': '/ypspur_ros/odom'}
+
+
+def test_resolve_param_path_joins_relative_path_with_package_share_directory():
+    profile = LaunchProfile(
+        profile_id='route_planner',
+        category='route_stack',
+        display_name='Route Planner',
+        package='route_planner',
+        launch_file='route_planner.launch.py',
+        param_argument='param_file',
+        default_param='params/default.yaml',
+    )
+
+    resolved = resolve_param_path(profile, 'params/tsukuba.yaml')
+
+    expected = str(Path(get_package_share_directory('route_planner')) / 'params/tsukuba.yaml')
+    assert resolved == expected
+
+
+def test_resolve_param_path_uses_param_package_when_different_from_package():
+    profile = LaunchProfile(
+        profile_id='road_blockage_detector',
+        category='perception_stack',
+        display_name='Road Blockage Detector',
+        package='road_blockage_detector',
+        launch_file='road_blockage_perception.launch.py',
+        param_argument='detector_param_file',
+        param_package='yolo_detector',
+        default_param='params/default.yaml',
+    )
+
+    resolved = resolve_param_path(profile, 'params/default.yaml')
+
+    expected = str(Path(get_package_share_directory('yolo_detector')) / 'params/default.yaml')
+    assert resolved == expected
+
+
+def test_resolve_param_path_returns_input_unchanged_when_already_absolute():
+    profile = LaunchProfile(
+        profile_id='route_planner',
+        category='route_stack',
+        display_name='Route Planner',
+        package='route_planner',
+        launch_file='route_planner.launch.py',
+    )
+
+    resolved = resolve_param_path(profile, '/tmp/custom.yaml')
+
+    assert resolved == '/tmp/custom.yaml'
+
+
+def test_resolve_param_path_returns_none_unchanged():
+    profile = LaunchProfile(
+        profile_id='route_planner',
+        category='route_stack',
+        display_name='Route Planner',
+        package='route_planner',
+        launch_file='route_planner.launch.py',
+    )
+
+    assert resolve_param_path(profile, None) is None
+
+
+def test_resolve_param_path_falls_back_to_original_when_package_not_found():
+    profile = LaunchProfile(
+        profile_id='unknown',
+        category='route_stack',
+        display_name='Unknown',
+        package='this_package_does_not_exist',
+        launch_file='unknown.launch.py',
+    )
+
+    resolved = resolve_param_path(profile, 'params/default.yaml')
+
+    assert resolved == 'params/default.yaml'
 
 
 def test_build_launch_args_uses_alternate_launch_file_when_requested():
