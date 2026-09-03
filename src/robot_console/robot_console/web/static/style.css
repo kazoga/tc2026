@@ -90,6 +90,38 @@ main {
   color: var(--accent);
 }
 
+/* snapshot取得の生死表示。閲覧者が「今見えている値が最新か」を常に判別できるよう、
+   正常時も含めて常時表示する。配色はapp.jsのFRESHNESS_COLORS（OK/LOST）に合わせる。 */
+.connection-status {
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.connection-status.is-ok {
+  border-color: #2e7d32;
+  background: #17251a;
+  color: #a5d6a7;
+}
+
+.connection-status.is-stale {
+  border-color: #c62828;
+  background: #2a1414;
+  color: #ff8a80;
+  font-weight: bold;
+}
+
+/* 更新停止中はサマリパネル自体も縁取り、値が古いことを一目で分かるようにする。 */
+#summary.is-stale {
+  border-color: #c62828;
+}
+
+#summary.is-stale .fields dd {
+  color: var(--muted);
+}
+
 .fields {
   display: grid;
   grid-template-columns: auto 1fr;

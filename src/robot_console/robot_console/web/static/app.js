@@ -3,6 +3,8 @@
 // /snapshot.json をポーリングして状態サマリ・GPS・センサ一覧・鮮度一覧・地図
 // マーカーを更新し、/images/{panel_id} を別周期でポーリングして画像を更新する。
 // 本ページは観測専用であり、書き込み系のfetch（POST/PUT/DELETE）は行わない。
+// 状態サマリ先頭には常にsnapshot取得の生死を表示し、更新が停止した場合は
+// 「表示中の値が最新ではない」旨を警告する（古い値を現在値と誤認させないため）。
 // 地図はLeaflet + OpenStreetMapタイルを使うため、閲覧時にインターネット接続が
 // 必要（robot_console_ui_renewal_input.md 8.4節 候補A）。waypoint列は
 // snapshot.route.waypoints（緯度経度を持つもののみ）から描画し、
@@ -10,6 +12,17 @@
 
 const SNAPSHOT_POLL_MS = 1000;
 const IMAGE_POLL_MS = 1500;
+
+// 最後にsnapshotを反映できてからこの時間を超えたら「更新が停止している」と見なす。
+// ポーリング周期の3倍まではネットワークの揺らぎとして許容する。
+const SNAPSHOT_STALE_MS = SNAPSHOT_POLL_MS * 3;
+// 更新停止表示の再評価周期。fetchが長時間ハングしてもバナーが更新されるよう、
+// ポーリングの成否とは独立したタイマーで判定する。
+const CONNECTION_STATUS_CHECK_MS = 500;
+// 1回のsnapshot取得に許す最大時間。上限が無いと、経路の切断（VPNのNATタイムアウト等）で
+// fetchが解決も棄却もしないまま滞留し、次回ポーリングが再スケジュールされずに
+// 画面が無言で固まる。
+const SNAPSHOT_FETCH_TIMEOUT_MS = 5000;
 
 const DEFAULT_LATITUDE = 36.083;
 const DEFAULT_LONGITUDE = 140.113;
@@ -21,6 +34,10 @@ const FRESHNESS_COLORS = {
   LOST: '#c62828',
   UNKNOWN: '#757575',
 };
+
+let lastSnapshotSuccessAt = null;
+let snapshotFailureCount = 0;
+let lastSnapshotErrorText = '';
 
 let knownPanelIds = [];
 let leafletMap = null;
@@ -37,6 +54,15 @@ const ROUTE_UNTRAVELED_COLOR = '#66bb6a';
 
 function freshnessColor(level) {
   return FRESHNESS_COLORS[level] || FRESHNESS_COLORS.UNKNOWN;
+}
+
+// GPS未測位時などサーバ側の値がnullになり得るため、そのままtoFixed()を呼ばない。
+// null相手にTypeErrorを投げると描画全体が中断し、画面が無言で固まる。
+function formatNumber(value, digits, unit) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '-';
+  }
+  return `${value.toFixed(digits)}${unit}`;
 }
 
 function initMap() {
@@ -171,7 +197,12 @@ function renderSummary(snapshot) {
     '業務モード',
     `${snapshot.operation.environment} / ${snapshot.operation.drive_mode}`,
   );
-  appendField(fields, '進捗', `${(snapshot.operation.route_progress * 100).toFixed(1)}%`);
+  const routeProgress = snapshot.operation.route_progress;
+  appendField(
+    fields,
+    '進捗',
+    typeof routeProgress === 'number' ? formatNumber(routeProgress * 100, 1, '%') : '-',
+  );
   appendField(
     fields,
     'WP',
@@ -186,9 +217,9 @@ function renderGpsSummary(snapshot) {
   fields.innerHTML = '';
   appendField(fields, 'RTK', snapshot.gps.rtk_state);
   appendField(fields, 'Satellites', `${snapshot.gps.num_satellites} sat`);
-  appendField(fields, 'HDOP', snapshot.gps.hdop.toFixed(2));
-  appendField(fields, 'Correction', `${snapshot.gps.correction_age_s.toFixed(2)} s`);
-  appendField(fields, 'Heading', `${snapshot.gps.heading_deg.toFixed(1)} deg`);
+  appendField(fields, 'HDOP', formatNumber(snapshot.gps.hdop, 2, ''));
+  appendField(fields, 'Correction', formatNumber(snapshot.gps.correction_age_s, 2, ' s'));
+  appendField(fields, 'Heading', formatNumber(snapshot.gps.heading_deg, 1, ' deg'));
   appendField(fields, 'Localization freshness', snapshot.localization.freshness);
 }
 
@@ -264,24 +295,89 @@ function renderMapCaption(snapshot) {
   caption.style.color = freshnessColor(freshness);
 }
 
+// 表示中の値が最新かどうかを常時明示する。遠隔観測UIでは、更新が止まったことに
+// 閲覧者が気付けないまま古い値を現在値と誤認するのが最も危険なため、正常時も
+// 「いつ更新されたか」を出し、停止時は赤系の警告へ切り替える。
+function renderConnectionStatus() {
+  const banner = document.getElementById('connection-status');
+  const panel = document.getElementById('summary');
+  if (banner === null || panel === null) {
+    return;
+  }
+
+  const detail = lastSnapshotErrorText ? `／直近のエラー: ${lastSnapshotErrorText}` : '';
+
+  if (lastSnapshotSuccessAt === null) {
+    banner.className = 'connection-status is-stale';
+    panel.classList.add('is-stale');
+    banner.textContent =
+      `サーバから状態を取得できていません。表示中の値はありません`
+      + `（連続失敗 ${snapshotFailureCount} 回${detail}）`;
+    return;
+  }
+
+  const elapsedSec = (Date.now() - lastSnapshotSuccessAt) / 1000;
+  if (elapsedSec * 1000 < SNAPSHOT_STALE_MS) {
+    banner.className = 'connection-status is-ok';
+    panel.classList.remove('is-stale');
+    banner.textContent = `最新の状態を表示中（最終更新 ${elapsedSec.toFixed(1)} 秒前）`;
+    return;
+  }
+
+  banner.className = 'connection-status is-stale';
+  panel.classList.add('is-stale');
+  banner.textContent =
+    `更新が停止しています。表示中の値は ${elapsedSec.toFixed(0)} 秒前のもので、`
+    + `現在の状態とは異なる可能性があります`
+    + `（連続失敗 ${snapshotFailureCount} 回${detail}）`;
+}
+
+async function fetchSnapshot() {
+  // fetchはタイムアウトを持たないため、AbortControllerで上限を設ける。
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SNAPSHOT_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch('/snapshot.json', {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return await response.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function pollSnapshot() {
   try {
-    const response = await fetch('/snapshot.json', { cache: 'no-store' });
-    if (response.ok) {
-      const snapshot = await response.json();
-      renderSummary(snapshot);
-      renderGpsSummary(snapshot);
-      renderMapCaption(snapshot);
-      updateRouteOverlay(snapshot);
-      updateMapMarkers(snapshot);
-      renderSensorGrid(snapshot.sensor_panels);
-      renderHealthTable(snapshot.health);
-    }
+    const snapshot = await fetchSnapshot();
+    // 描画までを1つの成功単位として扱う。描画途中の例外を握り潰すと、
+    // 通信は成功しているのに画面だけが古いまま固まる状態を検知できない。
+    renderSummary(snapshot);
+    renderGpsSummary(snapshot);
+    renderMapCaption(snapshot);
+    updateRouteOverlay(snapshot);
+    updateMapMarkers(snapshot);
+    renderSensorGrid(snapshot.sensor_panels);
+    renderHealthTable(snapshot.health);
+    lastSnapshotSuccessAt = Date.now();
+    snapshotFailureCount = 0;
+    lastSnapshotErrorText = '';
   } catch (error) {
-    console.error('snapshot取得に失敗しました', error);
+    snapshotFailureCount += 1;
+    lastSnapshotErrorText = `${error.name}: ${error.message}`;
+    console.error('snapshotの取得または描画に失敗しました', error);
   } finally {
+    renderConnectionStatus();
     setTimeout(pollSnapshot, SNAPSHOT_POLL_MS);
   }
+}
+
+function pollConnectionStatus() {
+  renderConnectionStatus();
+  setTimeout(pollConnectionStatus, CONNECTION_STATUS_CHECK_MS);
 }
 
 function pollImages() {
@@ -297,4 +393,5 @@ function pollImages() {
 
 initMap();
 pollSnapshot();
+pollConnectionStatus();
 pollImages();

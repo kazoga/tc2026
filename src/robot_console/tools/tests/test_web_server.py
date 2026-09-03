@@ -1,5 +1,6 @@
 """web/server.py の単体テスト（実HTTPリクエストで検証する）。"""
 
+import http.client
 import json
 import urllib.error
 import urllib.request
@@ -8,8 +9,18 @@ import pytest
 from PIL import Image
 
 from robot_console.core.image_store import ImageStore
-from robot_console.core.snapshot_model import ConsoleSnapshot, OperationStateView
-from robot_console.web.server import WebObservationServer
+from robot_console.core.snapshot_model import (
+    ConsoleSnapshot,
+    GpsStateView,
+    OperationStateView,
+)
+from robot_console.web.server import (
+    KEEP_ALIVE_TIMEOUT_S,
+    REQUEST_QUEUE_SIZE,
+    WebObservationServer,
+    _ObservationHTTPServer,
+    _ObservationRequestHandler,
+)
 
 
 @pytest.fixture
@@ -113,3 +124,125 @@ def test_start_is_idempotent(server):
     address_before = server.address
     server.start()
     assert server.address == address_before
+
+
+def _reject_json_constant(name: str):
+    """json.loads が NaN/Infinity を読んだ場合に失敗させるフック。"""
+
+    raise AssertionError(f'JSONとして不正な定数が含まれている: {name}')
+
+
+def test_non_finite_floats_are_serialized_as_null():
+    """NaN/Infinityをそのまま出力すると不正なJSONになり、ブラウザ側のパースが失敗する。
+
+    GPS未測位時のROSメッセージにはNaNが入り得るため、null へ落として
+    RFC 8259 準拠のJSONを返すことを確認する。
+    """
+
+    snapshot = ConsoleSnapshot(
+        gps_state=GpsStateView(
+            hdop=float('nan'),
+            correction_age_s=float('inf'),
+            heading_deg=float('-inf'),
+        )
+    )
+    instance = WebObservationServer(lambda: snapshot, host='127.0.0.1', port=0)
+    instance.start()
+    try:
+        _status, _content_type, body = _get(instance, '/snapshot.json')
+        assert b'NaN' not in body
+        assert b'Infinity' not in body
+        # strict なパーサでも読めること（json.loads の既定はNaNを許容するため明示的に禁止する）
+        payload = json.loads(body, parse_constant=_reject_json_constant)
+        assert payload['gps']['hdop'] is None
+        assert payload['gps']['correction_age_s'] is None
+        assert payload['gps']['heading_deg'] is None
+    finally:
+        instance.stop()
+
+
+def test_provider_exception_returns_500_without_closing_connection():
+    """snapshot生成中の例外でも500応答を返し、コネクションを維持することを確認する。
+
+    応答無しで切断されると、ブラウザ側は原因不明の `TypeError: Failed to fetch`
+    としてしか観測できず、サーバ側に原因があることが分からなくなる。
+    """
+
+    calls = {'count': 0}
+
+    def provider() -> ConsoleSnapshot:
+        calls['count'] += 1
+        if calls['count'] == 1:
+            raise RuntimeError('テスト用の内部エラー')
+        return ConsoleSnapshot(operation_state=OperationStateView(phase='走行中'))
+
+    instance = WebObservationServer(provider, host='127.0.0.1', port=0)
+    instance.start()
+    try:
+        host, port = instance.address
+        conn = http.client.HTTPConnection(host, port, timeout=5)
+
+        conn.request('GET', '/snapshot.json')
+        first = conn.getresponse()
+        first.read()
+        assert first.status == 500
+
+        # 同一コネクションを使い回して次のリクエストが通ること（切断されていないこと）
+        conn.request('GET', '/snapshot.json')
+        second = conn.getresponse()
+        body = second.read()
+        assert second.status == 200
+        assert json.loads(body)['operation']['phase'] == '走行中'
+        conn.close()
+    finally:
+        instance.stop()
+
+
+def test_keep_alive_connection_serves_repeated_requests(server):
+    """ブラウザ同様に1本のkeep-aliveコネクションを使い回せることを確認する。"""
+
+    host, port = server.address
+    conn = http.client.HTTPConnection(host, port, timeout=5)
+    try:
+        for _ in range(20):
+            conn.request('GET', '/snapshot.json')
+            response = conn.getresponse()
+            body = response.read()
+            assert response.status == 200
+            assert json.loads(body)['operation']['phase'] == '走行中'
+    finally:
+        conn.close()
+
+
+def test_rejected_method_keeps_connection_usable(server):
+    """405応答時にリクエストボディを読み捨てないと、keep-aliveの次要求が壊れる。"""
+
+    host, port = server.address
+    conn = http.client.HTTPConnection(host, port, timeout=5)
+    try:
+        conn.request('POST', '/snapshot.json', body=b'{"payload": "ignored"}')
+        rejected = conn.getresponse()
+        rejected.read()
+        assert rejected.status == 405
+
+        conn.request('GET', '/snapshot.json')
+        response = conn.getresponse()
+        body = response.read()
+        assert response.status == 200
+        assert json.loads(body)['operation']['phase'] == '走行中'
+    finally:
+        conn.close()
+
+
+def test_request_queue_size_is_larger_than_socketserver_default():
+    """既定のlisten backlog(5)ではブラウザの同時接続+再接続で溢れるため拡張している。"""
+
+    assert REQUEST_QUEUE_SIZE > 5
+    assert _ObservationHTTPServer.request_queue_size == REQUEST_QUEUE_SIZE
+
+
+def test_keep_alive_timeout_is_configured():
+    """相手が無通告で消えたkeep-aliveコネクションがワーカースレッドを占有し続けないこと。"""
+
+    assert _ObservationRequestHandler.timeout == KEEP_ALIVE_TIMEOUT_S
+    assert KEEP_ALIVE_TIMEOUT_S > 0
