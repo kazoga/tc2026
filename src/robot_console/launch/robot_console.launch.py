@@ -75,9 +75,9 @@ _TOPIC_CONFIGS = [
     (
         'odom_topic',
         'odom',
-        '/odom',
-        'オドメトリトピック（実機ではypspur_ros2、シミュレーションではrobot_navigatorの'
-        'odom_topic設定に合わせて上書きする）',
+        '/ypspur_ros/odom',
+        'オドメトリトピック（実機のypspur_ros2、Gazebo bridge、robot_simulatorの'
+        'いずれも既定で/ypspur_ros/odomへ publish する）',
     ),
 ]
 

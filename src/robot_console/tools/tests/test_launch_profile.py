@@ -350,3 +350,31 @@ def test_build_simulator_launch_args_only_forwards_mapped_overrides():
     assert not any(arg.startswith('cmd_vel_topic:=') for arg in args)
     assert 'odom_topic:=/ypspur_ros/odom' in args
     assert 'pose_topic:=/localization/pose_enu' in args
+
+
+def test_odom_topic_is_consistent_between_publisher_and_subscriber_profiles():
+    """odom を publish する profile と subscribe する profile の既定値が一致すること。
+
+    `robot_navigator` は odom（現在速度）が揃うまで制御ループで停止指令を出し続ける
+    （`robot_navigator_node.py` の `current_velocity` ゲート）。ypspur_ros2 の publish 先と
+    robot_navigator の subscribe 先が食い違うと、実機で走行不能になるが
+    シミュレーション（Gazebo bridge / robot_simulator はいずれも /ypspur_ros/odom）
+    では露見しないため、profile定義の時点で不一致を検出する。
+    """
+
+    store = LaunchProfileStore(REPO_PROFILE_PATH)
+    profiles = {profile.profile_id: profile for profile in store.load()}
+
+    publisher_topic = profiles['ypspur_ros2'].default_arguments['odom_topic']
+    subscriber_topic = profiles['robot_navigator'].default_arguments['odom_topic']
+
+    assert publisher_topic == subscriber_topic == '/ypspur_ros/odom'
+
+
+def test_ypspur_health_topic_matches_its_publish_topic():
+    """稼働判定に使うtopicが、実際にpublishするtopicと一致すること。"""
+
+    store = LaunchProfileStore(REPO_PROFILE_PATH)
+    profile = {p.profile_id: p for p in store.load()}['ypspur_ros2']
+
+    assert profile.default_arguments['odom_topic'] in profile.health_topics

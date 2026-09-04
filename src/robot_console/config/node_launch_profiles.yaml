@@ -40,7 +40,7 @@ profiles:
     launch_order: 30
     startup_group: real_robot_base
     health_topics:
-      - /odom
+      - /ypspur_ros/odom
     user_arguments:
       - cmd_vel_topic
       - odom_topic
@@ -49,7 +49,9 @@ profiles:
       - coordinator_param
     default_arguments:
       cmd_vel_topic: /cmd_vel
-      odom_topic: /odom
+      # robot_navigator が購読する topic に合わせる。異なる名前にすると
+      # robot_navigator の制御ループが odom 未受信となり停止指令を出し続ける。
+      odom_topic: /ypspur_ros/odom
       start_coordinator: 'false'
 
   - profile_id: rtk_gps_um982
