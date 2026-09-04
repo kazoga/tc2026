@@ -39,7 +39,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 - `FollowerStateView`: インデックス・現在ラベル・次ラベル・滞留理由・左右オフセット中央値を保持。
 - `ObstacleHintView`: `front_clearance_m`、`front_blocked`、左右オフセット、最終更新時刻を保持。
 - `ManualSignalView`: `manual_start`、`sig_recog`、`road_blocked` の最新値と送信タイムスタンプを保持し、`road_blocked` は外部ノードからの受信を常に優先する。
-- `TargetDistanceView`: `active_target` と `amcl_pose` の距離と基準距離（前回ターゲット距離）。
+- `TargetDistanceView`: `active_target` と `pose_enu` の距離と基準距離（前回ターゲット距離）。
 - `CmdVelView`: 並進速度 [m/s] と角速度 [rad/s]。GUI 表示時に deg/s に変換する。
 - `ImageBundle`: ルート地図・障害物ビュー・外部カメラ（走行／信号監視）の PIL 画像と最終更新時刻。
 - `NodeLaunchState`: 起動可否、選択中パラメータ、シミュレータ有効状態、最終アクション時刻、ログリングのファイルディスクリプタ。
@@ -58,7 +58,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 | ルート進捗カード | 上段左 | `route_state` (1Hz) + `manager_status.state`（イベント駆動） | 状態ラベル、進捗バー (`current_index/total_waypoints`)、ルートバージョン履歴、再計画要因と時刻。 |
 | フォロワ状態カード | 上段中央 | `follower_state` (20Hz) | `state`、`active_waypoint_index`、`active_waypoint_label`、`segment_length_m`、滞留理由、左右オフセット、回避試行回数。高速更新だが GUI では 5Hz に間引き表示。 |
 | ロボット速度カード | 上段右 (上段) | `cmd_vel` (20Hz) | 並進速度 [m/s]、角速度 [deg/s]、閾値超過時の色変化。 |
-| 目標距離カード | 上段右 (下段) | `active_target` + `amcl_pose` (5Hz)。いずれか未取得時は `follower_state.active_target_distance_m` を使用する。 | 現在距離、基準距離（`segment_length_m`）、距離比ゲージ。到達閾値 1.0m 以下で警告色。 |
+| 目標距離カード | 上段右 (下段) | `active_target` + `pose_enu` (5Hz)。いずれか未取得時は `follower_state.active_target_distance_m` を使用する。 | 現在距離、基準距離（`segment_length_m`）、距離比ゲージ。到達閾値 1.0m 以下で警告色。 |
 | 手動・信号・封鎖イベント | 中央左 | `manual_start`・`sig_recog`・`road_blocked` (イベント) | 3種のうち優先度順 (road_blocked > manual_start > sig_recog) で1件をバナー表示。manual_start・sig_recog・road_blocked の各通知は受信後60秒が経過すると自動的にクリアし、未発生時は無地を維持してレイアウト幅を固定する。 |
 | 制御コマンドタブ | 中央右 | GUI操作 | Notebook で manual_start / sig_recog / obstacle_hint / road_blocked を切替。各タブは1～2行構成で縦幅を最小化。 |
 | 画像パネル3面 | 下段 | `route_image` (更新時), `sensor_viewer` (5Hz), 外部カメラ (信号監視:4:3, 走行:16:9 / 5Hz) | それぞれ専用キャンバスに描画。アスペクト比を維持し、余白は背景色と同色でレターボックス処理。障害物ビュー左上に2行オーバレイ (遮蔽/余裕、左/右オフセット)。 |
@@ -79,7 +79,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
   - パラメータファイル `Combobox`（既定は `params/default.yaml`。表示はファイル名のみで、内部では実パスへマッピングする）。
   - `drive_mode_manager` カードでは launch 引数 `start_gui` を任意指定できる。
     `joy_input` で `joy_node` または `ps3_joy_sim` を選択し、`manual_teleop_node` と `drive_cmd_mux_node` は常に同時起動する。画面確認時だけ `start_gui=true` を指定する。
-  - `robot_navigator` カードでは launch 引数 `cmd_vel_topic` と `odom_topic` を任意指定できる。
+  - `robot_navigator` カードでは launch 引数 `cmd_vel_topic`、`odom_topic`、`pose_enu_topic` を任意指定できる。
     route stack 評価では `cmd_vel_topic=/cmd_vel/autonomous`、`odom_topic=/ypspur_ros/odom` を渡す。
   - `robot_navigator`、`obstacle_monitor`、認識系カードでは「Simulator 同時起動」
     チェックボックスを表示する。認識系カードの simulator は `yolo_detector` の
@@ -106,7 +106,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 | ルート進捗カード | 状態・進捗率・再計画履歴 | `/route_state`, `/manager_status` | モックの表示内容と完全一致させる。 |
 | フォロワ状態カード | 状態・インデックス・ラベル・区間長 | `/follower_state` | `active_waypoint_label` は Route メッセージのラベル辞書を参照し、`segment_length_m` を進捗計算の分母に利用する。 |
 | ロボット速度カード | 並進・角速度 | `/cmd_vel` | 角速度は GUI 側で deg/s に変換。 |
-| 目標距離カード | 現在距離・基準距離 | `/active_target`, `/amcl_pose` | ターゲット切替時に基準距離を更新。 |
+| 目標距離カード | 現在距離・基準距離 | `/active_target`, `/localization/pose_enu` | ターゲット切替時に基準距離を更新。 |
 | 手動・信号・封鎖バナー | 優先度付きイベント表示 | `/manual_start`, `/sig_recog`, `/road_blocked` | 各トピックを購読し、未受信時はデフォルト状態を維持する。詳細な項目対応は `docs/dashboard_topic_mapping.csv` に整理する。 |
 | manual_start タブ | True/False 選択と送信 | `/manual_start` | 送信値は `Bool.data`。現在値は購読結果（未受信時は既定False）をステータスラベルに表示し、トグルは操作者の送信意図を保持する。 |
 | sig_recog タブ | GO/STOP 送信 | `/sig_recog` | 1=GO, 2=STOP を送信。現在値は購読結果（未受信時は未定義表示）を表示。 |
@@ -139,16 +139,16 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 ### 4.1 購読トピック
 | トピック名 | 型 | 想定更新 | 利用箇所 |
 | --- | --- | --- | --- |
-| `/route_state` | `route_msgs/msg/RouteState` | 1Hz (`state_publish_rate_hz`) | ルート進捗カード、再計画履歴。 |
-| `/manager_status` | `route_msgs/msg/ManagerStatus` | 状態遷移時 | 状態ラベル・再計画要因。 |
-| `/active_route` | `route_msgs/msg/Route` | ルート更新時 | ルート地図画像、ウェイポイント一覧。 |
-| `/mission_info` | `route_msgs/msg/MissionInfo` | 起動時／ルート更新時 | ミッション概要（カード内ツールチップ）。 |
-| `/follower_state` | `route_msgs/msg/FollowerState` | 20Hz (`control_rate_hz`) | フォロワ状態カード、障害物統計。 |
+| `/route_state` | `tc_route_msgs/msg/RouteState` | 1Hz (`state_publish_rate_hz`) | ルート進捗カード、再計画履歴。 |
+| `/manager_status` | `tc_route_msgs/msg/ManagerStatus` | 状態遷移時 | 状態ラベル・再計画要因。 |
+| `/active_route` | `tc_route_msgs/msg/Route` | ルート更新時 | ルート地図画像、ウェイポイント一覧。 |
+| `/mission_info` | `tc_route_msgs/msg/MissionInfo` | 起動時／ルート更新時 | ミッション概要（カード内ツールチップ）。 |
+| `/follower_state` | `tc_route_msgs/msg/FollowerState` | 20Hz (`control_rate_hz`) | フォロワ状態カード、障害物統計。 |
 | `/active_target` | `geometry_msgs/msg/PoseStamped` | 20Hz | 目標距離カード、地図描画。 |
 | `/cmd_vel` | `geometry_msgs/msg/Twist` | 20Hz | ロボット速度カード。 |
-| `/amcl_pose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | 10Hz | 目標距離カード、地図描画。 |
+| `/localization/pose_enu` | `geometry_msgs/msg/PoseWithCovarianceStamped` | 10Hz | 目標距離カード、地図描画。 |
 | `/odom` | `nav_msgs/msg/Odometry` | 30Hz | 速度比較（将来拡張用ログ）。 |
-| `/obstacle_avoidance_hint` | `route_msgs/msg/ObstacleAvoidanceHint` | 10Hz | 障害物パネル、オーバレイ数値。 |
+| `/obstacle_avoidance_hint` | `tc_route_msgs/msg/ObstacleAvoidanceHint` | 10Hz | 障害物パネル、オーバレイ数値。 |
 | `/sensor_viewer` | `sensor_msgs/msg/Image` | 5Hz | 障害物画像パネル。 |
 | `/perception/road_blockage/decision_image` | `sensor_msgs/msg/Image` | 5Hz | 通常走行時カメラパネル (16:9)。 |
 | `/perception/traffic_signal/decision_image` | `sensor_msgs/msg/Image` | 5Hz | 信号停止時カメラパネル (4:3)。 |
@@ -161,7 +161,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 | --- | --- | --- | --- |
 | `/manual_start` | `std_msgs/msg/Bool` | manual_start タブ送信時 | True/False をラッチ送信し、復帰命令を発行。 |
 | `/sig_recog` | `std_msgs/msg/Int32` | sig_recog タブ送信時 | 1=GO、2=STOP をラッチ送信。 |
-| `/obstacle_avoidance_hint` | `route_msgs/msg/ObstacleAvoidanceHint` | 固定値送出開始／停止 | GUI入力値をそのまま配信し、停止時はゼロ値を送信して obstacle_monitor へ制御を戻す。 |
+| `/obstacle_avoidance_hint` | `tc_route_msgs/msg/ObstacleAvoidanceHint` | 固定値送出開始／停止 | GUI入力値をそのまま配信し、停止時はゼロ値を送信して obstacle_monitor へ制御を戻す。 |
 | `/road_blocked` | `std_msgs/msg/Bool` | road_blocked タブ送信時 | 道路封鎖検知の仮想トピック。現在は他ノード未購読だがログに残す。 |
 
 ### 4.3 サービス・アクション
@@ -196,7 +196,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 ## 6. 更新・同期設計
 - **GUI更新**：`UiMain` が 200ms ごとに `GuiCore.snapshot()` を呼び出す。スナップショットはディープコピーされた dataclass 群で、GUI 側での加工によりスレッド安全性を確保する。
 - **画像処理**：ROS コールバックで `sensor_msgs/Image` を受信後、`cv_bridge` で OpenCV 画像へ変換し、`PIL.Image` に変換。アスペクト比計算を `GuiCore` 側で行い、Tkinter では `PhotoImage` を生成する。画像の描画サイズは各パネルのピクセル数から算出し、背景色 (`#1f1f1f`) と同色のレターボックスを描く。
-- **距離計算**：`active_target` と `amcl_pose` の距離は `tf_transformations` を用いず、単純なユークリッド距離で算出。新しいターゲット受信時に `reference_distance_m` を更新し、到達割合をリセットする。どちらかが未取得の場合のみ `follower_state.active_target_distance_m` を暫定値として用いる。`reference_distance_m` は最新の `segment_length_m` を反映する。
+- **距離計算**：`active_target` と `pose_enu` の距離は `tf_transformations` を用いず、単純なユークリッド距離で算出。新しいターゲット受信時に `reference_distance_m` を更新し、到達割合をリセットする。どちらかが未取得の場合のみ `follower_state.active_target_distance_m` を暫定値として用いる。`reference_distance_m` は最新の `segment_length_m` を反映する。
 - **イベントバナー**：`ManualSignalView` を参照し、`road_blocked` → `manual_start=True` → `sig_recog` の順に優先。`road_blocked` は外部ノードからの受信値を GUI 操作よりも優先して表示する。`manual_start`・`sig_recog`・`road_blocked` に起因するバナーは受信後60秒を経過すると自動的に非表示とし、`WAITING_STOP` 状態に基づく信号／停止線表示は状態が解除されるまで維持する。
 - **障害物固定送出**：送出開始時に内部状態 `override_active=True` を設定し、0.5Hz のタイマーで上書きメッセージを送信する。停止ボタンでタイマーを解除し、通常の受信値表示に復帰する。
 
@@ -225,8 +225,8 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 - route stack 連携に関わる既定プロファイルは以下とする。
   - `drive_mode_manager`: `drive_mode_manager.launch.py` を起動し、`start_gui` と `joy_input` を user argument として受け付ける。
     `joy_input` は `joy_node` または `ps3_joy_sim` を指定する。`manual_teleop_node` と `drive_cmd_mux_node` は個別停止せず、常に同時起動する。
-  - `robot_navigator`: `robot_navigator.launch.py` を起動し、`cmd_vel_topic` と `odom_topic` を
-    user argument として受け付ける。simulator 有効時は `robot_simulator.launch.py` を併起動する。
+  - `robot_navigator`: `robot_navigator.launch.py` を起動し、`cmd_vel_topic`、`odom_topic`、`pose_enu_topic` を
+    user argument として受け付ける。simulator 有効時は `robot_simulator.launch.py` を併起動し、`pose_enu_topic` の指定値を simulator 側の `pose_topic` に渡す。
 - 認識系の既定プロファイルは以下とする。
   - `road_blockage_detector`: `road_blockage_perception.launch.py` を起動し、選択 YAML は
     `detector_param_file:=<path>` として渡す。toggle 有効時は
@@ -255,7 +255,7 @@ robot_console パッケージの正式実装に先立ち、GUI構造・ROS通信
 | Profile | 主な override | 理由 |
 | --- | --- | --- |
 | `drive_mode_manager` | `start_gui=false`, `joy_input=joy_node` | `joy_node`、manual teleop、mux を同時起動し、自律 cmd と最終 `/cmd_vel` の mux を検証対象に含める。headless 評価では GUI を起動しない |
-| `robot_navigator` | `cmd_vel_topic=/cmd_vel/autonomous`, `odom_topic=/ypspur_ros/odom` | `drive_cmd_mux_node` が最終 `/cmd_vel` を publish する構成に合わせる |
+| `robot_navigator` | `cmd_vel_topic=/cmd_vel/autonomous`, `odom_topic=/ypspur_ros/odom`, 必要に応じて `pose_enu_topic=/localization/pose_enu` | `drive_cmd_mux_node` が最終 `/cmd_vel` を publish する構成に合わせる。自己位置 topic を変更する場合は simulator の `pose_topic` も同値で起動する |
 
 headless monitor は `/cmd_vel` に加え、`/cmd_vel/autonomous` と `/drive_mode_status` を購読し、
 自律 cmd の発行有無、mux の出力元、復帰カウントダウン状態をログへ出す。GUI あり評価では

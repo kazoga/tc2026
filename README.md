@@ -17,7 +17,13 @@ ROS 2 Jazzy ワークスペース。
 | [`src/route_planner`](src/route_planner/README.md)          | YAML / CSV から経路を生成し `/get_route`・`/update_route` を提供。可変ブロックの再計画にも対応 |
 | [`src/route_manager`](src/route_manager/README.md)          | `route_planner` のサービスを呼び出し `/active_route` を配信、滞留報告から再計画を統括する FSM |
 | [`src/route_follower`](src/route_follower/README.md)        | `/active_route` を追従し、現在の目標 Pose を `/active_target` として配信。滞留検知で `/report_stuck` を発行 |
-| [`src/route_msgs`](src/route_msgs/README.md)                | 経路・走行系で共有する msg / srv 定義 (`Route`, `RouteState`, `ReportStuck` ほか) |
+| [`src/tc_route_msgs`](src/tc_route_msgs/README.md)                | 経路・走行系で共有する msg / srv 定義 (`Route`, `RouteState`, `ReportStuck` ほか) |
+
+### 座標変換・地理情報
+| パッケージ                                                  | 役割                                                                 |
+| ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| [`src/tc_geo_msgs`](src/tc_geo_msgs/)                       | LLH位置、品質、地図投影条件を共有する msg 定義                       |
+| [`src/geo_pose_converter`](src/geo_pose_converter/README.md) | LLH/ENU相互変換、経路の地理座標投影、OSM経路表示を提供               |
 
 ### 走行制御・障害物
 | パッケージ                                                  | 役割                                                                 |
@@ -35,10 +41,21 @@ ROS 2 Jazzy ワークスペース。
 | パッケージ                                                  | 役割                                                                 |
 | ----------------------------------------------------------- | -------------------------------------------------------------------- |
 | [`src/yolo_detector`](src/yolo_detector/README.md)          | USB カメラ画像を YOLO (PyTorch / NCNN) で物体検出し、検出画像・`Detection2DArray` を配信 |
-| [`src/robot_console`](src/robot_console/README.md)          | 走行状態・障害物回避・経路進捗・ノード起動を一画面で監視する tkinter GUI ダッシュボード |
+| [`src/traffic_signal_recognizer`](src/traffic_signal_recognizer/README.md) | YOLO検出結果から信号のGO/STOPを判定し、判定画像を配信 |
+| [`src/road_blockage_detector`](src/road_blockage_detector/README.md) | YOLO検出結果と自己位置から道路封鎖を判定し、判定画像を配信 |
+| [`src/robot_console`](src/robot_console/README.md)          | 走行状態・障害物回避・経路進捗・ノード起動を一画面で監視する PyQt5 GUI ダッシュボードとHTML遠隔観測UI |
 
 ワークスペース横断の仕様書は [`docs/`](docs/)、パッケージ固有の設計書は各パッケージ
-配下の `docs/design.md` を参照。
+配下の `docs/` を参照。
+
+## 開発状態
+
+- `robot_console` の正式UIは PyQt5 版（`robot_console_qt`）である。遠隔観測用の
+  HTML UI（`robot_console_web`）も同じ `ConsoleCore` の状態を表示する。
+  旧 tkinter 版（`robot_console`）は当面残すが、正式UIとしては扱わない。
+- `localization_fusion` 実装前の暫定構成では、GNSS入力がある場合に
+  `geo_pose_converter` のENU出力を `/localization/pose_enu` として使用する。
+- 走行制御はENU、OSM・GUI表示はLLHを使用し、`geo_pose_converter` が両者を変換する。
 
 ## 必要環境
 
@@ -48,6 +65,21 @@ ROS 2 Jazzy ワークスペース。
 - `ros_gz_sim`, `ros_gz_bridge`, `ros_gz_interfaces`
 - Python 3
 - (パッケージごとの追加要件は各 README を参照)
+
+## Claude Code スキル設定
+
+本リポジトリでは、GUI・UI 実装時に Anthropic 公式の `frontend-design` スキルを
+共通利用する。`.claude/settings.json` (Git 管理対象) で
+`frontend-design@claude-plugins-official` を有効化しているため、リポジトリを
+Claude Code で開いて信頼 (trust) すると、このプラグインが自動的に有効化候補として
+認識される。初回のみ、各自の環境で以下を実行してインストールする。
+
+```bash
+claude plugin install frontend-design@claude-plugins-official
+```
+
+インストール後は Claude が GUI デザイン作業時に自動でこのスキルを参照する。
+手動で呼び出す場合は `/frontend-design:frontend-design` のように実行する。
 
 ## Codex ローカル実行設定
 
@@ -70,7 +102,7 @@ network_access = true
 Python パッケージ群で使用する pip 依存モジュールは、[`requirements.txt`](requirements.txt) にまとめている。
 対象は `obstacle_monitor`, `robot_console`, `robot_navigator`, `route_follower`,
 `route_manager`, `route_planner`, `obstacle_route_sim`, `yolo_detector` と、それらが利用する
-`route_msgs`。`drive_mode_manager` の GUI 依存である `python3-pyqt5` と、
+`tc_route_msgs`。`drive_mode_manager` の GUI 依存である `python3-pyqt5` と、
 `obstacle_route_sim` の Gazebo / ros_gz 依存は pip ではなく apt / rosdep で導入する。
 
 ROS 2 の環境を読み込んだうえで、ワークスペース直下で以下を実行する。
@@ -196,8 +228,8 @@ ros2 launch robot_console robot_console.launch.py
 
 #### 障害物回避シミュレーション
 
-Gazebo GUI 付きで道路 world、robot、bridge、fake AMCL、TF を起動する。
-`obstacle_route_sim` は Gazebo 上の真値 pose から `/amcl_pose` を配信するため、経路追従側は
+Gazebo GUI 付きで道路 world、robot、bridge、fake localization pose、TF を起動する。
+`obstacle_route_sim` は Gazebo 上の真値 pose から `/localization/pose_enu` を配信するため、経路追従側は
 自己位置推定誤差なしの前提で結合確認できる。
 
 ```bash

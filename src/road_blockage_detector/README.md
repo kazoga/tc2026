@@ -10,13 +10,13 @@ ROS 2 パッケージです。YOLO モデルのロードと画像推論は行わ
 - `/perception/road_blockage/detections` から経路封鎖看板候補を抽出。
 - score、class id、bbox サイズ条件に基づいて有効検知をフィルタ。
 - 判定期間内の検知割合から仮封鎖を判断し、`/road_blocked` を publish。
-- `/amcl_pose` を用いて確定封鎖位置を記録し、同一地点付近の多重検知を抑止。
+- `/localization/pose_enu` を用いて確定封鎖位置を記録し、同一地点付近の多重検知を抑止。
 - `/perception/road_blockage/decision_image` に判定状態を重畳した画像を publish。
 - `road_blockage_perception.launch.py` により、経路封鎖用 `yolo_detector` と判定ノードをまとめて起動可能。
 
 ## 起動方法
 ### 判定ノード単体
-すでに `/perception/road_blockage/detections`、`/usb_cam/image_raw`、`/amcl_pose` が
+すでに `/perception/road_blockage/detections`、`/usb_cam/image_raw`、`/localization/pose_enu` が
 publish されている場合に使用します。
 
 ```bash
@@ -39,7 +39,7 @@ ros2 launch road_blockage_detector road_blockage_perception_yolo.launch.py \
 ```
 
 ## 認識系パッケージのみでの動作確認
-`robot_navigator` や実機カメラを起動せず、`yolo_detector` の静止画配信、疑似 `/amcl_pose`、
+`robot_navigator` や実機カメラを起動せず、`yolo_detector` の静止画配信、疑似 `/localization/pose_enu`、
 経路封鎖検知 launch だけで確認します。
 
 1. 静止画を `/usb_cam/image_raw` へ publish します。
@@ -52,10 +52,10 @@ ros2 launch yolo_detector camera_simulator_node.launch.py \
   frame_ratio:=10.0
 ```
 
-2. 別ターミナルで疑似 `/amcl_pose` を publish します。
+2. 別ターミナルで疑似 `/localization/pose_enu` を publish します。
 
 ```bash
-ros2 topic pub /amcl_pose geometry_msgs/msg/PoseWithCovarianceStamped \
+ros2 topic pub /localization/pose_enu geometry_msgs/msg/PoseWithCovarianceStamped \
   "{header: {frame_id: map}, pose: {pose: {orientation: {w: 1.0}}}}" -r 1
 ```
 
@@ -91,7 +91,7 @@ ros2 topic hz /perception/road_blockage/decision_image
 | --- | --- | --- | --- |
 | `detections_topic` | `/perception/road_blockage/detections` | `vision_msgs/msg/Detection2DArray` | YOLO 経路封鎖検出結果。 |
 | `image_topic` | `/usb_cam/image_raw` | `sensor_msgs/msg/Image` | 判定重畳画像の元画像。 |
-| `amcl_pose_topic` | `/amcl_pose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | 自己位置。封鎖位置記録と多重検知抑止に使用。 |
+| `pose_enu_topic` | `/localization/pose_enu` | `geometry_msgs/msg/PoseWithCovarianceStamped` | 自己位置。封鎖位置記録と多重検知抑止に使用。 |
 
 ### Publish
 | パラメータ | 既定値 | 型 | 説明 |
@@ -116,7 +116,7 @@ ros2 topic hz /perception/road_blockage/decision_image
 | `publish_decision_image` | `true` | 判定重畳画像を publish するか。 |
 
 ## 判定フロー
-1. `Detection2DArray` を受信し、最新 `/amcl_pose` が取得できていることを確認します。
+1. `Detection2DArray` を受信し、最新 `/localization/pose_enu` が取得できていることを確認します。
 2. 各検出について class id、score、bbox 条件を確認し、有効検知数を計数します。
 3. `decision_duration` 内の履歴から、有効検知があった秒バケットの割合を算出します。
 4. 割合が `decision_frame_ratio` 以上の場合、`/road_blocked=True` を publish します。
@@ -131,6 +131,6 @@ colcon build --packages-select road_blockage_detector
 ```
 
 ## トラブルシューティング
-- `/road_blocked` が publish されない場合は、`/amcl_pose` が流れているか確認してください。未受信時は判定処理をスキップします。
+- `/road_blocked` が publish されない場合は、`/localization/pose_enu` が流れているか確認してください。未受信時は判定処理をスキップします。
 - `/perception/road_blockage/detections` が流れない場合は、統合 launch の `model_path` と `image_topic` を確認してください。
 - 検知しているのに封鎖判定にならない場合は、`target_class_id`、`score_threshold`、bbox 閾値、`decision_frame_ratio` の設定を確認してください。

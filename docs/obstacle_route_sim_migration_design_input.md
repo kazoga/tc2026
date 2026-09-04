@@ -15,7 +15,7 @@
 - 3D LiDAR
 - 差動二輪駆動
 - odometry
-- fake AMCL
+- fake localization pose
 - waypoint CSV 生成
 - パイロン障害物配置
 - TF
@@ -93,7 +93,7 @@ obstacle_route_sim
 | 3D LiDAR | 対象 | Gazebo point cloud → ROS 2 PointCloud2 へ bridge |
 | 差動二輪駆動 | 対象 | Gazebo Sim DiffDrive 相当へ置換 |
 | odom | 対象 | Gazebo odom → ROS 2 odom へ bridge |
-| fake AMCL | 対象 | 基本流用、topic/frame は移植先構成に合わせる |
+| fake localization pose | 対象 | 基本流用、topic/frame は移植先構成に合わせる |
 | waypoint CSV 生成 | 対象 | 基本流用、道路定義共通化 |
 | パイロン生成 | 対象 | 起動前 world 生成方式へ変更 |
 | TF | 対象 | frame 構成を整理し直す |
@@ -116,7 +116,7 @@ obstacle_route_sim
 4. 道路中心線定義の重複解消
 5. pylon spawn service 依存の廃止
 6. topic / frame / namespace の移植先構成への適合
-7. fake AMCL が map = odom の簡易実装であることの明記
+7. fake localization pose が map = odom の簡易実装であることの明記
 8. センサ frame_id と TF の整合性確認
 ```
 
@@ -135,7 +135,7 @@ obstacle_route_sim
 /scan
 /mid360/livox/lidar
 /ypspur_ros/odom
-/amcl_pose
+/localization/pose_enu
 /tf
 /tf_static
 ```
@@ -174,7 +174,7 @@ obstacle_route_sim/
 │   ├── sim_obstacle_route.launch.py
 │   └── bridge_gz.launch.py
 ├── scripts/
-│   ├── fake_amcl_pose.py
+│   ├── fake_pose_enu.py
 │   ├── generate_waypoints.py
 │   ├── generate_pylon_world.py
 │   ├── road_generator.py
@@ -280,7 +280,7 @@ install(
 
 install(
   PROGRAMS
-    scripts/fake_amcl_pose.py
+    scripts/fake_pose_enu.py
     scripts/generate_waypoints.py
     scripts/generate_pylon_world.py
     scripts/road_generator.py
@@ -327,7 +327,7 @@ launch の役割:
 3. Gazebo Harmonic を ros_gz_sim で起動
 4. robot model を spawn
 5. ros_gz_bridge を起動
-6. fake_amcl_pose.py を起動
+6. fake_pose_enu.py を起動
 7. static TF を起動
 8. 必要に応じて互換 remap を適用
 ```
@@ -690,9 +690,9 @@ clock:
 
 ---
 
-## 21. fake AMCL 設計
+## 21. fake localization pose 設計
 
-既存 `fake_amcl_pose.py` は基本流用する。
+既存 `fake_pose_enu.py` は基本流用する。
 
 役割:
 
@@ -705,8 +705,8 @@ odom を PoseWithCovarianceStamped に変換して publish する
 設計書上では以下を明記する。
 
 ```text
-fake_amcl_pose は map = odom とみなす簡易ノードである。
-Gazebo シミュレーションにおいて、既存ノードが /amcl_pose を要求する場合の互換用として使用する。
+fake_pose_enu は map = odom とみなす簡易ノードである。
+Gazebo シミュレーションにおいて、既存ノードが /localization/pose_enu を要求する場合の互換用として使用する。
 本格的な自己位置推定精度評価には使用しない。
 ```
 
@@ -834,7 +834,7 @@ road_scurve_100m_w5
 7. odom 相当が publish される
 8. 2D LaserScan 相当が publish される
 9. 3D PointCloud2 相当が publish される
-10. fake AMCL 相当が publish される
+10. fake localization pose 相当が publish される
 11. map / odom / base_link / laser / mid360_frame の TF が解決できる
 12. waypoint CSV が生成できる
 13. pylon あり world が生成できる
@@ -875,7 +875,7 @@ ros2 topic list
 ros2 topic echo /scan --once
 ros2 topic echo /mid360/livox/lidar --once
 ros2 topic echo /ypspur_ros/odom --once
-ros2 topic echo /amcl_pose --once
+ros2 topic echo /localization/pose_enu --once
 ```
 
 TF 確認例:
@@ -916,7 +916,7 @@ ros2 topic pub /cmd_vel geometry_msgs/msg/Twist \
 11. odom bridge 確認
 12. 2D LiDAR bridge 確認
 13. 3D LiDAR bridge 確認
-14. fake_amcl_pose.py を接続
+14. fake_pose_enu.py を接続
 15. TF 整合性確認
 16. generate_pylon_world.py を作成
 17. pylon あり world の再現生成確認

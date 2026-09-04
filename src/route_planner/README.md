@@ -26,8 +26,8 @@ YAML 設定、CSV キャッシュ、グラフ探索を組み合わせて再計�
 ### Service Server
 | 名称 | 型 | 説明 |
 |------|----|------|
-| `/get_route` | `route_msgs/srv/GetRoute` | YAML 定義に基づきルートを生成して返却。成功時は `Route.version=1` に初期化。 |
-| `/update_route` | `route_msgs/srv/UpdateRoute` | 滞留地点情報を受け取り、可変ブロックを再探索して部分ルートを返却。成功時は `Route.version` を加算。 |
+| `/get_route` | `tc_route_msgs/srv/GetRoute` | YAML 定義に基づきルートを生成して返却。成功時は `Route.version=1` に初期化。 |
+| `/update_route` | `tc_route_msgs/srv/UpdateRoute` | 滞留地点情報を受け取り、可変ブロックを再探索して部分ルートを返却。成功時は `Route.version` を加算。 |
 
 ## パラメータ
 | 名称 | 型 | 既定値 | 概要 |
@@ -36,6 +36,8 @@ YAML 設定、CSV キャッシュ、グラフ探索を組み合わせて再計�
 | `csv_base_dir` | string | `routes` | CSV 探索基準ディレクトリ。空文字時は YAML の所在ディレクトリを使用。 |
 | `map_image_path` | string | `""` | 可変ブロック描画用の地図画像パス。パッケージルートからの相対パスを指定可能。 |
 | `map_worldfile_path` | string | `""` | 地図画像に対応するワールドファイルのパス。パッケージルートからの相対パスを指定可能。 |
+| `route_id` | string | `default_route` | `Route.route_id` に設定するルート識別子。 |
+| `projection_config_path` | string | `params/default.yaml` | `geo_pose_converter` の parameter YAML。`Route.projection` と LLH/ENU 変換に使う投影条件を読み込む。 |
 
 ## 状態管理・処理フロー
 ### YAML `blocks` の構成
@@ -80,11 +82,22 @@ blocks:
 CSV の Waypoint は `segment_id` 単位でキャッシュされ、進行方向に応じて反転されます。
 
 ### CSV 仕様
-- Waypoint CSV: `label,latitude,longitude,x,y,z,q1,q2,q3,q4,right_is_open,left_is_open,line_is_stop,signal_is_stop,isnot_skipnum`
+- 実コース用 Waypoint CSV: `label,latitude,longitude,altitude,heading_deg,right_is_open,left_is_open,line_is_stop,signal_is_stop,isnot_skipnum`。現状のrouteでは高度を扱わないため、`altitude` は空欄を標準とする。
+- simulation / Gazebo 用 Waypoint CSV: `label,x,y,z,q1,q2,q3,q4,right_is_open,left_is_open,line_is_stop,signal_is_stop,isnot_skipnum`
 - グラフ CSV: `nodes.csv`（`id,lat,lon,...`）、`edges.csv`（`source,target,waypoint_list,reversible[,weight_factor]`）
+
+Waypoint CSV は LLH 系または ENU 系のどちらか一方を正本として持つ。`latitude,longitude,heading_deg` が全て有効な行は LLH route として扱い、`route_planner` が `geo_pose_converter.geo_core` のライブラリを使って ENU pose を生成する。走行用 ENU pose は2D座標として扱い、LLH route由来でも `pose.position.z=0.0` に正規化する。`x,y` があり LLH がない行は ENU route として扱い、simulation / Gazebo 向けにそのまま使用する。
+
+LLH と ENU が併記された CSV も読み込み可能だが、warning を出した上で LLH を正本として使用する。この場合、併記された `x,y` は LLH から再計算した ENU と水平 `0.10 m` の閾値で整合性を確認する。併記された `z` は2D走行座標として `0.0` を期待し、鉛直 `0.30 m` を超える場合は warning を出す。併記された quaternion と `heading_deg` の差も確認し、差が `1.0 deg` を超える場合は warning を出す。
 
 `waypoint_list` には Waypoint CSV への相対パスを記述します。`reversible=0` の場合は片方向エッジとして扱われます。
 `weight_factor` は任意の正の実数で、指定するとセグメント長に係数を掛けた重みでグラフ探索を行います。
+
+
+### LLH/ENU 座標系と `Route.projection`
+LLH/ENU 変換式、heading/yaw 変換、投影原点は `geo_pose_converter` が一元管理する。`route_planner` は `projection_config_path` で指定された `geo_pose_converter` の parameter YAML を読み込み、install 後も通常の Python ライブラリ import として `geo_pose_converter.geo_core` を参照する。
+
+`route_planner` は route 応答時に `Route.projection` を設定し、各 waypoint の ENU pose と LLH pose がどの投影条件で対応するかを明示します。現在の既定 projection は開発チーム共通仕様に合わせた東京駅原点です。投影条件を変更する場合は `geo_pose_converter/params/default.yaml` または同等の共通 parameter YAML を更新し、`route_planner` 側には同じ YAML への参照だけを設定します。
 
 ### `/get_route` の処理
 1. `blocks` を順番に処理し、固定ブロックは CSV を連結、可変ブロックは最短経路を探索する。
@@ -105,7 +118,7 @@ CSV の Waypoint は `segment_id` 単位でキャッシュされ、進行方向�
 2. `ros2 run route_planner route_planner` を起動し、`/get_route` `/update_route` サービスが利用可能であることを確認する。
 3. 初期ルート生成を確認するには次を実行する。
    ```bash
-   ros2 service call /get_route route_msgs/srv/GetRoute "{start_label: '', goal_label: '', checkpoint_labels: []}"
+   ros2 service call /get_route tc_route_msgs/srv/GetRoute "{start_label: '', goal_label: '', checkpoint_labels: []}"
    ```
 4. 滞留再計画を確認するには、`route_manager` などから `/update_route` を呼び出し、`prev_index` と `current_index` に隣接インデックスを指定する。
 

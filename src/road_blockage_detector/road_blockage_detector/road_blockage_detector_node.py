@@ -37,8 +37,8 @@ class RoadBlockageDetector(Node):
         self._load_parameters()
 
         self.count_history: Deque[Tuple[int, int]] = deque()
-        self.latest_amcl_pose: Optional[Pose] = None
-        self.latest_amcl_time: Optional[Time] = None
+        self.latest_pose_enu: Optional[Pose] = None
+        self.latest_pose_enu_time: Optional[Time] = None
         self.blocked_positions: List[Pose] = []
         self.temporary_decision_count = 0
         self.blocked_state_started_at: Optional[float] = None
@@ -69,17 +69,17 @@ class RoadBlockageDetector(Node):
                 self.decision_image_topic,
                 qos_sensor_data,
             )
-        self.amcl_subscriber = self.create_subscription(
+        self.pose_enu_subscriber = self.create_subscription(
             PoseWithCovarianceStamped,
-            self.amcl_pose_topic,
-            self._amcl_pose_callback,
+            self.pose_enu_topic,
+            self._pose_enu_callback,
             10,
         )
         self.road_blocked_publisher = self.create_publisher(Bool, self.road_blocked_topic, 10)
 
         self.get_logger().info(
             'road_blockage_detector を起動しました。'
-            f' detections={self.detections_topic}, amcl_pose={self.amcl_pose_topic}, '
+            f' detections={self.detections_topic}, pose_enu={self.pose_enu_topic}, '
             f'road_blocked={self.road_blocked_topic}, '
             f'decision_image={self.decision_image_topic}'
         )
@@ -90,7 +90,7 @@ class RoadBlockageDetector(Node):
         self.declare_parameter('target_class_id', 0)
         self.declare_parameter('detections_topic', '/perception/road_blockage/detections')
         self.declare_parameter('image_topic', '/usb_cam/image_raw')
-        self.declare_parameter('amcl_pose_topic', '/amcl_pose')
+        self.declare_parameter('pose_enu_topic', '/localization/pose_enu')
         self.declare_parameter('road_blocked_topic', '/road_blocked')
         self.declare_parameter(
             'decision_image_topic',
@@ -114,7 +114,7 @@ class RoadBlockageDetector(Node):
         self.target_class_id = self._get_int_parameter('target_class_id')
         self.detections_topic = self._get_string_parameter('detections_topic')
         self.image_topic = self._get_string_parameter('image_topic')
-        self.amcl_pose_topic = self._get_string_parameter('amcl_pose_topic')
+        self.pose_enu_topic = self._get_string_parameter('pose_enu_topic')
         self.road_blocked_topic = self._get_string_parameter('road_blocked_topic')
         self.decision_image_topic = self._get_string_parameter('decision_image_topic')
         self.publish_decision_image = self._get_bool_parameter('publish_decision_image')
@@ -164,11 +164,11 @@ class RoadBlockageDetector(Node):
             self.latest_image = cv_image.copy()
             self.latest_image_header = copy.deepcopy(msg.header)
 
-    def _amcl_pose_callback(self, msg: PoseWithCovarianceStamped) -> None:
-        """最新の amcl_pose をキャッシュする."""
+    def _pose_enu_callback(self, msg: PoseWithCovarianceStamped) -> None:
+        """最新の pose_enu をキャッシュする."""
 
-        self.latest_amcl_pose = msg.pose.pose
-        self.latest_amcl_time = Time.from_msg(msg.header.stamp)
+        self.latest_pose_enu = msg.pose.pose
+        self.latest_pose_enu_time = Time.from_msg(msg.header.stamp)
 
     def _detections_callback(self, msg: Detection2DArray) -> None:
         """Detection2DArray を受信し、判定処理を行う."""
@@ -467,7 +467,7 @@ class RoadBlockageDetector(Node):
         if now_sec - self.blocked_state_started_at < self.confirmation_duration:
             return
 
-        target_stamp = self.latest_amcl_time or Time()
+        target_stamp = self.latest_pose_enu_time or Time()
         confirmation_pose = pose or self._lookup_pose(target_stamp)
         if confirmation_pose is None:
             self.get_logger().warn(
@@ -486,19 +486,19 @@ class RoadBlockageDetector(Node):
         self._reset_temporary_decision_state()
 
     def _lookup_pose(self, stamp: Time) -> Optional[Pose]:
-        """最新の amcl_pose から現在位置を取得する."""
+        """最新の pose_enu から現在位置を取得する."""
 
-        if self.latest_amcl_pose is None or self.latest_amcl_time is None:
+        if self.latest_pose_enu is None or self.latest_pose_enu_time is None:
             return None
 
-        time_diff_sec = abs(self.latest_amcl_time.nanoseconds - stamp.nanoseconds) / 1e9
+        time_diff_sec = abs(self.latest_pose_enu_time.nanoseconds - stamp.nanoseconds) / 1e9
         if time_diff_sec >= 3.0:
             self.get_logger().warn(
-                'Detection と /amcl_pose のタイムスタンプに'
+                'Detection と /localization/pose_enu のタイムスタンプに'
                 '3秒以上の差があります。'
             )
 
-        return self._copy_pose(self.latest_amcl_pose)
+        return self._copy_pose(self.latest_pose_enu)
 
     def _is_within_blocked_positions(self, pose: Pose) -> bool:
         """過去の封鎖位置近傍にいるかを判定する."""

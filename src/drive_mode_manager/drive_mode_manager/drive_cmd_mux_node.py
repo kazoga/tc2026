@@ -14,7 +14,7 @@ from drive_mode_manager.drive_mode_core import (
     DriveModeOutput,
     JoySnapshot,
 )
-from route_msgs.msg import DriveModeStatus
+from tc_route_msgs.msg import DriveModeStatus
 
 
 class DriveCmdMuxNode(Node):

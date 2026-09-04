@@ -12,7 +12,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from std_msgs.msg import Bool, Int32, String
 
-from route_msgs.msg import (
+from tc_route_msgs.msg import (
     FollowerState,
     ManagerStatus,
     ObstacleAvoidanceHint,
@@ -88,8 +88,8 @@ class RobotConsoleNode(Node):
         self.create_subscription(PoseStamped, 'active_target', self._core.update_active_target, 10)
         self.create_subscription(
             PoseWithCovarianceStamped,
-            'amcl_pose',
-            self._core.update_amcl_pose,
+            'localization/pose_enu',
+            self._core.update_pose_enu,
             10,
         )
         self.create_subscription(Twist, 'cmd_vel', self._core.update_cmd_vel, 10)

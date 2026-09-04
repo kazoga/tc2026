@@ -133,7 +133,12 @@ class StuckReport:
 class WaypointLite:
     """必要最小限のWP表現。元実装の属性を反映（省略無し）。"""
     label: str = ""
+    index: int = 0
     pose: Pose2D = field(default_factory=Pose2D)
+    has_pose_enu: bool = True
+    geo_pose: Any = None
+    has_geo_pose: bool = False
+    geo_pose_source: int = 0
     line_stop: bool = False
     signal_stop: bool = False
     not_skip: bool = False
@@ -169,6 +174,10 @@ class RouteModel:
     waypoints: List[WaypointLite]
     version: VersionMM
     frame_id: str = "map"
+    route_id: str = ""
+    map_frame_id: str = "map"
+    earth_frame_id: str = "earth"
+    projection: Any = None
     has_image: bool = True
     current_index: int = 0
     current_label: str = ""
@@ -192,6 +201,10 @@ class RouteModel:
                 waypoints=list(getattr(rm, "waypoints", [])),
                 version=VersionMM(major=int(getattr(rm.version, "major", 0)), minor=int(getattr(rm.version, "minor", 0))),
                 frame_id=str(getattr(rm, "frame_id", "map")),
+                route_id=str(getattr(rm, "route_id", "")),
+                map_frame_id=str(getattr(rm, "map_frame_id", "map")),
+                earth_frame_id=str(getattr(rm, "earth_frame_id", "earth")),
+                projection=copy.deepcopy(getattr(rm, "projection", None)),
                 has_image=bool(getattr(rm, "route_image", None) is not None or getattr(rm, "has_image", False)),
                 current_index=int(getattr(rm, "current_index", 0)),
                 current_label=str(getattr(rm, "current_label", "")),
@@ -216,6 +229,10 @@ class RouteModel:
                     getattr(route_like, "header", None), "frame_id", getattr(route_like, "frame_id", "map")
                 )
             ),
+            route_id=str(getattr(route_like, "route_id", "")),
+            map_frame_id=str(getattr(route_like, "map_frame_id", "map")),
+            earth_frame_id=str(getattr(route_like, "earth_frame_id", "earth")),
+            projection=copy.deepcopy(getattr(route_like, "projection", None)),
             has_image=route_image is not None,
             current_index=cur_idx,
             current_label=cur_lbl,
@@ -291,6 +308,10 @@ class RouteModel:
             waypoints=new_wps,
             version=VersionMM(major=self.version.major, minor=self.version.minor),
             frame_id=self.frame_id,
+            route_id=self.route_id,
+            map_frame_id=self.map_frame_id,
+            earth_frame_id=self.earth_frame_id,
+            projection=copy.deepcopy(self.projection),
             has_image=self.has_image,
             current_index=0 if new_wps else -1,
             current_label=(new_wps[0].label if new_wps else ""),
@@ -729,6 +750,10 @@ class RouteManagerCore:
                 minor=current.version.minor + 1,
             ),
             frame_id=current.frame_id,
+            route_id=current.route_id,
+            map_frame_id=current.map_frame_id,
+            earth_frame_id=current.earth_frame_id,
+            projection=copy.deepcopy(current.projection),
             has_image=current.has_image,
             current_index=current.current_index,
             current_label=current.current_label,
@@ -891,6 +916,10 @@ class RouteManagerCore:
             waypoints=new_wps,
             version=VersionMM(major=cur.major, minor=cur.minor + 1),
             frame_id=self.route_model.frame_id,
+            route_id=self.route_model.route_id,
+            map_frame_id=self.route_model.map_frame_id,
+            earth_frame_id=self.route_model.earth_frame_id,
+            projection=copy.deepcopy(self.route_model.projection),
             has_image=self.route_model.has_image,
             current_index=self.route_model.current_index,
             current_label=self.route_model.current_label,
@@ -966,6 +995,10 @@ class RouteManagerCore:
             waypoints=new_wps,
             version=VersionMM(major=cur.major, minor=cur.minor + 1),
             frame_id=self.route_model.frame_id,
+            route_id=self.route_model.route_id,
+            map_frame_id=self.route_model.map_frame_id,
+            earth_frame_id=self.route_model.earth_frame_id,
+            projection=copy.deepcopy(self.route_model.projection),
             has_image=self.route_model.has_image,
             current_index=nxt_idx,
             current_label=new_cur_label,

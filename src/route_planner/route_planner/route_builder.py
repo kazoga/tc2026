@@ -15,6 +15,37 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import yaml
 
+try:
+    from geo_pose_converter.geo_core import (
+        LlhPoint,
+        ProjectionConfig,
+        heading_deg_to_yaw_enu_rad,
+        llh_to_enu,
+        quaternion_to_yaw,
+        yaw_enu_rad_to_heading_deg,
+        yaw_to_quaternion as geo_yaw_to_quaternion,
+    )
+except ModuleNotFoundError:
+    GEO_PACKAGE_DIR = os.path.normpath(
+        os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..",
+            "..",
+            "geo_pose_converter",
+        )
+    )
+    if GEO_PACKAGE_DIR not in sys.path:
+        sys.path.insert(0, GEO_PACKAGE_DIR)
+    from geo_pose_converter.geo_core import (
+        LlhPoint,
+        ProjectionConfig,
+        heading_deg_to_yaw_enu_rad,
+        llh_to_enu,
+        quaternion_to_yaw,
+        yaw_enu_rad_to_heading_deg,
+        yaw_to_quaternion as geo_yaw_to_quaternion,
+    )
+
 if __package__ in (None, ""):
     # 単体実行時はパッケージ相対インポートが利用できないため、実行ファイル直下をパスへ追加する。
     PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -84,6 +115,8 @@ class WaypointRecord:
     segment_is_fixed: bool = False
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    altitude: Optional[float] = None
+    heading_deg: Optional[float] = None
 
     def clone(self) -> "WaypointRecord":
         """ディープコピーを生成する."""
@@ -371,34 +404,179 @@ def yaw_to_quaternion(yaw: float) -> Tuple[float, float, float, float]:
     return 0.0, 0.0, math.sin(half), math.cos(half)
 
 
-def parse_waypoint_csv(csv_path: str) -> List[WaypointRecord]:
+def _row_value(row: Dict[str, Any], *names: str) -> Any:
+    """複数候補名から最初に値が入っているCSV値を返す."""
+
+    for name in names:
+        value = row.get(name)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _parse_optional_float(row: Dict[str, Any], *names: str) -> Optional[float]:
+    """CSV値をoptional floatとして読む."""
+
+    value = _row_value(row, *names)
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _has_any_value(row: Dict[str, Any], *names: str) -> bool:
+    """候補カラムのどれかに値があるかを返す."""
+
+    return _row_value(row, *names) is not None
+
+
+def _warn(logger: Optional[Any], message: str) -> None:
+    """loggerがあればwarningを出す."""
+
+    if logger is None:
+        return
+    log_func = getattr(logger, "warn", None)
+    if callable(log_func):
+        log_func(message)
+
+
+def _set_pose_from_llh(
+    wp: WaypointRecord,
+    projection: ProjectionConfig,
+) -> None:
+    """LLH/headingを正本としてENU poseを生成する.
+
+    走行用ENU poseは2D座標として扱い（zは0.0へ正規化する）、水平座標の投影基準
+    高度は常に `origin_altitude` を用いる。local tangent planeでは同一の緯度経度
+    でも高度が変わると水平座標がずれるため（原点距離d[m]に対し 高度差 × d/R）、
+    waypointごとに異なる高度で投影すると同じ地点が別のENU座標になり、自己位置
+    （`geo_pose_converter` が同じく `origin_altitude` 基準でENU化する）との
+    整合が崩れる。CSVのaltitude列は投影には用いず、`geo_pose` の情報として
+    のみ扱う。
+    """
+
+    if wp.latitude is None or wp.longitude is None or wp.heading_deg is None:
+        raise ValueError("LLH routeにはlatitude/longitude/heading_degが必要です。")
+
+    enu = llh_to_enu(
+        LlhPoint(wp.latitude, wp.longitude, projection.origin_altitude), projection
+    )
+    wp.pose.position.x = enu.x
+    wp.pose.position.y = enu.y
+    wp.pose.position.z = 0.0
+    yaw_map = (
+        heading_deg_to_yaw_enu_rad(wp.heading_deg) - projection.map_yaw_offset_rad
+    )
+    qx, qy, qz, qw = geo_yaw_to_quaternion(yaw_map)
+    wp.pose.orientation.x = qx
+    wp.pose.orientation.y = qy
+    wp.pose.orientation.z = qz
+    wp.pose.orientation.w = qw
+
+
+def _validate_enu_against_llh(
+    csv_path: str,
+    row_number: int,
+    wp: WaypointRecord,
+    source_pose: PoseRecord,
+    projection: ProjectionConfig,
+    logger: Optional[Any],
+    horizontal_warning_threshold_m: float,
+    vertical_warning_threshold_m: float,
+) -> None:
+    """CSV併記ENUがLLH正本からの再計算値と整合するか確認する.
+
+    再計算の基準高度は `_set_pose_from_llh()` と同じく `origin_altitude` とする
+    （両者がずれると、実際に生成するENUと検証に使うENUが食い違う）。
+    """
+
+    if wp.latitude is None or wp.longitude is None or wp.heading_deg is None:
+        return
+
+    expected = llh_to_enu(
+        LlhPoint(wp.latitude, wp.longitude, projection.origin_altitude), projection
+    )
+    dx = float(source_pose.position.x) - expected.x
+    dy = float(source_pose.position.y) - expected.y
+    dz = float(source_pose.position.z)
+    horizontal_error = math.hypot(dx, dy)
+    vertical_error = abs(dz)
+    if horizontal_error > horizontal_warning_threshold_m:
+        _warn(
+            logger,
+            f"{csv_path}:{row_number}: CSV併記ENUの水平誤差が"
+            f"{horizontal_error:.3f} mあります。LLHを正本として使用します。",
+        )
+    if vertical_error > vertical_warning_threshold_m:
+        _warn(
+            logger,
+            f"{csv_path}:{row_number}: CSV併記ENUの鉛直誤差が"
+            f"{vertical_error:.3f} mあります。LLHを正本として使用します。",
+        )
+
+    source_yaw = quaternion_to_yaw(
+        source_pose.orientation.x,
+        source_pose.orientation.y,
+        source_pose.orientation.z,
+        source_pose.orientation.w,
+    )
+    source_heading = yaw_enu_rad_to_heading_deg(
+        source_yaw + projection.map_yaw_offset_rad
+    )
+    heading_error = abs((source_heading - wp.heading_deg + 180.0) % 360.0 - 180.0)
+    if heading_error > 1.0:
+        _warn(
+            logger,
+            f"{csv_path}:{row_number}: CSV併記quaternionとheading_degの差が"
+            f"{heading_error:.2f} degあります。heading_degを正本として使用します。",
+        )
+
+
+def parse_waypoint_csv(
+    csv_path: str,
+    projection: Optional[ProjectionConfig] = None,
+    logger: Optional[Any] = None,
+    horizontal_warning_threshold_m: float = 0.10,
+    vertical_warning_threshold_m: float = 0.30,
+) -> List[WaypointRecord]:
     """waypoint CSVをWayPointRecordの配列へ変換する."""
 
     waypoints: List[WaypointRecord] = []
+    warned_both = False
+    warned_partial_llh = False
+
     with open(csv_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for i, row in enumerate(reader):
+            row_number = i + 2
             wp = WaypointRecord()
             label_val = row.get("label")
             if label_val is None or label_val == "":
                 label_val = row.get("id") or row.get("num") or ""
             wp.label = str(label_val)
             wp.index = i
-            try:
-                wp.pose.position.x = float(row.get("x", 0.0))
-                wp.pose.position.y = float(row.get("y", 0.0))
-                wp.pose.position.z = float(row.get("z", 0.0))
-            except ValueError as exc:
-                raise ValueError(f"Invalid XYZ in {csv_path} at row {i + 1}: {exc}")
-            try:
-                wp.pose.orientation.x = float(row.get("q1", 0.0))
-                wp.pose.orientation.y = float(row.get("q2", 0.0))
-                wp.pose.orientation.z = float(row.get("q3", 0.0))
-                wp.pose.orientation.w = float(row.get("q4", 1.0))
-            except ValueError as exc:
-                raise ValueError(
-                    f"Invalid quaternion in {csv_path} at row {i + 1}: {exc}"
-                )
+
+            source_pose = PoseRecord()
+            has_enu = _has_any_value(row, "x") and _has_any_value(row, "y")
+            has_quaternion = all(_has_any_value(row, name) for name in ("q1", "q2", "q3", "q4"))
+            if has_enu:
+                try:
+                    source_pose.position.x = float(row.get("x", 0.0))
+                    source_pose.position.y = float(row.get("y", 0.0))
+                    source_pose.position.z = float(row.get("z", 0.0) or 0.0)
+                except ValueError as exc:
+                    raise ValueError(f"Invalid XYZ in {csv_path} at row {i + 1}: {exc}")
+                try:
+                    source_pose.orientation.x = float(row.get("q1", 0.0) or 0.0)
+                    source_pose.orientation.y = float(row.get("q2", 0.0) or 0.0)
+                    source_pose.orientation.z = float(row.get("q3", 0.0) or 0.0)
+                    source_pose.orientation.w = float(row.get("q4", 1.0) or 1.0)
+                except ValueError as exc:
+                    raise ValueError(
+                        f"Invalid quaternion in {csv_path} at row {i + 1}: {exc}"
+                    )
 
             def _bool_from_int(value: Any) -> bool:
                 try:
@@ -428,23 +606,62 @@ def parse_waypoint_csv(csv_path: str) -> List[WaypointRecord]:
                 row.get("not_skip", row.get("isnot_skipnum", 0))
             )
 
-            lat_raw = row.get("lat")
-            if lat_raw in (None, ""):
-                lat_raw = row.get("latitude")
-            try:
-                if lat_raw not in (None, ""):
-                    wp.latitude = float(lat_raw)
-            except (TypeError, ValueError):
-                wp.latitude = None
+            wp.latitude = _parse_optional_float(row, "lat", "latitude")
+            wp.longitude = _parse_optional_float(row, "lon", "longitude")
+            wp.altitude = _parse_optional_float(row, "alt", "altitude")
+            wp.heading_deg = _parse_optional_float(row, "heading_deg", "heading")
 
-            lon_raw = row.get("lon")
-            if lon_raw in (None, ""):
-                lon_raw = row.get("longitude")
-            try:
-                if lon_raw not in (None, ""):
-                    wp.longitude = float(lon_raw)
-            except (TypeError, ValueError):
-                wp.longitude = None
+            has_latlon = wp.latitude is not None and wp.longitude is not None
+            has_heading = wp.heading_deg is not None
+            has_complete_llh = has_latlon and has_heading
+            has_any_llh = any(
+                value is not None
+                for value in (wp.latitude, wp.longitude, wp.altitude, wp.heading_deg)
+            )
+
+            if has_complete_llh and has_enu and not warned_both:
+                _warn(
+                    logger,
+                    f"{csv_path}: LLH座標とENU座標が併記されています。"
+                    "LLH/heading_degを正本として使用し、ENUは整合性検証のみ行います。",
+                )
+                warned_both = True
+
+            if has_any_llh and not has_complete_llh and not warned_partial_llh:
+                _warn(
+                    logger,
+                    f"{csv_path}: LLH系カラムにはlatitude/longitude/heading_degが必要です。"
+                    "不足行はENU座標がある場合のみENU routeとして扱います。",
+                )
+                warned_partial_llh = True
+
+            if has_complete_llh and projection is not None:
+                if has_enu:
+                    _validate_enu_against_llh(
+                        csv_path,
+                        row_number,
+                        wp,
+                        source_pose,
+                        projection,
+                        logger,
+                        horizontal_warning_threshold_m,
+                        vertical_warning_threshold_m,
+                    )
+                _set_pose_from_llh(wp, projection)
+            elif has_enu:
+                wp.pose = source_pose
+            elif has_complete_llh:
+                raise ValueError(
+                    f"{csv_path}:{row_number}: LLH routeのENU生成にはprojection設定が必要です。"
+                )
+            else:
+                raise ValueError(
+                    f"{csv_path}:{row_number}: waypointにはLLH(latitude/longitude/heading_deg)"
+                    "またはENU(x/y)が必要です。"
+                )
+
+            if has_complete_llh and has_quaternion and projection is None:
+                wp.pose = source_pose
 
             waypoints.append(wp)
     return waypoints
@@ -502,6 +719,10 @@ def _merge_endpoint_records(
         base_wp.latitude = new_wp.latitude
     if new_wp.longitude is not None:
         base_wp.longitude = new_wp.longitude
+    if new_wp.altitude is not None:
+        base_wp.altitude = new_wp.altitude
+    if new_wp.heading_deg is not None:
+        base_wp.heading_deg = new_wp.heading_deg
 
 
 def concat_records_with_dedup(
@@ -770,10 +991,12 @@ class RouteBuilder:
         config_yaml_path: str,
         csv_base_dir: Optional[str] = None,
         logger: Optional[Any] = None,
+        projection: Optional[ProjectionConfig] = None,
     ) -> None:
         self.config_yaml_path = config_yaml_path
         self.csv_base_dir = csv_base_dir or ""
         self.logger = logger
+        self.projection = projection
         self.blocks: List[Dict[str, Any]] = []
         self.segments: Dict[str, SegmentRecord] = {}
         self.graph_builders: Dict[Tuple[str, int], VariableGraphBuilder] = {}
@@ -945,7 +1168,7 @@ class RouteBuilder:
             if btype == "fixed":
                 seg_path = resolve_path(self.csv_base_dir, block["segment_id"])
                 try:
-                    waypoints = parse_waypoint_csv(seg_path)
+                    waypoints = parse_waypoint_csv(seg_path, self.projection, self.logger)
                     self.segments[block["segment_id"]] = SegmentRecord(
                         block["segment_id"], waypoints
                     )
@@ -1009,7 +1232,7 @@ class RouteBuilder:
                             seg_path = resolve_path(self.csv_base_dir, seg_rel)
                             if seg_rel not in self.segments:
                                 try:
-                                    waypoints = parse_waypoint_csv(seg_path)
+                                    waypoints = parse_waypoint_csv(seg_path, self.projection, self.logger)
                                     self.segments[seg_rel] = SegmentRecord(
                                         seg_rel, waypoints
                                     )
@@ -1335,6 +1558,10 @@ def write_waypoints_to_csv(path: str, waypoints: List[WaypointRecord]) -> None:
         "signal_stop",
         "not_skip",
         "segment_is_fixed",
+        "latitude",
+        "longitude",
+        "altitude",
+        "heading_deg",
     ]
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=header)
@@ -1357,6 +1584,10 @@ def write_waypoints_to_csv(path: str, waypoints: List[WaypointRecord]) -> None:
                     "signal_stop": int(bool(wp.signal_stop)),
                     "not_skip": int(bool(wp.not_skip)),
                     "segment_is_fixed": int(bool(wp.segment_is_fixed)),
+                    "latitude": "" if wp.latitude is None else wp.latitude,
+                    "longitude": "" if wp.longitude is None else wp.longitude,
+                    "altitude": "" if wp.altitude is None else wp.altitude,
+                    "heading_deg": "" if wp.heading_deg is None else wp.heading_deg,
                 }
             )
 

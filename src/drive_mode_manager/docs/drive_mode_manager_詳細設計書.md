@@ -21,7 +21,7 @@
 
 参照した入力は、添付された自律走行・手動走行切替方式の検討資料、tc2025 ROS 1 資産の
 `scripts/joystick_teleop.py`、`scripts/total_gui.py`、`launch/1_init_robot_tc2024_joystick.launch`、
-および tc2026 の既存 `robot_navigator`, `ypspur_ros2`, `robot_console`, `route_msgs` の設計である。
+および tc2026 の既存 `robot_navigator`, `ypspur_ros2`, `robot_console`, `tc_route_msgs` の設計である。
 
 ## 2. 背景・要求・スコープ
 
@@ -112,7 +112,7 @@ src/drive_mode_manager/
 `launch/`, `params/`, `tests/` は実装フェーズで追加する。
 
 `DriveModeStatus.msg` は、GUI やログ解析など他パッケージからも参照される共有 interface である。
-実装時は `route_msgs/msg/DriveModeStatus.msg` として追加する方針を基本とする。
+実装時は `tc_route_msgs/msg/DriveModeStatus.msg` として追加する方針を基本とする。
 
 ## 5. 外部インタフェース仕様
 
@@ -134,7 +134,7 @@ src/drive_mode_manager/
 | Subscribe | `/cmd_vel/manual` | `geometry_msgs/msg/Twist` | Reliable / Volatile / depth 1 | 手動速度指令 |
 | Subscribe | `/joy` | `sensor_msgs/msg/Joy` | Reliable / Volatile / depth 10 | 状態遷移判定用 controller 入力 |
 | Publish | `/cmd_vel` | `geometry_msgs/msg/Twist` | Reliable / Volatile / depth 1 | `ypspur_ros2` へ渡す最終速度指令 |
-| Publish | `/drive_mode_status` | `route_msgs/msg/DriveModeStatus` | Reliable / Volatile / depth 10 | 走行状態と出力状態 |
+| Publish | `/drive_mode_status` | `tc_route_msgs/msg/DriveModeStatus` | Reliable / Volatile / depth 10 | 走行状態と出力状態 |
 
 `/cmd_vel` は本ノードだけが publish する。`robot_navigator` は launch remap で
 `/cmd_vel/autonomous` へ出力させる。
@@ -143,12 +143,12 @@ src/drive_mode_manager/
 
 | 方向 | Topic | Type | QoS | 内容 |
 | --- | --- | --- | --- | --- |
-| Subscribe | `/drive_mode_status` | `route_msgs/msg/DriveModeStatus` | Reliable / Volatile / depth 10 | 走行切替状態 |
+| Subscribe | `/drive_mode_status` | `tc_route_msgs/msg/DriveModeStatus` | Reliable / Volatile / depth 10 | 走行切替状態 |
 | Subscribe | `/cmd_vel` | `geometry_msgs/msg/Twist` | Reliable / Volatile / depth 1 | 最終出力の補助確認 |
 | Subscribe | `/cmd_vel/autonomous` | `geometry_msgs/msg/Twist` | Reliable / Volatile / depth 1 | 復帰予定 cmd の補助確認 |
 | Subscribe | `/rtk_gps/rtk_status` | `rtk_gps_um982_msgs/msg/RtkStatus` | Reliable / Volatile / depth 10 | 任意の RTK 表示 |
-| Subscribe | `/follower_state` | `route_msgs/msg/FollowerState` | Reliable / Volatile / depth 10 | 任意の次 waypoint 表示 |
-| Subscribe | `/manager_status` | `route_msgs/msg/ManagerStatus` | Reliable / Volatile / depth 10 | 任意の自律走行状態表示 |
+| Subscribe | `/follower_state` | `tc_route_msgs/msg/FollowerState` | Reliable / Volatile / depth 10 | 任意の次 waypoint 表示 |
+| Subscribe | `/manager_status` | `tc_route_msgs/msg/ManagerStatus` | Reliable / Volatile / depth 10 | 任意の自律走行状態表示 |
 
 GUI は表示専用とし、状態遷移コマンドや速度指令を publish しない。
 
@@ -514,7 +514,7 @@ GNSS/RTK は走行モードに関係なく自律復帰可否や自己位置信�
 `mode=AUTONOMOUS` で `output_source=ZERO` の場合は、自律 cmd timeout、起動直後、復帰保留などの
 停止理由を mux 状態や中央表示で明確にする。
 
-通常の自律走行画面の補助中央スロットでは、`route_msgs/msg/FollowerState` を主入力として使う。
+通常の自律走行画面の補助中央スロットでは、`tc_route_msgs/msg/FollowerState` を主入力として使う。
 `active_waypoint_label` を `WP: <label>`、`state` を `状態: <state>` として表示する。
 `FollowerState` がまだ届いていない場合は、`ManagerStatus.state` と `ManagerStatus.last_cause` を
 補助表示として使う。距離や詳細な状態語彙の変換は初期 UI には含めず、必要になった時点で
@@ -565,12 +565,12 @@ GUI 実装は、`PyQt5` の `Qt Widgets` と `QGraphicsView` / `QGraphicsScene` 
 | `sensor_msgs` | `Joy` |
 | `std_msgs` | 補助 topic |
 | `builtin_interfaces` | `DriveModeStatus.stamp` |
-| `route_msgs` | `DriveModeStatus`, `FollowerState`, `ManagerStatus` |
+| `tc_route_msgs` | `DriveModeStatus`, `FollowerState`, `ManagerStatus` |
 | `rtk_gps_um982_msgs` | GUI の RTK 状態表示 |
 | `python3-pyqt5` | 専用 GUI。16:9 論理キャンバス、等比拡縮、Qt event loop と ROS executor thread の分離 |
 
-`DriveModeStatus.msg` を `route_msgs` に追加する実装時は、`route_msgs/CMakeLists.txt` に msg を追加し、
-`drive_mode_manager/package.xml` の `route_msgs` 依存を維持する。
+`DriveModeStatus.msg` を `tc_route_msgs` に追加する実装時は、`tc_route_msgs/CMakeLists.txt` に msg を追加し、
+`drive_mode_manager/package.xml` の `tc_route_msgs` 依存を維持する。
 
 ## 15. テスト計画・受け入れ条件
 
@@ -592,8 +592,8 @@ GUI 実装は、`PyQt5` の `Qt Widgets` と `QGraphicsView` / `QGraphicsScene` 
 受け入れ条件は以下である。
 
 - `pytest src/drive_mode_manager/tests` が成功する。
-- `colcon build --symlink-install --packages-select route_msgs drive_mode_manager` が成功する。
-- `colcon build --packages-select route_msgs drive_mode_manager` が成功する。
+- `colcon build --symlink-install --packages-select tc_route_msgs drive_mode_manager` が成功する。
+- `colcon build --packages-select tc_route_msgs drive_mode_manager` が成功する。
 - 実機 `/joy` で L1 と PS ボタン index を確認し、PS が不安定な場合は代替 trigger を決める。
 - `DriveStatusGuiCore.fit_rect()` の単体テストで 16:9 表示領域の算出を確認する。
 - 画面を使う GUI 表示確認、controller 入力、実機駆動は自動テスト外の未確認事項として扱う。
@@ -609,7 +609,7 @@ GUI 実装は、`PyQt5` の `Qt Widgets` と `QGraphicsView` / `QGraphicsScene` 
 `robot_console` は既存どおり `/cmd_vel` を表示できる。ただし、切替状態と復帰カウントダウンは
 専用 GUI を正本表示とし、`robot_console` へ統合する場合も `/drive_mode_status` の購読表示に留める。
 
-`route_msgs` に `DriveModeStatus.msg` を追加するため、interface package の再ビルドが必要になる。
+`tc_route_msgs` に `DriveModeStatus.msg` を追加するため、interface package の再ビルドが必要になる。
 既存 msg/srv の field は変更しない。
 
 tc2025 の `joystick_teleop.py` から継承するのは、Joy 軸変換、deadzone、L1 デッドマン、
@@ -664,7 +664,7 @@ timeout 停止、turbo 倍率である。自律 cmd passthrough と waypoint fla
 
 ### 19.5 テスト計画
 
-`test_ps3_joy_sim_core.py` で L1/PS index、`w/s/a/d` の累積軸更新、Y 軸反転、斜め入力正規化、予測 `cmd_vel`、reset 相当、index 範囲外時の配列長維持を確認する。GUI 目視確認と ROS 2 topic 結合確認は `AGENTS.local.md` に従い、実機 driver と `ypspur_ros2` を起動しない範囲で実施する。
+`test_ps3_joy_sim_core.py` で L1/PS index、`w/s/a/d` の累積軸更新、Y 軸反転、斜め入力正規化、予測 `cmd_vel`、reset 相当、index 範囲外時の配列長維持を確認する。GUI 目視確認と ROS 2 topic 結合確認は `ros2-local-run` スキルに従い、実機 driver と `ypspur_ros2` を起動しない範囲で実施する。
 
 | 版 | 日付 | 変更概要 |
 | --- | --- | --- |

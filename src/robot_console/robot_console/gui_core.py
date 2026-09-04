@@ -166,6 +166,13 @@ class NodeLaunchManager:
                 simulator_package,
                 profile.simulator_launch_file,
             ]
+            if profile.profile_id == 'robot_navigator' and overrides:
+                pose_topic = overrides.get('pose_enu_topic')
+                if pose_topic:
+                    sim_args.append(f"pose_topic:={pose_topic}")
+                odom_topic = overrides.get('odom_topic')
+                if odom_topic:
+                    sim_args.append(f"odom_topic:={odom_topic}")
             sim_process = subprocess.Popen(
                 sim_args,
                 stdout=subprocess.PIPE,
@@ -844,7 +851,7 @@ class GuiCore:
                 self._target_distance.current_distance_m = self._compute_distance(msg, self._current_pose)
                 self._target_distance.updated_at = now()
 
-    def update_amcl_pose(self, msg: PoseWithCovarianceStamped) -> None:
+    def update_pose_enu(self, msg: PoseWithCovarianceStamped) -> None:
         with self._lock:
             self._current_pose = msg
             if self._current_target is not None:
@@ -1391,7 +1398,7 @@ def default_launch_profiles() -> List[NodeLaunchProfile]:
             package='robot_navigator',
             launch_file='robot_navigator.launch.py',
             simulator_launch_file='robot_simulator.launch.py',
-            user_arguments=['cmd_vel_topic', 'odom_topic'],
+            user_arguments=['cmd_vel_topic', 'odom_topic', 'pose_enu_topic'],
         ),
         NodeLaunchProfile(
             profile_id='obstacle_monitor',

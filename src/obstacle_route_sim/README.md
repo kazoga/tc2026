@@ -73,7 +73,7 @@ source install/setup.bash
 
 ## Gazebo 単体起動
 
-Gazebo GUI 付きで world、robot、bridge、fake AMCL、TF を起動する。
+Gazebo GUI 付きで world、robot、bridge、fake localization pose、TF を起動する。
 
 ```bash
 ros2 launch obstacle_route_sim sim_obstacle_route.launch.py \
