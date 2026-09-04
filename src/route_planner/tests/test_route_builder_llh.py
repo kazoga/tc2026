@@ -156,3 +156,59 @@ def test_parse_waypoint_csv_keeps_enu_only_route(tmp_path: Path) -> None:
     assert waypoints[0].pose.position.y == 2.0
     assert waypoints[0].pose.position.z == 3.0
     assert waypoints[0].pose.orientation.z == 0.70710678
+
+
+def _tokyo_station_projection() -> ProjectionConfig:
+    """params/default.yaml と同じ、東京駅を原点とする投影設定."""
+
+    return ProjectionConfig(
+        origin_latitude=35.681382,
+        origin_longitude=139.766084,
+        origin_altitude=3.86,
+        map_yaw_offset_rad=0.0,
+        projection_id="tokyo_station",
+    )
+
+
+def test_enu_pose_does_not_depend_on_csv_altitude(tmp_path: Path) -> None:
+    """CSVのaltitude列が水平ENU座標へ影響しないことを確認する.
+
+    local tangent planeでは同一の緯度経度でも高度が変わると水平座標がずれる
+    （原点距離d[m]に対し 高度差 × d/R）。waypointごとに異なる高度で投影すると
+    同じ地点が別のENU座標になり、自己位置（geo_pose_converterが origin_altitude
+    基準でENU化する）との整合が崩れるため、投影基準は常に origin_altitude とする。
+    """
+
+    projection = _tokyo_station_projection()
+    header = "label,latitude,longitude,altitude,heading_deg\n"
+
+    without_alt = tmp_path / "no_alt.csv"
+    without_alt.write_text(header + "wp1,36.0829271,140.0769037,,90.0\n", encoding="utf-8")
+    with_alt = tmp_path / "with_alt.csv"
+    with_alt.write_text(header + "wp1,36.0829271,140.0769037,62.0,90.0\n", encoding="utf-8")
+
+    a = parse_waypoint_csv(str(without_alt), projection)[0]
+    b = parse_waypoint_csv(str(with_alt), projection)[0]
+
+    assert a.pose.position.x == b.pose.position.x
+    assert a.pose.position.y == b.pose.position.y
+
+
+def test_enu_pose_matches_origin_altitude_projection(tmp_path: Path) -> None:
+    """生成されるENU poseが origin_altitude 基準の投影と一致することを確認する."""
+
+    projection = _tokyo_station_projection()
+    csv_path = tmp_path / "wp.csv"
+    csv_path.write_text(
+        "label,latitude,longitude,altitude,heading_deg\n"
+        "wp1,36.0829271,140.0769037,62.0,90.0\n",
+        encoding="utf-8",
+    )
+
+    wp = parse_waypoint_csv(str(csv_path), projection)[0]
+    expected = llh_to_enu(
+        LlhPoint(36.0829271, 140.0769037, projection.origin_altitude), projection
+    )
+
+    assert abs(wp.pose.position.x - expected.x) < 1e-9
+    assert abs(wp.pose.position.y - expected.y) < 1e-9

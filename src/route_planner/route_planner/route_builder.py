@@ -446,13 +446,23 @@ def _set_pose_from_llh(
     wp: WaypointRecord,
     projection: ProjectionConfig,
 ) -> None:
-    """LLH/headingを正本としてENU poseを生成する."""
+    """LLH/headingを正本としてENU poseを生成する.
+
+    走行用ENU poseは2D座標として扱い（zは0.0へ正規化する）、水平座標の投影基準
+    高度は常に `origin_altitude` を用いる。local tangent planeでは同一の緯度経度
+    でも高度が変わると水平座標がずれるため（原点距離d[m]に対し 高度差 × d/R）、
+    waypointごとに異なる高度で投影すると同じ地点が別のENU座標になり、自己位置
+    （`geo_pose_converter` が同じく `origin_altitude` 基準でENU化する）との
+    整合が崩れる。CSVのaltitude列は投影には用いず、`geo_pose` の情報として
+    のみ扱う。
+    """
 
     if wp.latitude is None or wp.longitude is None or wp.heading_deg is None:
         raise ValueError("LLH routeにはlatitude/longitude/heading_degが必要です。")
 
-    altitude = projection.origin_altitude if wp.altitude is None else float(wp.altitude)
-    enu = llh_to_enu(LlhPoint(wp.latitude, wp.longitude, altitude), projection)
+    enu = llh_to_enu(
+        LlhPoint(wp.latitude, wp.longitude, projection.origin_altitude), projection
+    )
     wp.pose.position.x = enu.x
     wp.pose.position.y = enu.y
     wp.pose.position.z = 0.0
@@ -476,13 +486,18 @@ def _validate_enu_against_llh(
     horizontal_warning_threshold_m: float,
     vertical_warning_threshold_m: float,
 ) -> None:
-    """CSV併記ENUがLLH正本からの再計算値と整合するか確認する."""
+    """CSV併記ENUがLLH正本からの再計算値と整合するか確認する.
+
+    再計算の基準高度は `_set_pose_from_llh()` と同じく `origin_altitude` とする
+    （両者がずれると、実際に生成するENUと検証に使うENUが食い違う）。
+    """
 
     if wp.latitude is None or wp.longitude is None or wp.heading_deg is None:
         return
 
-    altitude = projection.origin_altitude if wp.altitude is None else float(wp.altitude)
-    expected = llh_to_enu(LlhPoint(wp.latitude, wp.longitude, altitude), projection)
+    expected = llh_to_enu(
+        LlhPoint(wp.latitude, wp.longitude, projection.origin_altitude), projection
+    )
     dx = float(source_pose.position.x) - expected.x
     dy = float(source_pose.position.y) - expected.y
     dz = float(source_pose.position.z)
