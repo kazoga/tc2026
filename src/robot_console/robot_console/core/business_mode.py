@@ -37,6 +37,7 @@ LAUNCH_PRESETS: Dict[Tuple[str, str], List[LaunchPresetEntry]] = {
         LaunchPresetEntry('drive_mode_manager'),
         LaunchPresetEntry('route_planner'),
         LaunchPresetEntry('route_manager'),
+        LaunchPresetEntry('geo_pose_converter', overrides={'enable_geo_pose_converter': 'true'}),
         LaunchPresetEntry('route_follower'),
         LaunchPresetEntry('obstacle_monitor'),
         LaunchPresetEntry('robot_navigator'),
@@ -52,6 +53,7 @@ LAUNCH_PRESETS: Dict[Tuple[str, str], List[LaunchPresetEntry]] = {
         LaunchPresetEntry('drive_mode_manager'),
         LaunchPresetEntry('route_planner'),
         LaunchPresetEntry('route_manager'),
+        LaunchPresetEntry('geo_pose_converter'),
         LaunchPresetEntry('route_follower'),
         LaunchPresetEntry('obstacle_monitor'),
         LaunchPresetEntry('robot_navigator'),
@@ -62,6 +64,7 @@ LAUNCH_PRESETS: Dict[Tuple[str, str], List[LaunchPresetEntry]] = {
     ('机上確認', '自律走行'): [
         LaunchPresetEntry('route_planner'),
         LaunchPresetEntry('route_manager'),
+        LaunchPresetEntry('geo_pose_converter'),
         LaunchPresetEntry('route_follower'),
         LaunchPresetEntry('drive_mode_manager', overrides={'joy_input': 'ps3_joy_sim'}),
         LaunchPresetEntry('robot_navigator', use_simulator_alternate=True),

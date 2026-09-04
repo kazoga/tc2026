@@ -13,13 +13,17 @@ import threading
 from dataclasses import dataclass
 
 import rclpy
-from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
+from nav_msgs.msg import Odometry
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rtk_gps_um982_msgs.msg import RtkStatus
 from sensor_msgs.msg import Image as ImageMsg
 from std_msgs.msg import Bool, Int32, String
 from tc_geo_msgs.msg import GeoPoseWithQuality
 from tc_route_msgs.msg import (
+    ActiveTargetLlh,
+    DriveModeStatus,
     FollowerState,
     ManagerStatus,
     ObstacleAvoidanceHint,
@@ -33,6 +37,41 @@ DEFAULT_NODE_NAME = 'robot_console_gui'
 # rtk_gps_um982ノードのlaunch側namespace（rtk_gps）に合わせた絶対パス。
 RTK_STATUS_TOPIC = '/rtk_gps/rtk_gps_um982_node/rtk_status'
 
+# route_manager の /active_route はTransient Local（ラッチ配信）で配信される
+# （route_manager_node.py の qos_tl()）。購読側が既定のVOLATILEのままだと、
+# route_manager の publish 完了より購読の確立が遅れた場合に初回のRouteを
+# 二度と受け取れない（DDSのdurability replayはVOLATILE購読には行われない）。
+# 起動順に依存せず必ず現在のrouteを受け取れるよう、publisher側と同じQoSで購読する。
+_QOS_ACTIVE_ROUTE = QoSProfile(
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=1,
+)
+
+# obstacle_monitor は obstacle_avoidance_hint を BEST_EFFORT で配信する
+# （obstacle_monitor_node.py の qos_be_volatile）。購読側が既定のRELIABLEのままだと
+# QoS非互換となり接続自体が成立せず、hintを一切受信できない。BEST_EFFORT購読は
+# RELIABLE配信元とも互換であるため、購読側をBEST_EFFORTに合わせる。
+_QOS_BEST_EFFORT = QoSProfile(
+    reliability=ReliabilityPolicy.BEST_EFFORT,
+    durability=DurabilityPolicy.VOLATILE,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=1,
+)
+
+# 画像系トピックも配信側のQoSがノードごとに異なる
+# （road_blockage_detector の decision_image は BEST_EFFORT、obstacle_monitor の
+# sensor_viewer と traffic_signal_recognizer の decision_image は RELIABLE）。
+# BEST_EFFORT購読はどちらとも互換であり、表示用途では取りこぼしも許容できるため
+# 画像購読は一律 BEST_EFFORT とする。
+_QOS_IMAGE = QoSProfile(
+    reliability=ReliabilityPolicy.BEST_EFFORT,
+    durability=DurabilityPolicy.VOLATILE,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=1,
+)
+
 
 class RobotConsoleNode(Node):
     """ROS 2 topicを購読し `ConsoleCore` へ橋渡しするだけのNode。"""
@@ -45,7 +84,9 @@ class RobotConsoleNode(Node):
         self.create_subscription(
             ManagerStatus, 'manager_status', self._core.update_manager_status, 10
         )
-        self.create_subscription(Route, 'active_route', self._core.update_route, 10)
+        self.create_subscription(
+            Route, 'active_route', self._core.update_route, _QOS_ACTIVE_ROUTE
+        )
         self.create_subscription(
             FollowerState, 'follower_state', self._core.update_follower_state, 10
         )
@@ -53,11 +94,33 @@ class RobotConsoleNode(Node):
             ObstacleAvoidanceHint,
             'obstacle_avoidance_hint',
             self._core.update_obstacle_hint,
-            10,
+            _QOS_BEST_EFFORT,
         )
         self.create_subscription(
             PoseStamped, 'active_target', self._core.update_active_target, 10
         )
+        # 目標の緯度経度は geo_pose_converter（route_geo_projector_node）が
+        # ENUから変換して配信する。`robot_console` は変換を持たず受け取るだけとする。
+        self.create_subscription(
+            ActiveTargetLlh,
+            'route/active_target_llh',
+            self._core.update_active_target_llh,
+            10,
+        )
+        self.create_subscription(
+            DriveModeStatus, 'drive_mode_status', self._core.update_drive_mode_status, 10
+        )
+        self.create_subscription(Twist, 'cmd_vel', self._core.update_cmd_vel, 10)
+        self.create_subscription(
+            Twist, 'cmd_vel/autonomous', self._core.update_cmd_vel_autonomous, 10
+        )
+        odom_topic = self.resolve_topic_name('odom')
+        self.create_subscription(
+            Odometry, 'odom', lambda msg: core.update_odom(msg, topic=odom_topic), 10
+        )
+        # 自身がpublishした値もDDS経由でエコーバックされるため、GUI送信の結果確認と
+        # GUI以外（joyコンソール等）からの送信検知の双方をこの購読で扱う。
+        self.create_subscription(Bool, 'manual_start', self._core.update_manual_start, 10)
         self.create_subscription(
             PoseWithCovarianceStamped,
             'localization/pose_enu',
@@ -79,7 +142,7 @@ class RobotConsoleNode(Node):
             lambda msg: core.update_sensor_image(
                 'sensor_viewer', 'Sensor Viewer', '/sensor_viewer', msg
             ),
-            10,
+            _QOS_IMAGE,
         )
         self.create_subscription(
             ImageMsg,
@@ -90,7 +153,7 @@ class RobotConsoleNode(Node):
                 '/perception/road_blockage/decision_image',
                 msg,
             ),
-            10,
+            _QOS_IMAGE,
         )
         self.create_subscription(
             ImageMsg,
@@ -101,7 +164,7 @@ class RobotConsoleNode(Node):
                 '/perception/traffic_signal/decision_image',
                 msg,
             ),
-            10,
+            _QOS_IMAGE,
         )
 
         # 先頭にスラッシュを付けないことで launch からの remap を可能にする。

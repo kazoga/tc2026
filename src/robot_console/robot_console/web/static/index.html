@@ -13,14 +13,16 @@
 </head>
 <body>
 <header>
-  <h1>robot_console 遠隔観測（閲覧専用）</h1>
+  <div class="title-row">
+    <h1>robot_console 遠隔観測（閲覧専用）</h1>
+    <span id="freshness-indicator" class="freshness-indicator">-</span>
+  </div>
   <p class="notice">このページは観測専用です。手動介入・起動操作・パラメータ編集はできません。</p>
 </header>
 
 <main>
   <section id="summary" class="panel">
     <h2>状態サマリ</h2>
-    <p id="connection-status" class="connection-status">サーバへ接続中…</p>
     <dl id="summary-fields" class="fields"></dl>
   </section>
 

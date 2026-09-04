@@ -12,6 +12,7 @@ from typing import Optional
 
 from PyQt5 import QtCore, QtWidgets
 
+from robot_console.core.route_adapter import traveled_waypoint_count
 from robot_console.core.snapshot_model import ConsoleSnapshot
 
 from .widgets.color_rules import freshness_color, phase_color, rtk_state_color
@@ -99,6 +100,7 @@ class DashboardTab(QtWidgets.QWidget):
         self._progress_label = QtWidgets.QLabel('-')
         self._waypoint_label = QtWidgets.QLabel('-')
         self._manual_start_label = QtWidgets.QLabel('-')
+        self._pause_reason_label = QtWidgets.QLabel('-')
         self._top_event_label = QtWidgets.QLabel('-')
 
         detail_row = QtWidgets.QHBoxLayout()
@@ -107,6 +109,7 @@ class DashboardTab(QtWidgets.QWidget):
             ('進捗', self._progress_label),
             ('WP', self._waypoint_label),
             ('manual_start', self._manual_start_label),
+            ('停止理由', self._pause_reason_label),
             ('重要イベント', self._top_event_label),
         ):
             title_label = QtWidgets.QLabel(f'{title}:')
@@ -184,6 +187,7 @@ class DashboardTab(QtWidgets.QWidget):
             f'{operation.current_waypoint or "-"} -> {operation.next_waypoint or "-"}'
         )
         self._manual_start_label.setText(str(operation.manual_start))
+        self._pause_reason_label.setText(operation.pause_reason or '-')
 
         ordered_events = sort_by_priority(snapshot.event_banners)
         self._top_event_label.setText(ordered_events[0].message if ordered_events else 'なし')
@@ -203,7 +207,7 @@ class DashboardTab(QtWidgets.QWidget):
         )
         self._follower_stagnation_label.setText(follower.stagnation_reason or '-')
         self._route_progress_label.setText(
-            f'{route.current_index}/{route.total_waypoints} '
+            f'{traveled_waypoint_count(route)}/{route.total_waypoints} '
             f'({route.progress_ratio * 100.0:.1f}%)'
         )
         arrival_text = '到達' if target.within_arrival_threshold else '未到達'

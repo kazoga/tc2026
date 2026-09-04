@@ -104,3 +104,43 @@ def test_map_view_update_route_does_not_raise(qt_app):
     )
 
     view.update_route(route)
+
+
+def test_map_html_fits_route_bounds_on_first_waypoints():
+    """自己位置未受信でも初回waypoint受信で地図がroute範囲へ移動する（HTML観測UIと同じ挙動）。"""
+
+    html = build_map_html()
+
+    assert 'hasFitRouteBounds' in html
+    assert 'map.fitBounds(' in html
+
+
+def test_build_update_route_script_marks_all_waypoints_traveled_on_completion():
+    """完走時は最終waypointまで走行済みとして色分けされる（PyQt5側もHTML側と同じ挙動）。"""
+
+    route = RouteView(
+        current_index=2,
+        total_waypoints=3,
+        is_completed=True,
+        waypoints=[
+            RouteWaypointView(index=0, latitude=36.083, longitude=140.113),
+            RouteWaypointView(index=1, latitude=36.0831, longitude=140.1131),
+            RouteWaypointView(index=2, latitude=36.0832, longitude=140.1132),
+        ],
+    )
+
+    script = build_update_route_script(route)
+
+    assert script.endswith('3);')
+
+
+def test_build_update_route_script_uses_current_index_while_running():
+    route = RouteView(
+        current_index=1,
+        total_waypoints=3,
+        waypoints=[RouteWaypointView(index=0, latitude=36.083, longitude=140.113)],
+    )
+
+    script = build_update_route_script(route)
+
+    assert script.endswith('1);')

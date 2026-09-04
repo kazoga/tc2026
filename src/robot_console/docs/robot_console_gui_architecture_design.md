@@ -167,6 +167,29 @@ route、waypoint、active targetも同様に、現行のmap/ENU/PoseStamped前�
 - 将来のLLH route/target topicをroute/target Viewへ変換する。
 - UIに座標変換規約を持たせず、地図描画に必要なoverlay情報を生成する。
 
+### 6.3.1 ENU⇔LLH変換の集約先
+
+地図表示（PyQt5 `MapView` / HTML観測UI）は緯度経度を必要とするが、ENU⇔LLH変換は
+`robot_console` では行わない。変換は `geo_pose_converter`（`route_geo_projector_node`）へ
+集約し、`robot_console` は変換済みのLLH topicを購読するだけとする。
+
+| 用途 | 購読するtopic | 配信元 |
+| --- | --- | --- |
+| 自己位置 | `/localization/pose_llh` | `geo_pose_converter` |
+| 目標waypoint | `/route/active_target_llh` | `geo_pose_converter` |
+| route waypoint列 | `/active_route` の `waypoints[].geo_pose` | `route_planner`（route file由来） |
+
+この方針の根拠は以下である。
+
+- `tc_route_msgs/ActiveTargetLlh` は「GUI・HTML UI・ログ向け」と定義されており、GUIがLLHを
+  受け取る前提で設計されている（制御用のENU目標は `/active_target` のまま維持する）。
+- 投影パラメータの解釈（原点、`map_yaw_offset_rad`、datum）を複数パッケージへ分散させると、
+  投影設定の変更時に不整合が生じる。
+
+したがって地図表示を行う構成では `geo_pose_converter` profileの起動が前提となる。同profileは
+業務モードプリセット（自律走行系）へ含める。GNSS実機を伴わない構成では
+`enable_geo_pose_converter:=false` とし、ENU→LLH変換を行う `route_geo_projector_node` のみ起動する。
+
 ### 6.4 移行時の表示方針
 
 - 現行sourceのみの場合、画面には `Localization source: pose_enu` と表示する。
@@ -198,6 +221,7 @@ route、waypoint、active targetも同様に、現行のmap/ENU/PoseStamped前�
 | `/sensor_viewer` | `sensor_msgs/msg/Image` | 現行 | 障害物/センサビュー表示 |
 | `/perception/road_blockage/decision_image` | `sensor_msgs/msg/Image` | 現行 | 道路封鎖判定画像表示 |
 | `/perception/traffic_signal/decision_image` | `sensor_msgs/msg/Image` | 現行 | 信号認識画像表示 |
+| `/route/active_target_llh` | `tc_route_msgs/msg/ActiveTargetLlh` | 現行 | 地図表示用の目標LLH、目標距離・bearing |
 | `/manual_start` | `std_msgs/msg/Bool` | 現行 | 手動開始状態、送信結果確認 |
 | `/sig_recog` | `std_msgs/msg/Int32` | 現行 | 信号GO/STOP状態、送信結果確認 |
 | `/road_blocked` | `std_msgs/msg/Bool` | 現行 | 道路封鎖状態、入力元表示 |
@@ -466,12 +490,18 @@ traffic_signal_recognizer (simulator代替使用)
 
 ## 13. QoS・並行性・タイミング設計
 
+- 購読QoSは配信側ノードのQoSに合わせる。QoS非互換の購読は接続自体が成立せず無言で受信ゼロになるため、以下を購読側の既定とする。
+  - `/active_route`: route_managerがTransient Local（ラッチ）で配信するため、`RELIABLE` / `TRANSIENT_LOCAL` / `depth=1` で購読する（VOLATILE購読では起動順によって初回Routeを取り逃す）。
+  - `/obstacle_avoidance_hint`: obstacle_monitorがBEST_EFFORTで配信するため、`BEST_EFFORT` で購読する。
+  - 画像topic（`/sensor_viewer`、各 `decision_image`）: 配信側のreliabilityがノードごとに異なるため、双方と互換な `BEST_EFFORT` で一律購読する（表示用途であり取りこぼしを許容する）。
+  - 上記以外のストリーム系topicは `RELIABLE` / `VOLATILE` / `depth=10` を既定とする。
 - ROS callbackはCoreのスレッド安全APIへ状態を投入し、GUI部品を直接更新しない。
 - PyQt5 GUIはQt main thread上でのみwidgetを更新する。
 - Snapshot生成時はStateStoreを短時間lockし、UI側では読み取り専用データとして扱う。
 - 画像はImageStoreに保持し、Snapshotには参照情報だけを含める。
 - GPS/GNSS topicは受信周期が10Hz程度のため、GUI表示は5Hz以下へ間引いてよい。
 - 将来の `pose_llh` と現行 `/localization/pose_enu` を同時購読する期間は、sourceごとの鮮度を別々に保持する。
+- `odom` は実機（`ypspur_ros2` 既定: `/odom`）とシミュレーション評価構成（`node_launch_profiles.yaml` の `robot_navigator` プロファイル既定: `/ypspur_ros/odom`）とで既定トピック名が異なるため、`launch/robot_console.launch.py` は `odom_topic` launch引数でremapできるようにする（`ros2 run` 経由で起動する場合は `--ros-args -r odom:=<実際のtopic>` で同様に上書きできる）。`drive_mode_status` / `cmd_vel` / `cmd_vel/autonomous` も同様にlaunch引数でremapできるようにし、他の購読topicと同じ扱いとする。
 
 ## 14. エラー処理・ログ・診断
 
@@ -525,7 +555,6 @@ HTML UIには操作APIを提供しない。自己位置は現行 `/localization/
 
 - `localization_fusion/pose_llh` の正確なtopic名と型は、`localization_fusion` 実装時に確定する。
 - LLHベースroute/waypoint/active_targetのtopic名と型は、route系interface拡張時に確定する。
-- OSM表示でGPS LLHとlocal ENUをどの共通変換機能に集約するかは、地図・自己位置系の実装時に確定する。
 - `gpsd`、`chrony` の状態をGUIへ表示するかは、OS管理方法が固まった後に別profileまたはhealth checkとして検討する。
 - 複数GPS受信機を扱う場合は、GPS profileを複数インスタンス化できるよう `instance_id` を追加する。
 

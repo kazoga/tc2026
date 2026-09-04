@@ -173,6 +173,7 @@ class _FakeConsoleCore:
         self.use_alternate_launch_calls: list = []
         self.simulator_enabled_calls: list = []
         self.launch_override_calls: list = []
+        self.business_mode_calls: list = []
 
     def request_launch(self, profile_id: str) -> None:
         self.launched.append(profile_id)
@@ -211,6 +212,9 @@ class _FakeConsoleCore:
 
     def update_launch_override(self, profile_id: str, key: str, value: str) -> None:
         self.launch_override_calls.append((profile_id, key, value))
+
+    def update_business_mode(self, environment: str, drive_mode: str) -> None:
+        self.business_mode_calls.append((environment, drive_mode))
 
 
 def test_launch_requested_signal_calls_core_request_launch(qt_app):
@@ -333,3 +337,16 @@ def test_dashboard_apply_preset_updates_shared_launch_plan(qt_app):
     ]
     # 適用結果が起動操作カードへも反映される（plan_changed経由）。
     assert card._ordered_profile_ids == ['obstacle_route_sim', 'drive_mode_manager']
+
+
+def test_business_mode_selection_is_pushed_to_core(qt_app):
+    """業務モードはROS topicから得られないため、選択値をConsoleCoreへ渡す必要がある。"""
+
+    core = _FakeConsoleCore()
+    window = MainWindow(core=core)
+
+    assert core.business_mode_calls == [('実機', '手動走行')]
+
+    window.launch_settings_tab._environment_combo.setCurrentText('シミュレーション')
+
+    assert core.business_mode_calls[-1] == ('シミュレーション', '手動走行')

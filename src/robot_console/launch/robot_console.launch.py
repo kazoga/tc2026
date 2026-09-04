@@ -60,6 +60,25 @@ _TOPIC_CONFIGS = [
     ('active_target_topic', 'active_target', '/active_target', 'ターゲット姿勢トピック'),
     ('pose_enu_topic', 'localization/pose_enu', '/localization/pose_enu', 'ENU自己位置トピック'),
     ('cmd_vel_topic', 'cmd_vel', '/cmd_vel', '速度指令トピック'),
+    (
+        'cmd_vel_autonomous_topic',
+        'cmd_vel/autonomous',
+        '/cmd_vel/autonomous',
+        '自律速度指令トピック',
+    ),
+    (
+        'drive_mode_status_topic',
+        'drive_mode_status',
+        '/drive_mode_status',
+        '走行モード状態トピック',
+    ),
+    (
+        'odom_topic',
+        'odom',
+        '/odom',
+        'オドメトリトピック（実機ではypspur_ros2、シミュレーションではrobot_navigatorの'
+        'odom_topic設定に合わせて上書きする）',
+    ),
 ]
 
 

@@ -15,6 +15,7 @@ from typing import Optional
 from PyQt5 import QtWidgets
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 
+from robot_console.core.route_adapter import traveled_waypoint_count
 from robot_console.core.snapshot_model import LocalizationStateView, RouteView, TargetView
 
 DEFAULT_LATITUDE = 36.083
@@ -44,6 +45,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 var currentMarker = null;
 var targetMarker = null;
 var hasCentered = false;
+var hasFitRouteBounds = false;
 
 var routeWaypointMarkers = [];
 var routeTraveledPolyline = null;
@@ -52,7 +54,7 @@ var knownRouteWaypointCount = -1;
 var ROUTE_TRAVELED_COLOR = '#757575';
 var ROUTE_UNTRAVELED_COLOR = '#66bb6a';
 
-function updateRoute(waypoints, currentIndex) {
+function updateRoute(waypoints, traveledCount) {
   var validWaypoints = waypoints.filter(function (waypoint) {
     return waypoint.latitude !== null && waypoint.longitude !== null;
   });
@@ -67,11 +69,24 @@ function updateRoute(waypoints, currentIndex) {
       }).addTo(map);
     });
     knownRouteWaypointCount = validWaypoints.length;
+
+    // 自己位置（pose_enu）を未受信の間は地図が初期表示座標のまま動かず、
+    // waypointが描画されていても実際のroute位置が画面外になり続ける
+    // （manual_start前はrobot_simulatorが自己位置を出力しないため、この状態が
+    // 長時間続き得る）。初めてwaypointを受け取った時点で一度だけroute全体が
+    // 収まるよう地図をfitさせ、以後は自己位置側の自動センタリング
+    // （updateMarkers）やユーザー操作を優先して上書きしない。
+    if (validWaypoints.length > 0 && !hasFitRouteBounds && !hasCentered) {
+      map.fitBounds(validWaypoints.map(function (waypoint) {
+        return [waypoint.latitude, waypoint.longitude];
+      }), { padding: [24, 24] });
+      hasFitRouteBounds = true;
+    }
   }
 
   for (var j = 0; j < validWaypoints.length; j += 1) {
     var waypoint = validWaypoints[j];
-    var traveled = waypoint.index < currentIndex;
+    var traveled = waypoint.index < traveledCount;
     var color = traveled ? ROUTE_TRAVELED_COLOR : ROUTE_UNTRAVELED_COLOR;
     routeWaypointMarkers[j].setLatLng([waypoint.latitude, waypoint.longitude]);
     routeWaypointMarkers[j].setStyle({ color: color, fillColor: color });
@@ -86,11 +101,13 @@ function updateRoute(waypoints, currentIndex) {
     }).addTo(map);
   }
 
+  // 走行済み線と未走行線は現在追従中のwaypointで接続する（両方に含める）。
+  // 完走時は traveledCount が総数になり、未走行線は空になる。
   var traveledLatLngs = validWaypoints
-    .filter(function (waypoint) { return waypoint.index <= currentIndex; })
+    .filter(function (waypoint) { return waypoint.index <= traveledCount; })
     .map(function (waypoint) { return [waypoint.latitude, waypoint.longitude]; });
   var untraveledLatLngs = validWaypoints
-    .filter(function (waypoint) { return waypoint.index >= currentIndex; })
+    .filter(function (waypoint) { return waypoint.index >= traveledCount; })
     .map(function (waypoint) { return [waypoint.latitude, waypoint.longitude]; });
   routeTraveledPolyline.setLatLngs(traveledLatLngs);
   routeUntraveledPolyline.setLatLngs(untraveledLatLngs);
@@ -101,7 +118,7 @@ function updateMarkers(current, target) {
     var latlng = [current.latitude, current.longitude];
     if (currentMarker === null) {
       currentMarker = L.circleMarker(latlng, {
-        radius: 8, color: '#4fc3f7', fillColor: '#4fc3f7', fillOpacity: 0.9,
+        radius: 5, color: '#4fc3f7', fillColor: '#4fc3f7', fillOpacity: 0.9,
       }).bindTooltip('現在位置').addTo(map);
     } else {
       currentMarker.setLatLng(latlng);
@@ -115,7 +132,7 @@ function updateMarkers(current, target) {
     var tlatlng = [target.latitude, target.longitude];
     if (targetMarker === null) {
       targetMarker = L.circleMarker(tlatlng, {
-        radius: 6, color: '#f9a825', fillColor: '#f9a825', fillOpacity: 0.9,
+        radius: 4, color: '#f9a825', fillColor: '#f9a825', fillOpacity: 0.9,
       }).bindTooltip('目標waypoint').addTo(map);
     } else {
       targetMarker.setLatLng(tlatlng);
@@ -164,13 +181,20 @@ def build_update_markers_script(
 
 
 def build_update_route_script(route: RouteView) -> str:
-    """route waypoint列をLeaflet地図へ反映するJavaScriptを組み立てる。"""
+    """route waypoint列をLeaflet地図へ反映するJavaScriptを組み立てる。
+
+    走行済み点数は `traveled_waypoint_count()` を用いる。完走時は
+    `current_index` が最終waypointのindexで止まるため、indexだけで色分けすると
+    最後の1点が未走行の色のまま残る。
+    """
 
     waypoints_payload = [
         {'index': waypoint.index, 'latitude': waypoint.latitude, 'longitude': waypoint.longitude}
         for waypoint in route.waypoints
     ]
-    return 'updateRoute({}, {});'.format(json.dumps(waypoints_payload), json.dumps(route.current_index))
+    return 'updateRoute({}, {});'.format(
+        json.dumps(waypoints_payload), json.dumps(traveled_waypoint_count(route))
+    )
 
 
 class MapView(QWebEngineView):

@@ -24,7 +24,7 @@ def _make_tab() -> LaunchSettingsTab:
 def test_tab_loads_all_profiles_grouped_by_category(qt_app):
     tab = _make_tab()
 
-    assert len(tab._profiles) == 14
+    assert len(tab._profiles) == 15
     assert tab._tree.topLevelItemCount() == 8  # profile.category の種類数
     assert set(tab._tree_items.keys()) == {p.profile_id for p in tab._profiles}
 
@@ -63,13 +63,14 @@ def test_apply_preset_without_existing_plan_needs_no_confirmation(qt_app):
         'drive_mode_manager',
         'route_planner',
         'route_manager',
+        'geo_pose_converter',
         'route_follower',
         'obstacle_monitor',
         'robot_navigator',
         'road_blockage_detector',
         'traffic_signal_recognizer',
     ]
-    assert tab._plan_table.rowCount() == 10
+    assert tab._plan_table.rowCount() == 11
     assert tab._tree_items['rtk_gps_um982'].checkState(0) == QtCore.Qt.Checked
 
 
@@ -254,3 +255,18 @@ def test_update_launch_states_reflects_status_in_tree_and_table(qt_app):
 
     assert tab._tree_items['route_manager'].text(1) == 'RUNNING'
     assert tab._plan_table.item(0, 5).text() == 'RUNNING'
+
+
+def test_business_mode_changed_emitted_on_combo_selection(qt_app):
+    """業務モード選択は、プリセット適用を待たずConsoleCore側へ通知される。"""
+
+    tab = _make_tab()
+    received = []
+    tab.business_mode_changed.connect(
+        lambda environment, drive_mode: received.append((environment, drive_mode))
+    )
+
+    tab._environment_combo.setCurrentText('シミュレーション')
+    tab._drive_mode_combo.setCurrentText('自律走行')
+
+    assert received == [('シミュレーション', '手動走行'), ('シミュレーション', '自律走行')]

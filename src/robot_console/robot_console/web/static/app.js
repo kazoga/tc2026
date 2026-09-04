@@ -3,8 +3,8 @@
 // /snapshot.json をポーリングして状態サマリ・GPS・センサ一覧・鮮度一覧・地図
 // マーカーを更新し、/images/{panel_id} を別周期でポーリングして画像を更新する。
 // 本ページは観測専用であり、書き込み系のfetch（POST/PUT/DELETE）は行わない。
-// 状態サマリ先頭には常にsnapshot取得の生死を表示し、更新が停止した場合は
-// 「表示中の値が最新ではない」旨を警告する（古い値を現在値と誤認させないため）。
+// ページタイトル脇には常にsnapshot取得の最終更新時刻と経過秒数を端的に表示し、
+// 古い値を現在値と誤認させないようにする（詳細メッセージや色分けによる強調はしない）。
 // 地図はLeaflet + OpenStreetMapタイルを使うため、閲覧時にインターネット接続が
 // 必要（robot_console_ui_renewal_input.md 8.4節 候補A）。waypoint列は
 // snapshot.route.waypoints（緯度経度を持つもののみ）から描画し、
@@ -13,12 +13,9 @@
 const SNAPSHOT_POLL_MS = 1000;
 const IMAGE_POLL_MS = 1500;
 
-// 最後にsnapshotを反映できてからこの時間を超えたら「更新が停止している」と見なす。
-// ポーリング周期の3倍まではネットワークの揺らぎとして許容する。
-const SNAPSHOT_STALE_MS = SNAPSHOT_POLL_MS * 3;
-// 更新停止表示の再評価周期。fetchが長時間ハングしてもバナーが更新されるよう、
+// 鮮度表示の再評価周期。fetchが長時間ハングしても表示が更新されるよう、
 // ポーリングの成否とは独立したタイマーで判定する。
-const CONNECTION_STATUS_CHECK_MS = 500;
+const FRESHNESS_INDICATOR_CHECK_MS = 500;
 // 1回のsnapshot取得に許す最大時間。上限が無いと、経路の切断（VPNのNATタイムアウト等）で
 // fetchが解決も棄却もしないまま滞留し、次回ポーリングが再スケジュールされずに
 // 画面が無言で固まる。
@@ -44,6 +41,7 @@ let leafletMap = null;
 let currentPositionMarker = null;
 let targetPositionMarker = null;
 let hasCenteredMap = false;
+let hasFitRouteBounds = false;
 let routeWaypointMarkers = [];
 let routeTraveledPolyline = null;
 let routeUntraveledPolyline = null;
@@ -89,7 +87,7 @@ function updateMapMarkers(snapshot) {
     const latlng = [current.latitude, current.longitude];
     if (currentPositionMarker === null) {
       currentPositionMarker = L.circleMarker(latlng, {
-        radius: 8,
+        radius: 5,
         color: '#4fc3f7',
         fillColor: '#4fc3f7',
         fillOpacity: 0.9,
@@ -110,7 +108,7 @@ function updateMapMarkers(snapshot) {
     const latlng = [target.latitude, target.longitude];
     if (targetPositionMarker === null) {
       targetPositionMarker = L.circleMarker(latlng, {
-        radius: 6,
+        radius: 4,
         color: '#f9a825',
         fillColor: '#f9a825',
         fillOpacity: 0.9,
@@ -129,7 +127,12 @@ function updateRouteOverlay(snapshot) {
   }
 
   const route = snapshot.route || {};
-  const currentIndex = route.current_index || 0;
+  // 走行済み点数はCore側が決める（完走時は current_index が最終waypointのindexで
+  // 止まるため、indexだけで色分けすると最後の1点が未走行のまま残る）。
+  const traveledCount =
+    typeof route.traveled_waypoint_count === 'number'
+      ? route.traveled_waypoint_count
+      : route.current_index || 0;
   const validWaypoints = (route.waypoints || []).filter(
     (waypoint) => waypoint.latitude !== null && waypoint.longitude !== null,
   );
@@ -148,11 +151,23 @@ function updateRouteOverlay(snapshot) {
       }).addTo(leafletMap),
     );
     knownRouteWaypointCount = validWaypoints.length;
+
+    // 自己位置（pose_enu）を未受信の間は地図がDEFAULT_LATITUDE/LONGITUDEの
+    // 初期表示のまま動かず、waypointが描画されていても実際のroute位置が
+    // 画面外になり続ける（manual_start前はrobot_simulatorが自己位置を出力
+    // しないため、この状態が長時間続き得る）。初めてwaypointを受け取った
+    // 時点で一度だけroute全体が収まるよう地図をfitさせ、以後は自己位置側の
+    // 自動センタリング（updateMapMarkers）やユーザー操作を優先して上書きしない。
+    if (validWaypoints.length > 0 && !hasFitRouteBounds && !hasCenteredMap) {
+      const routeBounds = validWaypoints.map((waypoint) => [waypoint.latitude, waypoint.longitude]);
+      leafletMap.fitBounds(routeBounds, { padding: [24, 24] });
+      hasFitRouteBounds = true;
+    }
   }
 
   for (let i = 0; i < validWaypoints.length; i += 1) {
     const waypoint = validWaypoints[i];
-    const traveled = waypoint.index < currentIndex;
+    const traveled = waypoint.index < traveledCount;
     const color = traveled ? ROUTE_TRAVELED_COLOR : ROUTE_UNTRAVELED_COLOR;
     routeWaypointMarkers[i].setLatLng([waypoint.latitude, waypoint.longitude]);
     routeWaypointMarkers[i].setStyle({ color, fillColor: color });
@@ -169,11 +184,13 @@ function updateRouteOverlay(snapshot) {
     }).addTo(leafletMap);
   }
 
+  // 走行済み線と未走行線は現在追従中のwaypointで接続する（両方に含める）。
+  // 完走時は traveledCount が総数になり、未走行線は空になる。
   const traveledLatLngs = validWaypoints
-    .filter((waypoint) => waypoint.index <= currentIndex)
+    .filter((waypoint) => waypoint.index <= traveledCount)
     .map((waypoint) => [waypoint.latitude, waypoint.longitude]);
   const untraveledLatLngs = validWaypoints
-    .filter((waypoint) => waypoint.index >= currentIndex)
+    .filter((waypoint) => waypoint.index >= traveledCount)
     .map((waypoint) => [waypoint.latitude, waypoint.longitude]);
   routeTraveledPolyline.setLatLngs(traveledLatLngs);
   routeUntraveledPolyline.setLatLngs(untraveledLatLngs);
@@ -208,7 +225,19 @@ function renderSummary(snapshot) {
     'WP',
     `${snapshot.operation.current_waypoint || '-'} -> ${snapshot.operation.next_waypoint || '-'}`,
   );
+  appendField(fields, 'manual_start', String(snapshot.operation.manual_start));
+  if (snapshot.operation.pause_reason) {
+    appendField(fields, '停止理由', snapshot.operation.pause_reason);
+  }
   appendField(fields, 'route_follower', snapshot.follower.state);
+  const drive = snapshot.drive;
+  appendField(fields, 'drive mode', `${drive.mode} / ${drive.output_source || '-'}`);
+  appendField(
+    fields,
+    'cmd_vel',
+    `${formatNumber(drive.cmd_vel_linear_mps, 2, ' m/s')} / ` +
+      `${formatNumber(drive.cmd_vel_angular_dps, 1, ' deg/s')} (${drive.cmd_vel_freshness})`,
+  );
   appendField(fields, 'localization source', snapshot.localization.source);
 }
 
@@ -295,41 +324,34 @@ function renderMapCaption(snapshot) {
   caption.style.color = freshnessColor(freshness);
 }
 
-// 表示中の値が最新かどうかを常時明示する。遠隔観測UIでは、更新が止まったことに
-// 閲覧者が気付けないまま古い値を現在値と誤認するのが最も危険なため、正常時も
-// 「いつ更新されたか」を出し、停止時は赤系の警告へ切り替える。
-function renderConnectionStatus() {
-  const banner = document.getElementById('connection-status');
-  const panel = document.getElementById('summary');
-  if (banner === null || panel === null) {
+// yyyy/mm/dd HH:MM:SS 形式の日時文字列を返す。画面幅が狭い場合は年月日を省略し、
+// HH:MM:SS のみを返す（ヘッダー右端の限られた幅に収めるため）。
+function formatTimestamp(date) {
+  const pad = (value) => String(value).padStart(2, '0');
+  const timePart = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  if (!window.matchMedia('(min-width: 768px)').matches) {
+    return timePart;
+  }
+  const datePart = `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())}`;
+  return `${datePart} ${timePart}`;
+}
+
+// ページタイトル脇に、最終更新時刻と経過秒数だけを端的に表示する。
+// 詳細な文章や色分けによる強調はせず、閲覧者が一目で「いつの値か」を確認できれば十分とする。
+function renderFreshnessIndicator() {
+  const indicator = document.getElementById('freshness-indicator');
+  if (indicator === null) {
     return;
   }
 
-  const detail = lastSnapshotErrorText ? `／直近のエラー: ${lastSnapshotErrorText}` : '';
-
   if (lastSnapshotSuccessAt === null) {
-    banner.className = 'connection-status is-stale';
-    panel.classList.add('is-stale');
-    banner.textContent =
-      `サーバから状態を取得できていません。表示中の値はありません`
-      + `（連続失敗 ${snapshotFailureCount} 回${detail}）`;
+    indicator.textContent = '未受信';
     return;
   }
 
   const elapsedSec = (Date.now() - lastSnapshotSuccessAt) / 1000;
-  if (elapsedSec * 1000 < SNAPSHOT_STALE_MS) {
-    banner.className = 'connection-status is-ok';
-    panel.classList.remove('is-stale');
-    banner.textContent = `最新の状態を表示中（最終更新 ${elapsedSec.toFixed(1)} 秒前）`;
-    return;
-  }
-
-  banner.className = 'connection-status is-stale';
-  panel.classList.add('is-stale');
-  banner.textContent =
-    `更新が停止しています。表示中の値は ${elapsedSec.toFixed(0)} 秒前のもので、`
-    + `現在の状態とは異なる可能性があります`
-    + `（連続失敗 ${snapshotFailureCount} 回${detail}）`;
+  indicator.textContent =
+    `${formatTimestamp(new Date(lastSnapshotSuccessAt))} (応答${elapsedSec.toFixed(1)}s)`;
 }
 
 async function fetchSnapshot() {
@@ -370,14 +392,14 @@ async function pollSnapshot() {
     lastSnapshotErrorText = `${error.name}: ${error.message}`;
     console.error('snapshotの取得または描画に失敗しました', error);
   } finally {
-    renderConnectionStatus();
+    renderFreshnessIndicator();
     setTimeout(pollSnapshot, SNAPSHOT_POLL_MS);
   }
 }
 
-function pollConnectionStatus() {
-  renderConnectionStatus();
-  setTimeout(pollConnectionStatus, CONNECTION_STATUS_CHECK_MS);
+function pollFreshnessIndicator() {
+  renderFreshnessIndicator();
+  setTimeout(pollFreshnessIndicator, FRESHNESS_INDICATOR_CHECK_MS);
 }
 
 function pollImages() {
@@ -393,5 +415,5 @@ function pollImages() {
 
 initMap();
 pollSnapshot();
-pollConnectionStatus();
+pollFreshnessIndicator();
 pollImages();

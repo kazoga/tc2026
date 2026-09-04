@@ -35,16 +35,45 @@ def route_status_label(value: int) -> str:
 
 
 def apply_route_state_msg(route: RouteView, msg: Any) -> RouteView:
-    """`tc_route_msgs/RouteState`（`route_state`）の内容を`RouteView`へ反映する。"""
+    """`tc_route_msgs/RouteState`（`route_state`）の内容を`RouteView`へ反映する。
 
+    `current_index` は「現在追従中のwaypoint」を指し、完走時も最終waypointの
+    index（`total_waypoints - 1`）で止まる。そのため進捗率をindexだけから
+    算出すると、goal到達後も 100% に到達しない（21点なら 20/21 = 95.2%）。
+    完走通知（`STATUS_COMPLETED`）を受けた場合は全waypoint走破として扱う。
+    """
+
+    state = route_status_label(msg.status)
+    is_completed = state == 'completed'
+    total_waypoints = int(msg.total_waypoints)
+    current_index = int(msg.current_index)
+    progress_ratio = (
+        1.0 if is_completed else compute_progress_ratio(current_index, total_waypoints)
+    )
     return replace(
         route,
-        state=route_status_label(msg.status),
+        state=state,
         route_version=int(msg.route_version),
-        current_index=int(msg.current_index),
-        total_waypoints=int(msg.total_waypoints),
-        progress_ratio=compute_progress_ratio(msg.current_index, msg.total_waypoints),
+        current_index=current_index,
+        current_label=str(getattr(msg, 'current_label', '')),
+        total_waypoints=total_waypoints,
+        progress_ratio=progress_ratio,
+        is_completed=is_completed,
     )
+
+
+def traveled_waypoint_count(route: RouteView) -> int:
+    """走行済みとして扱うwaypoint数を返す（地図の色分け・進捗カウンタ用）。
+
+    走行中は「現在追従中のwaypoint」の手前までが走行済みであり、`current_index`
+    がそのまま走行済み点数になる。完走時のみ最終waypointを含む全点を走行済みと
+    する（`current_index` は最終waypointのindexで止まるため、これを補正しないと
+    最後の1点だけ未走行の色で残る）。
+    """
+
+    if route.is_completed:
+        return max(route.total_waypoints, len(route.waypoints))
+    return max(route.current_index, 0)
 
 
 def apply_manager_status_msg(route: RouteView, msg: Any) -> RouteView:
@@ -62,7 +91,8 @@ def waypoints_from_route_msg(msg: Any) -> List[RouteWaypointView]:
 
     `has_geo_pose` が真の要素のみ緯度経度を埋め、偽の要素はNoneのままとする
     （`geo_pose_source`がENUからの逆投影に依存し得るため、地図表示側で
-    座標変換は行わない方針: architecture_design.md 6章）。
+    座標変換は行わない方針: architecture_design.md 6章）。`label` は緯度経度の
+    有無に関わらず保持する（運行フェーズ領域のcurrent/next waypoint表示に使う）。
     """
 
     waypoints: List[RouteWaypointView] = []
@@ -73,7 +103,14 @@ def waypoints_from_route_msg(msg: Any) -> List[RouteWaypointView]:
             point = waypoint.geo_pose.point
             latitude = float(point.latitude)
             longitude = float(point.longitude)
-        waypoints.append(RouteWaypointView(index=int(waypoint.index), latitude=latitude, longitude=longitude))
+        waypoints.append(
+            RouteWaypointView(
+                index=int(waypoint.index),
+                label=str(getattr(waypoint, 'label', '')),
+                latitude=latitude,
+                longitude=longitude,
+            )
+        )
     return waypoints
 
 
@@ -125,3 +162,25 @@ def target_view_from_pose_msg(msg: Any) -> TargetView:
 
     position = msg.pose.position
     return TargetView(x_m=float(position.x), y_m=float(position.y), z_m=float(position.z))
+
+
+def apply_active_target_llh_msg(target: TargetView, msg: Any) -> TargetView:
+    """`tc_route_msgs/ActiveTargetLlh`（`route/active_target_llh`）を`TargetView`へ反映する。
+
+    ENU→LLH変換は geo_pose_converter（`route_geo_projector_node`）の責務であり、
+    `robot_console` は変換済みのLLHを受け取るだけとする。同メッセージは
+    「GUI・HTML UI・ログ向け」に定義されており（`ActiveTargetLlh.msg`）、
+    制御用のENU目標は `active_target` のまま維持される。ENU座標側は
+    `active_target` 由来の値を保持し、緯度経度と距離・bearingのみ更新する。
+    """
+
+    point = msg.target_pose.point
+    return replace(
+        target,
+        target_id=str(getattr(msg, 'target_label', '') or ''),
+        latitude=float(point.latitude),
+        longitude=float(point.longitude),
+        altitude=float(point.altitude) if bool(getattr(point, 'has_altitude', False)) else None,
+        distance_m=float(getattr(msg, 'distance_m', target.distance_m)),
+        bearing_deg=float(getattr(msg, 'bearing_deg', 0.0)),
+    )

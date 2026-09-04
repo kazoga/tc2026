@@ -53,6 +53,7 @@ class LaunchSettingsTab(QtWidgets.QWidget):
     """業務開始時に使う起動・設定画面。"""
 
     plan_changed = QtCore.pyqtSignal()
+    business_mode_changed = QtCore.pyqtSignal(str, str)
     param_changed = QtCore.pyqtSignal(str, str)
     alternate_toggled = QtCore.pyqtSignal(str, bool)
     simulator_toggled = QtCore.pyqtSignal(str, bool)
@@ -99,6 +100,12 @@ class LaunchSettingsTab(QtWidgets.QWidget):
         self._drive_mode_combo = QtWidgets.QComboBox()
         self._drive_mode_combo.addItems(DRIVE_MODES)
 
+        # 業務モードはプリセット適用の入力であると同時に、ダッシュボードの
+        # 運行フェーズ領域が表示する実行環境・走行モードの元データでもあるため、
+        # プリセット適用を待たず選択時点で通知する。
+        self._environment_combo.currentTextChanged.connect(self._on_business_mode_changed)
+        self._drive_mode_combo.currentTextChanged.connect(self._on_business_mode_changed)
+
         apply_preset_button = QtWidgets.QPushButton('プリセット適用')
         apply_preset_button.clicked.connect(self._on_apply_preset_clicked)
 
@@ -126,6 +133,13 @@ class LaunchSettingsTab(QtWidgets.QWidget):
         if drive_mode_index >= 0:
             self._drive_mode_combo.setCurrentIndex(drive_mode_index)
         self._on_apply_preset_clicked()
+
+    def _on_business_mode_changed(self, _text: str) -> None:
+        """業務モードコンボの選択変更を外部（ConsoleCore・ダッシュボード）へ通知する。"""
+
+        self.business_mode_changed.emit(
+            self._environment_combo.currentText(), self._drive_mode_combo.currentText()
+        )
 
     def _on_apply_preset_clicked(self) -> None:
         if self._plan.ordered_profile_ids:

@@ -64,6 +64,7 @@ class RouteWaypointView:
     """
 
     index: int = 0
+    label: str = ''
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
@@ -77,8 +78,13 @@ class RouteView:
     last_decision: str = ''
     last_replan_reason: str = ''
     current_index: int = 0
+    current_label: str = ''
     total_waypoints: int = 0
     progress_ratio: float = 0.0
+    # route_manager が完走を通知したか（`RouteState.STATUS_COMPLETED`）。
+    # `current_index` は最終waypointのindex（0起算）で止まるため、完走判定は
+    # indexだけでは行えない（進捗が 100% にならず、最終waypointも未走行扱いになる）。
+    is_completed: bool = False
     coordinate_kind: str = 'enu'  # enu / llh
     waypoints: List[RouteWaypointView] = field(default_factory=list)
     updated_at: Optional[datetime] = None

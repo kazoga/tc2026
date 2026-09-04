@@ -122,6 +122,32 @@ profiles:
       - goal_label
       - checkpoint_labels
 
+  # 自己位置・目標のENU→LLH変換を担う。地図表示（PyQt5 MapView / HTML観測UI）は
+  # 緯度経度を必要とするため、地図を使う構成ではこのprofileの起動が前提になる
+  # （robot_console 側は変換を持たず /localization/pose_llh と
+  # /route/active_target_llh を購読するだけ）。
+  - profile_id: geo_pose_converter
+    category: route_stack
+    display_name: Geo Pose Converter
+    package: geo_pose_converter
+    launch_file: geo_pose_converter.launch.py
+    param_argument: config
+    default_param: params/default.yaml
+    launch_order: 65
+    startup_group: common
+    health_topics:
+      - /localization/pose_llh
+      - /route/active_target_llh
+    user_arguments:
+      - enable_geo_pose_converter
+      - pose_enu_topic
+      - pose_llh_topic
+    default_arguments:
+      # GNSS実機を伴わない構成（シミュレーション・机上確認）では
+      # geo_pose_converter_node（/rtk_gps/* を購読する）は不要なため既定で無効にし、
+      # route_geo_projector_node（ENU→LLH変換）だけを起動する。
+      enable_geo_pose_converter: 'false'
+
   - profile_id: route_follower
     category: route_stack
     display_name: Route Follower

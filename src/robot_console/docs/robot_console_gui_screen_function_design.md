@@ -464,6 +464,37 @@ profile一覧:
 
 復帰用topicの具体名は実装時点のroute/drive仕様に合わせる。画面仕様としては、復帰操作をダッシュボードに置くことを必須とする。
 
+#### 6.3.1 運行フェーズの判定条件
+
+運行フェーズは単独のtopicでは表現されないため、起動管理状態（`LaunchProfileState.status`）、`route_state`、`follower_state`、`drive_mode_status`、`manual_start` の組み合わせから決定する。重い状態を優先し、以下の順に評価して最初に成立したフェーズを採用する。
+
+| 順 | フェーズ | 判定条件 |
+| --- | --- | --- |
+| 1 | `異常` | いずれかのprofileが `ERROR`、または `follower_state.state == ERROR`、または `route_state.status == STATUS_ERROR` |
+| 2 | `終了処理中` | いずれかのprofileが `STOPPING`、または `route_state.status == STATUS_COMPLETED`、または `follower_state.state == FINISHED` |
+| 3 | `未起動` | `route_state` / `follower_state` をいずれも未受信で、起動中・起動済みのprofileも無い |
+| 4 | `起動確認中` | いずれかのprofileが `STARTING`、または起動済みprofileがあるが `route_state` / `follower_state` を未受信 |
+| 5 | `一時停止` | `manual_start=True` かつ停止要因あり（下表） |
+| 6 | `走行中` | `manual_start=True` かつ停止要因が無く、`follower_state.state` が `RUNNING`/`AVOIDING`、または `route_state.status == STATUS_RUNNING` |
+| 7 | `走行準備完了` | 上記以外（運行系topic受信済みで走行開始待ち） |
+
+`robot_console` がノードを起動しない使い方（HTML遠隔観測UIの単独起動など）では全profileが `STOPPED` のままになるため、起動管理状態だけでは判定せず、運行系topicの受信有無を併用する。受信実績があるtopicが途絶えた場合（`STALE`/`LOST`）は「未受信」とは区別し、`未起動` へは戻さない（途絶自体の提示はEventカードと鮮度表示の責務とする）。
+
+一時停止の理由は、操作者が次に取る判断に近い順で最初に成立したものを1件表示する。
+
+| 順 | 停止要因 | 表示する理由 |
+| --- | --- | --- |
+| 1 | `follower_state.state == WAITING_STOP` | 停止waypointで待機中（信号/停止線） |
+| 2 | `follower_state.state == WAITING_REROUTE` | 再経路待ち（route_managerの応答待ち） |
+| 3 | `follower_state.state == STAGNATION_DETECTED` | 滞留検知（回避判断中） |
+| 4 | `route_state.status == STATUS_HOLDING` | route_manager holding（`ManagerStatus.last_cause` を併記） |
+| 5 | `drive_mode_status.mode == MODE_MANUAL` | 手動介入中 |
+| 6 | `drive_mode_status.auto_resume_pending` | 自律復帰待ち |
+
+業務モードのうち実行環境（`実機` / `シミュレーション` / `机上確認`）は起動・設定タブの選択値を用いる（ROS topicからは得られないため、選択が無い場合は `unknown` とする）。走行モード（`手動` / `自律`）は実際に走行制御が選択しているモードを正とし、`drive_mode_status` 未受信の間だけ起動・設定タブの走行モード選択値で代替する。
+
+current waypoint は `route_state.current_label`（空の場合は `follower_state.active_waypoint_label`、いずれも空なら `#index`）、next waypoint は `active_route.waypoints` から次のindexのlabelを引き、labelが無い場合は `#index` 表記とする。次のindexが総waypoint数を超える場合は `goal` と表示する。
+
 ダッシュボードでは、走行中に必要な操作だけを表示する。起動設定、config変更、launch引数変更、ノード候補の追加は起動・設定タブに閉じる。走行中に設定変更が必要になった場合は、ダッシュボードから直接編集させず、停止または安全確認を経て起動・設定タブへ移動する導線にする。
 
 ### 6.4 Route / Followerカード

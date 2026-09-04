@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from ..core.route_adapter import traveled_waypoint_count
 from ..core.snapshot_model import ConsoleSnapshot, HealthSummaryView, ImageReference, RouteWaypointView
 
 
@@ -57,6 +58,7 @@ def build_snapshot_payload(snapshot: ConsoleSnapshot) -> Dict[str, Any]:
     route = snapshot.route_state
     follower = snapshot.follower_state
     target = snapshot.target_state
+    drive = snapshot.drive_mode_state
 
     return {
         'timestamp': _iso(snapshot.timestamp),
@@ -67,6 +69,18 @@ def build_snapshot_payload(snapshot: ConsoleSnapshot) -> Dict[str, Any]:
             'route_progress': operation.route_progress,
             'current_waypoint': operation.current_waypoint,
             'next_waypoint': operation.next_waypoint,
+            'manual_start': operation.manual_start,
+            'pause_reason': operation.pause_reason,
+        },
+        'drive': {
+            'mode': drive.mode,
+            'output_source': drive.output_source,
+            'auto_resume_pending': drive.auto_resume_pending,
+            'cmd_vel_linear_mps': drive.cmd_vel_linear_mps,
+            'cmd_vel_angular_dps': drive.cmd_vel_angular_dps,
+            'cmd_vel_freshness': drive.cmd_vel_freshness.value,
+            'odom_topic': drive.odom_topic,
+            'odom_freshness': drive.odom_freshness.value,
         },
         'gps': {
             'rtk_state': gps.rtk_state,
@@ -102,6 +116,8 @@ def build_snapshot_payload(snapshot: ConsoleSnapshot) -> Dict[str, Any]:
             'current_index': route.current_index,
             'total_waypoints': route.total_waypoints,
             'progress_ratio': route.progress_ratio,
+            'is_completed': route.is_completed,
+            'traveled_waypoint_count': traveled_waypoint_count(route),
             'coordinate_kind': route.coordinate_kind,
             'waypoints': [_waypoint_payload(waypoint) for waypoint in route.waypoints],
         },
@@ -158,6 +174,8 @@ def build_map_state_payload(snapshot: ConsoleSnapshot) -> Dict[str, Any]:
             'current_index': route.current_index,
             'total_waypoints': route.total_waypoints,
             'progress_ratio': route.progress_ratio,
+            'is_completed': route.is_completed,
+            'traveled_waypoint_count': traveled_waypoint_count(route),
         },
         'route': {
             'waypoints': [_waypoint_payload(waypoint) for waypoint in route.waypoints],

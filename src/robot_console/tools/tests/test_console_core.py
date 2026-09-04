@@ -33,7 +33,7 @@ def test_build_snapshot_includes_health_for_all_profiles():
 
     profile_ids = {item.profile_id for item in snapshot.health}
     assert profile_ids == {profile.profile_id for profile in core._profiles}
-    assert len(snapshot.health) == 14
+    assert len(snapshot.health) == 15
     assert all(item.status == 'STOPPED' for item in snapshot.health)
 
 
@@ -380,3 +380,222 @@ def test_send_frame_image_request_calls_publisher():
     core.send_frame_image_request('/tmp/frame.png')
 
     assert sent == ['/tmp/frame.png']
+
+
+def _drive_mode_status_msg(mode=1, output_source=1, auto_resume_pending=False):
+    return SimpleNamespace(
+        mode=mode, output_source=output_source, auto_resume_pending=auto_resume_pending
+    )
+
+
+def _twist_msg(linear_x=0.0, angular_z=0.0):
+    return SimpleNamespace(
+        linear=SimpleNamespace(x=linear_x, y=0.0, z=0.0),
+        angular=SimpleNamespace(x=0.0, y=0.0, z=angular_z),
+    )
+
+
+def _follower_state_msg(state='RUNNING', index=1, label='A-11'):
+    return SimpleNamespace(
+        state=state, active_waypoint_index=index, active_waypoint_label=label,
+        last_stagnation_reason='', avoidance_attempt_count=0, front_blocked=False,
+        front_clearance_m=5.0, left_offset_m=0.0, right_offset_m=0.0,
+    )
+
+
+def test_update_drive_mode_status_reflects_in_snapshot():
+    core = _make_core()
+
+    core.update_drive_mode_status(
+        _drive_mode_status_msg(mode=2, output_source=2, auto_resume_pending=True)
+    )
+    drive = core.build_snapshot().drive_mode_state
+
+    assert drive.mode == 'manual'
+    assert drive.output_source == 'manual_cmd'
+    assert drive.auto_resume_pending is True
+
+
+def test_update_cmd_vel_sets_values_and_freshness():
+    core = _make_core()
+
+    core.update_cmd_vel(_twist_msg(0.5, 0.0))
+    drive = core.build_snapshot().drive_mode_state
+
+    assert drive.cmd_vel_linear_mps == 0.5
+    assert drive.cmd_vel_freshness == FreshnessLevel.OK
+
+
+def test_update_cmd_vel_autonomous_does_not_overwrite_mux_output():
+    core = _make_core()
+
+    core.update_cmd_vel(_twist_msg(0.5, 0.0))
+    core.update_cmd_vel_autonomous(_twist_msg(0.8, 0.0))
+    drive = core.build_snapshot().drive_mode_state
+
+    assert drive.cmd_vel_linear_mps == 0.5
+    assert drive.cmd_vel_autonomous_linear_mps == 0.8
+
+
+def test_update_odom_records_topic_name_and_freshness():
+    core = _make_core()
+
+    core.update_odom(SimpleNamespace(), topic='/ypspur_ros/odom')
+    drive = core.build_snapshot().drive_mode_state
+
+    assert drive.odom_topic == '/ypspur_ros/odom'
+    assert drive.odom_freshness == FreshnessLevel.OK
+
+
+def test_update_manual_start_echo_confirms_gui_send():
+    core = _make_core()
+    core.send_manual_start(True)
+
+    assert core.build_snapshot().manual_controls.send_result == 'waiting_echo'
+
+    core.update_manual_start(SimpleNamespace(data=True))
+    manual_controls = core.build_snapshot().manual_controls
+
+    assert manual_controls.manual_start_value is True
+    assert manual_controls.send_result == 'confirmed'
+    assert manual_controls.input_source == 'gui'
+
+
+def test_update_manual_start_from_external_sender_is_marked_external():
+    core = _make_core()
+
+    core.update_manual_start(SimpleNamespace(data=True))
+    manual_controls = core.build_snapshot().manual_controls
+
+    assert manual_controls.manual_start_value is True
+    assert manual_controls.input_source == 'external'
+
+
+def test_update_business_mode_reflects_in_operation_state():
+    core = _make_core()
+
+    core.update_business_mode('シミュレーション', '自律走行')
+    operation = core.build_snapshot().operation_state
+
+    assert operation.environment == 'シミュレーション'
+    assert operation.drive_mode == '自律'
+
+
+def test_operation_state_transitions_from_not_started_to_driving():
+    """運行フェーズがROSメッセージ受信とmanual_startに追従して更新される。"""
+
+    core = _make_core()
+
+    assert core.build_snapshot().operation_state.phase == '未起動'
+
+    core.update_route_state(
+        SimpleNamespace(
+            status=1, route_version=1, current_index=0, current_label='A-10', total_waypoints=3
+        )
+    )
+    core.update_follower_state(_follower_state_msg(state='IDLE', index=0, label='A-10'))
+
+    assert core.build_snapshot().operation_state.phase == '走行準備完了'
+
+    core.send_manual_start(True)
+    core.update_route_state(
+        SimpleNamespace(
+            status=2, route_version=1, current_index=1, current_label='A-11', total_waypoints=3
+        )
+    )
+    core.update_follower_state(_follower_state_msg(state='RUNNING', index=1, label='A-11'))
+    operation = core.build_snapshot().operation_state
+
+    assert operation.phase == '走行中'
+    assert operation.manual_start is True
+    assert operation.route_progress > 0.0
+    assert operation.current_waypoint == 'A-11'
+
+
+def test_operation_state_reports_pause_reason_while_follower_waits():
+    core = _make_core()
+    core.send_manual_start(True)
+    core.update_route_state(
+        SimpleNamespace(
+            status=2, route_version=1, current_index=1, current_label='A-11', total_waypoints=3
+        )
+    )
+    core.update_follower_state(_follower_state_msg(state='WAITING_STOP'))
+    operation = core.build_snapshot().operation_state
+
+    assert operation.phase == '一時停止'
+    assert operation.pause_reason != ''
+
+
+def test_route_progress_reaches_100_percent_when_route_completes():
+    """goal到達後も 95.2% のまま止まらないことを確認する。"""
+
+    core = _make_core()
+    core.update_route_state(
+        SimpleNamespace(
+            status=2, route_version=100, current_index=20, current_label='30', total_waypoints=21
+        )
+    )
+    assert core.build_snapshot().route_state.progress_ratio < 1.0
+
+    core.update_route_state(
+        SimpleNamespace(
+            status=5, route_version=100, current_index=20, current_label='30', total_waypoints=21
+        )
+    )
+    snapshot = core.build_snapshot()
+
+    assert snapshot.route_state.progress_ratio == 1.0
+    assert snapshot.route_state.is_completed is True
+    assert snapshot.operation_state.route_progress == 1.0
+
+
+def _active_target_llh_msg(latitude, longitude):
+    return SimpleNamespace(
+        target_label='30',
+        target_index=20,
+        route_version=100,
+        target_pose=SimpleNamespace(
+            point=SimpleNamespace(
+                latitude=latitude, longitude=longitude, altitude=0.0, has_altitude=False
+            )
+        ),
+        distance_m=3.5,
+        bearing_deg=12.0,
+    )
+
+
+def _active_target_msg(x, y, z=0.0):
+    return SimpleNamespace(
+        header=SimpleNamespace(frame_id='map'),
+        pose=SimpleNamespace(
+            position=SimpleNamespace(x=x, y=y, z=z),
+            orientation=SimpleNamespace(x=0.0, y=0.0, z=0.0, w=1.0),
+        ),
+    )
+
+
+def test_update_active_target_llh_provides_map_coordinates():
+    """地図描画用の目標緯度経度は geo_pose_converter 由来のtopicから受け取る。"""
+
+    core = _make_core()
+
+    core.update_active_target_llh(_active_target_llh_msg(36.0833, 140.0769))
+    target = core.build_snapshot().target_state
+
+    assert target.latitude == 36.0833
+    assert target.longitude == 140.0769
+
+
+def test_active_target_enu_update_keeps_latitude_longitude_from_llh_topic():
+    """ENU目標は高頻度で更新されるため、LLH由来の緯度経度を消さないことを確認する。"""
+
+    core = _make_core()
+    core.update_active_target_llh(_active_target_llh_msg(36.0833, 140.0769))
+
+    core.update_active_target(_active_target_msg(28000.0, 44640.0))
+    target = core.build_snapshot().target_state
+
+    assert target.latitude == 36.0833
+    assert target.longitude == 140.0769
+    assert target.x_m == 28000.0

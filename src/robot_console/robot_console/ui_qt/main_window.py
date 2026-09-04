@@ -72,6 +72,7 @@ class MainWindow(QtWidgets.QMainWindow):
             lambda: self.tab_widget.setCurrentWidget(self.dashboard_tab)
         )
         self.launch_settings_tab.plan_changed.connect(self._on_launch_plan_changed)
+        self.launch_settings_tab.business_mode_changed.connect(self._on_business_mode_changed)
         self.dashboard_tab.launch_control_card.apply_preset_requested.connect(
             self.launch_settings_tab.apply_preset
         )
@@ -122,6 +123,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self.launch_settings_tab.argument_changed.connect(
                 self._core.update_launch_override
             )
+            # 起動時点のコンボ選択値（既定値）もConsoleCoreへ反映しておく。
+            # 以降の変更は business_mode_changed シグナル経由で伝わる。
+            self._core.update_business_mode(
+                self.launch_settings_tab.environment, self.launch_settings_tab.drive_mode
+            )
 
     def update_snapshot(self, snapshot: ConsoleSnapshot) -> None:
         """`ConsoleSnapshot` を各タブへ配布する（QTimer駆動でConsoleCoreから呼ばれる）。"""
@@ -146,6 +152,13 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         for profile_id in profile_ids:
             self._core.request_stop(profile_id)
+
+    def _on_business_mode_changed(self, environment: str, drive_mode: str) -> None:
+        """起動・設定タブの業務モード選択を、ConsoleCoreと起動操作カードへ反映する。"""
+
+        if self._core is not None:
+            self._core.update_business_mode(environment, drive_mode)
+        self._on_launch_plan_changed()
 
     def _on_node_health_profile_selected(self, profile_id: str) -> None:
         """Node Healthカードのチップ選択を受け、コンソールログタブへ遷移する（9章 画面間導線）。"""

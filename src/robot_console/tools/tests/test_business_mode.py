@@ -24,6 +24,7 @@ def test_real_robot_autonomous_preset_matches_architecture_doc_group_order():
         'drive_mode_manager',
         'route_planner',
         'route_manager',
+        'geo_pose_converter',
         'route_follower',
         'obstacle_monitor',
         'robot_navigator',

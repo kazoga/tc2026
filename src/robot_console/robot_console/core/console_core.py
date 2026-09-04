@@ -20,6 +20,11 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from ..utils import NodeLaunchStatus, convert_image_message
+from .drive_mode_adapter import (
+    apply_cmd_vel_autonomous_msg,
+    apply_cmd_vel_msg,
+    apply_drive_mode_status_msg,
+)
 from .freshness import FreshnessLevel, FreshnessMonitor
 from .image_store import ImageStore
 from .launch_manager import LaunchManager
@@ -37,7 +42,9 @@ from .localization_adapter import (
 )
 from .log_manager import LogManager
 from .metrics import euclidean_distance
+from .operation_phase import build_operation_state
 from .route_adapter import (
+    apply_active_target_llh_msg,
     apply_manager_status_msg,
     apply_route_msg,
     apply_route_state_msg,
@@ -55,7 +62,6 @@ from .snapshot_model import (
     LocalizationStateView,
     ManualControlsView,
     ObstacleStateView,
-    OperationStateView,
     RouteView,
     TargetView,
 )
@@ -99,7 +105,12 @@ class ConsoleCore:
             log_directory=log_directory,
         )
 
-        self._operation_state = OperationStateView()
+        # 業務モード（実行環境・走行モード）は起動・設定タブの選択値であり、
+        # ROS topicからは得られないため `update_business_mode()` で受け取る。
+        # 運行フェーズ領域の他のフィールドは `build_snapshot()` 時点の状態から
+        # `core/operation_phase.py` が毎回算出する。
+        self._environment = 'unknown'
+        self._drive_mode_selection = 'unknown'
         self._gps_state = GpsStateView()
         self._localization_state = LocalizationStateView()
         self._route_state = RouteView()
@@ -152,6 +163,7 @@ class ConsoleCore:
                 manual_start_value=value,
                 manual_start_last_sent_at=_utc_now(),
                 input_source='gui',
+                send_result='waiting_echo',
             )
 
     def send_sig_recog(self, value: int) -> None:
@@ -274,6 +286,17 @@ class ConsoleCore:
 
         self.launch_manager.stop(profile_id)
 
+    def update_business_mode(self, environment: str, drive_mode: str) -> None:
+        """起動・設定タブで選択中の業務モード（実行環境・走行モード）を反映する。
+
+        運行フェーズ領域の業務モード表示（6.3節）はこの選択値を元にする。
+        HTML遠隔観測UI単独起動のように選択操作が無い場合は `unknown` のままとなる。
+        """
+
+        with self._lock:
+            self._environment = environment or 'unknown'
+            self._drive_mode_selection = drive_mode or 'unknown'
+
     def update_selected_param(self, profile_id: str, param_path: Optional[str]) -> None:
         """起動・設定タブで選択されたパラメータパスを反映する。"""
 
@@ -378,6 +401,59 @@ class ConsoleCore:
             self._follower_state = follower_view_from_msg(msg)
         self.freshness.mark_received('follower_state')
 
+    def update_drive_mode_status(self, msg: Any) -> None:
+        """`tc_route_msgs/DriveModeStatus`（`drive_mode_status`）を反映する。"""
+
+        with self._lock:
+            self._drive_mode_state = apply_drive_mode_status_msg(self._drive_mode_state, msg)
+        self.freshness.mark_received('drive_mode_status')
+
+    def update_cmd_vel(self, msg: Any) -> None:
+        """`geometry_msgs/Twist`（`cmd_vel`）を反映する（mux後の最終指令）。"""
+
+        with self._lock:
+            self._drive_mode_state = apply_cmd_vel_msg(self._drive_mode_state, msg)
+        self.freshness.mark_received('cmd_vel')
+
+    def update_cmd_vel_autonomous(self, msg: Any) -> None:
+        """`geometry_msgs/Twist`（`cmd_vel/autonomous`）を反映する。"""
+
+        with self._lock:
+            self._drive_mode_state = apply_cmd_vel_autonomous_msg(self._drive_mode_state, msg)
+        self.freshness.mark_received('cmd_vel_autonomous')
+
+    def update_odom(self, msg: Any, *, topic: str = '') -> None:
+        """`nav_msgs/Odometry`（`odom`）の受信を鮮度として反映する。
+
+        6.5節のodom表示はfreshness確認が目的であり、内容そのものは表示しない
+        （自己位置は `localization/pose_enu` を正とする）。
+        """
+
+        with self._lock:
+            if topic and self._drive_mode_state.odom_topic != topic:
+                self._drive_mode_state = replace(self._drive_mode_state, odom_topic=topic)
+        self.freshness.mark_received('odom')
+
+    def update_manual_start(self, msg: Any) -> None:
+        """`std_msgs/Bool`（`manual_start`）の現在値を反映する。
+
+        自身の送信分もDDS経由でエコーバックされるため、GUI送信済みの場合は
+        送信結果（`send_result`）を `confirmed` にする。GUI以外の送信元
+        （joyコンソール等）から届いた場合は入力元を `external` として扱う。
+        """
+
+        value = bool(msg.data)
+        with self._lock:
+            sent_from_gui = self._manual_controls.manual_start_last_sent_at is not None
+            confirmed = sent_from_gui and self._manual_controls.manual_start_value == value
+            self._manual_controls = replace(
+                self._manual_controls,
+                manual_start_value=value,
+                input_source='gui' if confirmed else 'external',
+                send_result='confirmed' if confirmed else self._manual_controls.send_result,
+            )
+        self.freshness.mark_received('manual_start')
+
     def update_obstacle_hint(self, msg: Any) -> None:
         """`tc_route_msgs/ObstacleAvoidanceHint`（`obstacle_avoidance_hint`）を反映する。"""
 
@@ -449,7 +525,29 @@ class ConsoleCore:
                     (current.x_m, current.y_m, current.z_m or 0.0),
                     (partial.x_m, partial.y_m, partial.z_m),
                 )
-            self._target_state = replace(partial, distance_m=distance_m)
+            # 緯度経度は `route/active_target_llh`（geo_pose_converterが変換）が正本の
+            # ため、ENU側の更新で消さずに保持する。
+            previous = self._target_state
+            self._target_state = replace(
+                partial,
+                distance_m=distance_m,
+                target_id=previous.target_id,
+                latitude=previous.latitude,
+                longitude=previous.longitude,
+                altitude=previous.altitude,
+                bearing_deg=previous.bearing_deg,
+            )
+        self.freshness.mark_received('target')
+
+    def update_active_target_llh(self, msg: Any) -> None:
+        """`tc_route_msgs/ActiveTargetLlh`（`route/active_target_llh`）を反映する。
+
+        地図描画に必要な目標の緯度経度は、ENU→LLH変換を担う geo_pose_converter
+        （`route_geo_projector_node`）が配信する本topicから受け取る。
+        """
+
+        with self._lock:
+            self._target_state = apply_active_target_llh_msg(self._target_state, msg)
         self.freshness.mark_received('target')
 
     # ---------- Snapshot生成 ----------
@@ -464,7 +562,8 @@ class ConsoleCore:
         now = _utc_now()
         with self._lock:
             launch_profiles = dict(self._launch_states)
-            operation_state = self._operation_state
+            environment = self._environment
+            drive_mode_selection = self._drive_mode_selection
             gps_state = self._gps_state
             localization_state = self._localization_state
             route_state = self._route_state
@@ -499,6 +598,26 @@ class ConsoleCore:
         target_state = replace(
             target_state,
             freshness=self.freshness.evaluate('target', now=now),
+        )
+        drive_mode_state = replace(
+            drive_mode_state,
+            cmd_vel_freshness=self.freshness.evaluate('cmd_vel', now=now),
+            odom_freshness=self.freshness.evaluate('odom', now=now),
+        )
+
+        # 運行フェーズは単独のtopicでは表せず、起動状態・route/follower・drive mode・
+        # manual_startの組み合わせから決まるため、Snapshot生成時にまとめて算出する。
+        operation_state = build_operation_state(
+            environment=environment,
+            drive_mode_selection=drive_mode_selection,
+            launch_states=launch_profiles,
+            route=route_state,
+            follower=follower_state,
+            drive_mode=drive_mode_state,
+            manual_start=manual_controls.manual_start_value,
+            route_freshness=self.freshness.evaluate('route_state', now=now),
+            follower_freshness=self.freshness.evaluate('follower_state', now=now),
+            now=now,
         )
 
         log_paths: Dict[str, Optional[str]] = {}

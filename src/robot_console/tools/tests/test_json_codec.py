@@ -3,6 +3,7 @@
 from robot_console.core.freshness import FreshnessLevel
 from robot_console.core.snapshot_model import (
     ConsoleSnapshot,
+    DriveModeStateView,
     GpsStateView,
     HealthSummaryView,
     ImageReference,
@@ -127,3 +128,62 @@ def test_timestamp_is_iso_formatted_string():
     payload = build_snapshot_payload(_sample_snapshot())
 
     assert 'T' in payload['timestamp']
+
+
+def test_snapshot_payload_includes_manual_start_and_pause_reason():
+    """HTML観測UIでも一時停止理由とmanual_start現在値を確認できる（6.3節）。"""
+
+    snapshot = _sample_snapshot()
+    snapshot.operation_state = OperationStateView(
+        phase='一時停止', manual_start=True, pause_reason='停止waypointで待機中（信号/停止線）'
+    )
+
+    payload = build_snapshot_payload(snapshot)
+
+    assert payload['operation']['manual_start'] is True
+    assert payload['operation']['pause_reason'] == '停止waypointで待機中（信号/停止線）'
+
+
+def test_snapshot_payload_includes_drive_mode_section():
+    snapshot = _sample_snapshot()
+    snapshot.drive_mode_state = DriveModeStateView(
+        mode='autonomous',
+        output_source='autonomous_cmd',
+        cmd_vel_linear_mps=0.4,
+        cmd_vel_angular_dps=12.0,
+        cmd_vel_freshness=FreshnessLevel.OK,
+        odom_topic='/odom',
+        odom_freshness=FreshnessLevel.STALE,
+    )
+
+    payload = build_snapshot_payload(snapshot)
+
+    assert payload['drive']['mode'] == 'autonomous'
+    assert payload['drive']['cmd_vel_linear_mps'] == 0.4
+    assert payload['drive']['cmd_vel_freshness'] == 'OK'
+    assert payload['drive']['odom_freshness'] == 'STALE'
+
+
+def test_snapshot_payload_exposes_traveled_waypoint_count_for_map_coloring():
+    """完走時に最終waypointが未走行の色で残らないよう、走行済み点数をCore側から渡す。"""
+
+    snapshot = _sample_snapshot()
+    snapshot.route_state = RouteView(
+        current_index=2, total_waypoints=3, is_completed=True, progress_ratio=1.0
+    )
+
+    payload = build_snapshot_payload(snapshot)
+
+    assert payload['route']['is_completed'] is True
+    assert payload['route']['traveled_waypoint_count'] == 3
+    assert payload['route']['progress_ratio'] == 1.0
+
+
+def test_map_state_payload_exposes_traveled_waypoint_count():
+    snapshot = _sample_snapshot()
+    snapshot.route_state = RouteView(current_index=1, total_waypoints=3)
+
+    payload = build_map_state_payload(snapshot)
+
+    assert payload['route_progress']['traveled_waypoint_count'] == 1
+    assert payload['route_progress']['is_completed'] is False
