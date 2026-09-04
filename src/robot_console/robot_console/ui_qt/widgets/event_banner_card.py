@@ -6,36 +6,16 @@ from typing import List, Optional
 
 from PyQt5 import QtWidgets
 
+from robot_console.core.event_priority import PRIORITY_ORDER, sort_by_priority
 from robot_console.core.snapshot_model import EventBanner
 
 from .color_rules import severity_color
 from .typography import EVENT_HISTORY_FONT_POINT_SIZE, EVENT_PRIMARY_FONT_POINT_SIZE
 
-# robot_console_gui_screen_function_design.md 6.7節の優先順位。
-PRIORITY_ORDER = [
-    'profile_error',
-    'topic_lost',
-    'road_blocked',
-    'front_blocked',
-    'signal_stop',
-    'manual_start_pending',
-    'signal_go',
-    'route_update',
-]
+# 優先順位定義はHTML遠隔観測UIとも共有するため core/event_priority.py に置く。
+__all__ = ['PRIORITY_ORDER', 'sort_by_priority', 'EventBannerCard', 'HISTORY_DISPLAY_COUNT']
+
 HISTORY_DISPLAY_COUNT = 3
-
-
-def _priority_rank(banner: EventBanner) -> int:
-    try:
-        return PRIORITY_ORDER.index(banner.event_type)
-    except ValueError:
-        return len(PRIORITY_ORDER)
-
-
-def sort_by_priority(banners: List[EventBanner]) -> List[EventBanner]:
-    """6.7節の優先順位に従いEventBannerを並び替える。"""
-
-    return sorted(banners, key=_priority_rank)
 
 
 class EventBannerCard(QtWidgets.QGroupBox):

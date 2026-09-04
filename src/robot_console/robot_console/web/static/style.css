@@ -67,6 +67,7 @@ main {
     grid-template-columns: minmax(240px, 1fr) minmax(280px, 1fr) minmax(280px, 1fr);
     grid-template-areas:
       "summary map map"
+      "events map map"
       "gps-summary map map"
       "sensors sensors sensors"
       "health health health";
@@ -74,6 +75,10 @@ main {
 
   #summary {
     grid-area: summary;
+  }
+
+  #events {
+    grid-area: events;
   }
 
   #gps-summary {
@@ -186,4 +191,28 @@ th, td {
 th {
   color: var(--muted);
   font-weight: normal;
+}
+
+/* イベント一覧。優先度順はサーバ側（core/event_priority.py）で決まるため、
+   ここでは並び替えを行わず受け取った順に表示する。 */
+.event-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.event-list li {
+  font-size: 0.9rem;
+}
+
+.event-list .event-source {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-left: 6px;
+}
+
+.event-list .event-empty {
+  color: var(--muted);
 }

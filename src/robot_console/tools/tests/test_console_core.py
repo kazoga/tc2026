@@ -599,3 +599,70 @@ def test_active_target_enu_update_keeps_latitude_longitude_from_llh_topic():
     assert target.latitude == 36.0833
     assert target.longitude == 140.0769
     assert target.x_m == 28000.0
+
+
+def test_update_sig_recog_from_external_sender_is_marked_external():
+    """信号認識ノードからの送信を検知し、入力元を区別できることを確認する。"""
+
+    core = _make_core()
+
+    core.update_sig_recog(SimpleNamespace(data=1))
+    manual_controls = core.build_snapshot().manual_controls
+
+    assert manual_controls.sig_recog_value == 1
+    assert manual_controls.input_source == 'external'
+
+
+def test_update_sig_recog_echo_confirms_gui_send():
+    core = _make_core()
+    core.send_sig_recog(1)
+
+    core.update_sig_recog(SimpleNamespace(data=1))
+    manual_controls = core.build_snapshot().manual_controls
+
+    assert manual_controls.send_result == 'confirmed'
+    assert manual_controls.input_source == 'gui'
+
+
+def test_update_road_blocked_from_detector_is_marked_external():
+    """road_blockage_detector からの送信を external として区別する（12.2節）。"""
+
+    core = _make_core()
+
+    core.update_road_blocked(SimpleNamespace(data=True))
+    manual_controls = core.build_snapshot().manual_controls
+
+    assert manual_controls.road_blocked_value is True
+    assert manual_controls.road_blocked_source == 'external'
+
+
+def test_update_road_blocked_echo_confirms_gui_send():
+    core = _make_core()
+    core.send_road_blocked(True)
+
+    core.update_road_blocked(SimpleNamespace(data=True))
+    manual_controls = core.build_snapshot().manual_controls
+
+    assert manual_controls.road_blocked_source == 'gui'
+    assert manual_controls.send_result == 'confirmed'
+
+
+def test_snapshot_includes_event_banners_generated_from_state():
+    """Eventカードが常に空だった問題の回帰確認（6.7節）。"""
+
+    core = _make_core()
+    core.update_road_blocked(SimpleNamespace(data=True))
+
+    events = core.build_snapshot().event_banners
+
+    assert [e.event_type for e in events] == ['road_blocked']
+
+
+def test_snapshot_reports_profile_error_as_event():
+    core = _make_core()
+    profile_id = core._profiles[0].profile_id
+
+    core._on_launch_status(profile_id, NodeLaunchStatus.ERROR, None, 'process has died')
+    events = core.build_snapshot().event_banners
+
+    assert any(e.event_type == 'profile_error' and profile_id in e.message for e in events)

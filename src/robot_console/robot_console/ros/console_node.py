@@ -119,8 +119,11 @@ class RobotConsoleNode(Node):
             Odometry, 'odom', lambda msg: core.update_odom(msg, topic=odom_topic), 10
         )
         # 自身がpublishした値もDDS経由でエコーバックされるため、GUI送信の結果確認と
-        # GUI以外（joyコンソール等）からの送信検知の双方をこの購読で扱う。
+        # GUI以外（信号認識ノード・road_blockage_detector等）からの送信検知の双方を
+        # これらの購読で扱う。
         self.create_subscription(Bool, 'manual_start', self._core.update_manual_start, 10)
+        self.create_subscription(Int32, 'sig_recog', self._core.update_sig_recog, 10)
+        self.create_subscription(Bool, 'road_blocked', self._core.update_road_blocked, 10)
         self.create_subscription(
             PoseWithCovarianceStamped,
             'localization/pose_enu',

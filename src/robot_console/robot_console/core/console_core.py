@@ -25,6 +25,7 @@ from .drive_mode_adapter import (
     apply_cmd_vel_msg,
     apply_drive_mode_status_msg,
 )
+from .event_builder import build_event_banners
 from .freshness import FreshnessLevel, FreshnessMonitor
 from .image_store import ImageStore
 from .launch_manager import LaunchManager
@@ -454,6 +455,45 @@ class ConsoleCore:
             )
         self.freshness.mark_received('manual_start')
 
+    def update_sig_recog(self, msg: Any) -> None:
+        """`std_msgs/Int32`（`sig_recog`）の現在値を反映する。
+
+        `manual_start` と同様、自身の送信分もエコーバックされるため、GUI送信済みの
+        値と一致する場合は送信確認として扱い、それ以外は外部送信元（信号認識ノード
+        等）からの入力として扱う。
+        """
+
+        value = int(msg.data)
+        with self._lock:
+            sent_from_gui = self._manual_controls.sig_recog_last_sent_at is not None
+            confirmed = sent_from_gui and self._manual_controls.sig_recog_value == value
+            self._manual_controls = replace(
+                self._manual_controls,
+                sig_recog_value=value,
+                input_source='gui' if confirmed else 'external',
+                send_result='confirmed' if confirmed else self._manual_controls.send_result,
+            )
+        self.freshness.mark_received('sig_recog')
+
+    def update_road_blocked(self, msg: Any) -> None:
+        """`std_msgs/Bool`（`road_blocked`）の現在値を反映する。
+
+        道路封鎖はGUIだけでなく `road_blockage_detector` も送信するため、入力元を
+        `road_blocked_source` として区別する（screen_function_design.md 12.2節）。
+        """
+
+        value = bool(msg.data)
+        with self._lock:
+            sent_from_gui = self._manual_controls.road_blocked_last_sent_at is not None
+            confirmed = sent_from_gui and self._manual_controls.road_blocked_value == value
+            self._manual_controls = replace(
+                self._manual_controls,
+                road_blocked_value=value,
+                road_blocked_source='gui' if confirmed else 'external',
+                send_result='confirmed' if confirmed else self._manual_controls.send_result,
+            )
+        self.freshness.mark_received('road_blocked')
+
     def update_obstacle_hint(self, msg: Any) -> None:
         """`tc_route_msgs/ObstacleAvoidanceHint`（`obstacle_avoidance_hint`）を反映する。"""
 
@@ -620,6 +660,17 @@ class ConsoleCore:
             now=now,
         )
 
+        event_banners = build_event_banners(
+            launch_states=launch_profiles,
+            route=route_state,
+            follower=follower_state,
+            obstacle=obstacle_state,
+            manual_controls=manual_controls,
+            operation_phase=operation_state.phase,
+            lost_topics=self._collect_lost_topics(now),
+            now=now,
+        )
+
         log_paths: Dict[str, Optional[str]] = {}
         for profile in self._profiles:
             path = self.launch_manager.get_latest_log_path(profile.profile_id)
@@ -636,13 +687,41 @@ class ConsoleCore:
             obstacle_state=obstacle_state,
             drive_mode_state=drive_mode_state,
             sensor_panels=sensor_panels,
-            event_banners=[],
+            event_banners=event_banners,
             manual_controls=manual_controls,
             launch_profiles=launch_profiles,
             logs=self.log_manager.snapshot_all(),
             log_paths=log_paths,
             health=self._build_health_summaries(launch_profiles),
         )
+
+    # Eventカードの `topic lost` 判定対象。走行判断に直結し、途絶に気付かないと
+    # 古い値を現在値と誤認する運行系topicに限定する（6.7節）。
+    _LOST_WATCH_TOPICS: Dict[str, str] = {
+        'route_state': '/route_state',
+        'follower_state': '/follower_state',
+        'localization.pose_enu': '/localization/pose_enu',
+        'localization.pose_llh': '/localization/pose_llh',
+        'cmd_vel': '/cmd_vel',
+        'drive_mode_status': '/drive_mode_status',
+        'gps': '/rtk_gps/rtk_status',
+    }
+
+    def _collect_lost_topics(self, now: datetime) -> Dict[str, float]:
+        """`LOST` 判定になった監視対象topicと、その経過秒を返す。
+
+        一度も受信していないtopic（`UNKNOWN`）は「未使用の構成」と区別できない
+        ため対象にしない。受信実績があるのに途絶えたものだけを通知する。
+        """
+
+        lost: Dict[str, float] = {}
+        for key, display_name in self._LOST_WATCH_TOPICS.items():
+            if self.freshness.evaluate(key, now=now) != FreshnessLevel.LOST:
+                continue
+            elapsed = self.freshness.elapsed_seconds(key, now=now)
+            if elapsed is not None:
+                lost[display_name] = elapsed
+        return lost
 
     def _build_health_summaries(
         self, launch_profiles: Dict[str, LaunchProfileState]

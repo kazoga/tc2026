@@ -11,8 +11,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from ..core.event_priority import sort_by_priority
 from ..core.route_adapter import traveled_waypoint_count
-from ..core.snapshot_model import ConsoleSnapshot, HealthSummaryView, ImageReference, RouteWaypointView
+from ..core.snapshot_model import (
+    ConsoleSnapshot,
+    EventBanner,
+    HealthSummaryView,
+    ImageReference,
+    RouteWaypointView,
+)
 
 
 def _iso(value: Optional[datetime]) -> Optional[str]:
@@ -36,6 +43,16 @@ def _waypoint_payload(waypoint: RouteWaypointView) -> Dict[str, Any]:
         'index': waypoint.index,
         'latitude': waypoint.latitude,
         'longitude': waypoint.longitude,
+    }
+
+
+def _event_payload(event: EventBanner) -> Dict[str, Any]:
+    return {
+        'event_type': event.event_type,
+        'message': event.message,
+        'severity': event.severity,
+        'source': event.source,
+        'occurred_at': _iso(event.occurred_at),
     }
 
 
@@ -136,6 +153,7 @@ def build_snapshot_payload(snapshot: ConsoleSnapshot) -> Dict[str, Any]:
             'within_arrival_threshold': target.within_arrival_threshold,
             'freshness': target.freshness.value,
         },
+        'events': [_event_payload(event) for event in sort_by_priority(snapshot.event_banners)],
         'sensor_panels': [_panel_payload(panel) for panel in snapshot.sensor_panels],
         'health': [_health_payload(item) for item in snapshot.health],
     }

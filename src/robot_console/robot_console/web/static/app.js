@@ -50,6 +50,18 @@ let knownRouteWaypointCount = -1;
 const ROUTE_TRAVELED_COLOR = '#757575';
 const ROUTE_UNTRAVELED_COLOR = '#66bb6a';
 
+// EventBanner.severity の表示色（ui_qt/widgets/color_rules.py と同じ配色）。
+const SEVERITY_COLORS = {
+  error: '#c62828',
+  warn: '#f9a825',
+  notice: '#1565c0',
+  info: '#2e7d32',
+};
+
+function severityColor(severity) {
+  return SEVERITY_COLORS[severity] || FRESHNESS_COLORS.UNKNOWN;
+}
+
 function freshnessColor(level) {
   return FRESHNESS_COLORS[level] || FRESHNESS_COLORS.UNKNOWN;
 }
@@ -241,6 +253,33 @@ function renderSummary(snapshot) {
   appendField(fields, 'localization source', snapshot.localization.source);
 }
 
+function renderEvents(events) {
+  const list = document.getElementById('event-list');
+  list.innerHTML = '';
+  if (!events || events.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'event-empty';
+    li.textContent = 'イベントなし';
+    list.appendChild(li);
+    return;
+  }
+  // 並び順はサーバ側で優先度順に整列済みのため、ここでは変更しない。
+  for (const event of events) {
+    const li = document.createElement('li');
+    const message = document.createElement('span');
+    message.textContent = event.message;
+    message.style.color = severityColor(event.severity);
+    li.appendChild(message);
+    if (event.source) {
+      const source = document.createElement('span');
+      source.className = 'event-source';
+      source.textContent = event.source;
+      li.appendChild(source);
+    }
+    list.appendChild(li);
+  }
+}
+
 function renderGpsSummary(snapshot) {
   const fields = document.getElementById('gps-fields');
   fields.innerHTML = '';
@@ -378,6 +417,7 @@ async function pollSnapshot() {
     // 描画までを1つの成功単位として扱う。描画途中の例外を握り潰すと、
     // 通信は成功しているのに画面だけが古いまま固まる状態を検知できない。
     renderSummary(snapshot);
+    renderEvents(snapshot.events);
     renderGpsSummary(snapshot);
     renderMapCaption(snapshot);
     updateRouteOverlay(snapshot);
