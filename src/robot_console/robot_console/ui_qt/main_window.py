@@ -62,15 +62,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.dashboard_tab.node_health_card.profile_selected.connect(
             self._on_node_health_profile_selected
         )
-        self.dashboard_tab.view_localization_sensor_requested.connect(
-            lambda: self.tab_widget.setCurrentWidget(self.localization_sensor_tab)
-        )
-        self.localization_sensor_tab.back_to_dashboard_requested.connect(
-            lambda: self.tab_widget.setCurrentWidget(self.dashboard_tab)
-        )
-        self.console_log_tab.back_to_dashboard_requested.connect(
-            lambda: self.tab_widget.setCurrentWidget(self.dashboard_tab)
-        )
         self.launch_settings_tab.plan_changed.connect(self._on_launch_plan_changed)
         self.launch_settings_tab.business_mode_changed.connect(self._on_business_mode_changed)
         self.dashboard_tab.launch_control_card.apply_preset_requested.connect(

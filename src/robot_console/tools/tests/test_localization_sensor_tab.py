@@ -103,16 +103,13 @@ def test_update_snapshot_pushes_route_waypoints_to_map_view(qt_app):
     assert calls == [route_state]
 
 
-def test_back_to_dashboard_signal_emitted_on_button_click(qt_app):
+def test_tab_has_no_navigation_only_button(qt_app):
+    """タブで代替できる遷移ボタンを持たないことを確認する（9章 画面間導線）。"""
+
     tab = LocalizationSensorTab()
-    received = []
-    tab.back_to_dashboard_requested.connect(lambda: received.append(True))
 
-    back_button = tab.findChildren(QtWidgets.QPushButton)[0]
-    assert back_button.text() == 'ダッシュボードへ戻る'
-    back_button.click()
-
-    assert received == [True]
+    labels = [button.text() for button in tab.findChildren(QtWidgets.QPushButton)]
+    assert 'ダッシュボードへ戻る' not in labels
 
 
 def test_sensor_freshness_summary_reports_worst_level(qt_app):

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtWidgets
 
 from robot_console.core.freshness import FreshnessLevel
 from robot_console.core.image_store import ImageStore
@@ -53,8 +53,6 @@ DEFAULT_SENSOR_PANELS: List[ImageReference] = [
 class LocalizationSensorTab(QtWidgets.QWidget):
     """自己位置・センサ情報の詳細確認画面。"""
 
-    back_to_dashboard_requested = QtCore.pyqtSignal()
-
     def __init__(
         self,
         image_store: Optional[ImageStore] = None,
@@ -65,7 +63,6 @@ class LocalizationSensorTab(QtWidgets.QWidget):
         self._image_store = image_store or ImageStore()
 
         outer = QtWidgets.QVBoxLayout(self)
-        outer.addLayout(self._build_header())
         outer.addWidget(self._build_summary_panel())
 
         # GPS/自己位置の詳細カードは置かず（ダッシュボードのGPS/Poseカードと
@@ -76,14 +73,6 @@ class LocalizationSensorTab(QtWidgets.QWidget):
         outer.addLayout(content_row, 1)
 
         self.update_snapshot(ConsoleSnapshot())
-
-    def _build_header(self) -> QtWidgets.QHBoxLayout:
-        row = QtWidgets.QHBoxLayout()
-        back_button = QtWidgets.QPushButton('ダッシュボードへ戻る')
-        back_button.clicked.connect(self.back_to_dashboard_requested.emit)
-        row.addWidget(back_button)
-        row.addStretch(1)
-        return row
 
     # ---------- 運行サマリ（7.3節） ----------
     def _build_summary_panel(self) -> QtWidgets.QGroupBox:

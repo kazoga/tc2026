@@ -86,30 +86,42 @@ def test_node_health_chip_click_navigates_to_console_log_tab(qt_app):
     assert window.console_log_tab._selected_profile_id == 'obstacle_monitor'
 
 
-def test_gps_pose_detail_button_navigates_to_localization_sensor_tab(qt_app):
+def test_all_tabs_are_reachable_by_tab_selection(qt_app):
+    """画面切り替えはタブ操作で行う（9章 画面間導線）。
+
+    行き先を指定するだけの遷移ボタンは置かない方針のため、全タブがタブ選択で
+    到達できることを保証する。
+    """
+
     window = MainWindow()
 
-    window.dashboard_tab.view_localization_sensor_requested.emit()
+    for tab in (
+        window.localization_sensor_tab,
+        window.launch_settings_tab,
+        window.console_log_tab,
+        window.dashboard_tab,
+    ):
+        window.tab_widget.setCurrentWidget(tab)
+        assert window.tab_widget.currentWidget() is tab
 
-    assert window.tab_widget.currentWidget() is window.localization_sensor_tab
 
+def test_navigation_only_buttons_are_not_placed_on_screens(qt_app):
+    """タブと重複する遷移ボタンを持たないことを確認する（9章）。
 
-def test_localization_sensor_tab_back_button_navigates_to_dashboard(qt_app):
+    ダッシュボードは走行中に常時見る画面であり、タブで代替できるボタンで
+    表示面積を消費しない。
+    """
+
     window = MainWindow()
-    window.tab_widget.setCurrentWidget(window.localization_sensor_tab)
 
-    window.localization_sensor_tab.back_to_dashboard_requested.emit()
-
-    assert window.tab_widget.currentWidget() is window.dashboard_tab
-
-
-def test_console_log_tab_back_button_navigates_to_dashboard(qt_app):
-    window = MainWindow()
-    window.tab_widget.setCurrentWidget(window.console_log_tab)
-
-    window.console_log_tab.back_to_dashboard_requested.emit()
-
-    assert window.tab_widget.currentWidget() is window.dashboard_tab
+    for tab in (
+        window.dashboard_tab,
+        window.localization_sensor_tab,
+        window.console_log_tab,
+    ):
+        labels = [button.text() for button in tab.findChildren(QtWidgets.QPushButton)]
+        assert 'ダッシュボードへ戻る' not in labels
+        assert '自己位置・センサ情報を見る' not in labels
 
 
 def test_launch_settings_plan_changes_propagate_to_dashboard_launch_control_card(qt_app):

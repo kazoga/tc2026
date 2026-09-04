@@ -27,8 +27,6 @@ PROFILE_ID_ROLE = QtCore.Qt.UserRole
 class ConsoleLogTab(QtWidgets.QWidget):
     """起動後の詳細確認・異常調査・開発時デバッグ用の画面。"""
 
-    back_to_dashboard_requested = QtCore.pyqtSignal()
-
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
 
@@ -38,7 +36,6 @@ class ConsoleLogTab(QtWidgets.QWidget):
         self._selected_profile_id: Optional[str] = None
 
         layout = QtWidgets.QVBoxLayout(self)
-        layout.addLayout(self._build_header())
         layout.addLayout(self._build_toolbar())
 
         splitter = QtWidgets.QHBoxLayout()
@@ -47,14 +44,6 @@ class ConsoleLogTab(QtWidgets.QWidget):
         layout.addLayout(splitter, 1)
 
         layout.addWidget(self._build_warn_error_panel())
-
-    def _build_header(self) -> QtWidgets.QHBoxLayout:
-        row = QtWidgets.QHBoxLayout()
-        back_button = QtWidgets.QPushButton('ダッシュボードへ戻る')
-        back_button.clicked.connect(self.back_to_dashboard_requested.emit)
-        row.addWidget(back_button)
-        row.addStretch(1)
-        return row
 
     # ---------- ツールバー（5.2節） ----------
     def _build_toolbar(self) -> QtWidgets.QHBoxLayout:
