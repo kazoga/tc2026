@@ -14,11 +14,10 @@ from rtk_gps_um982_msgs.msg import RtkStatus
 from tc_geo_msgs.msg import GeoPoint, GeoPose, GeoPoseWithQuality, MapProjection
 
 from geo_pose_converter.geo_core import (
-    EnuPoint,
     LlhPoint,
     ProjectionConfig,
     bearing_from_map_delta,
-    enu_to_llh,
+    enu_to_llh_on_ground,
     heading_deg_to_yaw_enu_rad,
     llh_to_enu,
     quaternion_to_yaw,
@@ -159,9 +158,18 @@ def llh_to_pose_with_covariance(
 
     本プロジェクトでは走行用ENU poseを2Dとして扱うため、zは高度から復元せず0.0に
     正規化する。GNSS高度はLLH系topic側で保持する。
+
+    水平座標(x, y)の算出にもGNSS実高度ではなく `origin_altitude` を用いる。
+    local tangent planeでは同一の緯度経度でも高度が変わると水平座標がずれるため
+    (原点距離d[m]に対し 高度差 × d/R)、高度規約が経路ごとに異なると同じ地点が
+    別のENU座標になる。route waypointは `origin_altitude` 基準でENU化される
+    (`route_builder._set_pose_from_llh()`) ため、自己位置側も同じ基準へ揃える。
+    東京駅原点・つくば(52.7km)では、高度62mの実測値をそのまま使うと約0.48mの
+    系統誤差になる。
     """
 
-    enu = llh_to_enu(point, projection)
+    ground_point = LlhPoint(point.latitude, point.longitude, projection.origin_altitude)
+    enu = llh_to_enu(ground_point, projection)
     msg = PoseWithCovarianceStamped()
     msg.header = header
     msg.header.frame_id = projection.map_frame_id
@@ -187,14 +195,19 @@ def pose_to_llh_pose(
     """map ENU PoseをGeoPoseへ変換する.
 
     ENU poseは走行用2D座標として扱うため、既定では逆投影した高度を有効値としない。
+    zも `llh_to_enu_pose()` が0.0へ正規化した値が入るため、そのまま逆投影すると
+    原点から離れた地点で水平位置に誤差が出る(原点52.7km先で約1.8m)。
+    水平座標(x, y)を地表点として扱う `enu_to_llh_on_ground()` を用いることで、
+    `llh_to_enu_pose()` との往復を一致させる。基準高度は他経路（waypoint生成・
+    GNSS自己位置）と同じ `origin_altitude` を用い、ENU⇔LLH変換の高度規約を統一する。
     """
 
-    enu = EnuPoint(
+    point = enu_to_llh_on_ground(
         float(pose.position.x),
         float(pose.position.y),
-        float(pose.position.z),
+        projection,
+        ground_altitude=projection.origin_altitude,
     )
-    point = enu_to_llh(enu, projection)
     yaw_map = quaternion_to_yaw(
         pose.orientation.x,
         pose.orientation.y,

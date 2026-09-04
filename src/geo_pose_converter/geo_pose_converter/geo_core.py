@@ -237,6 +237,45 @@ def enu_to_llh(point: EnuPoint, projection: ProjectionConfig) -> LlhPoint:
     return ecef_to_geodetic(ox + dx, oy + dy, oz + dz)
 
 
+def enu_to_llh_on_ground(
+    x: float,
+    y: float,
+    projection: ProjectionConfig,
+    ground_altitude: float = 0.0,
+    iterations: int = 3,
+) -> LlhPoint:
+    """map frameの水平座標(x, y)を、指定高度の地表点としてWGS84 LLHへ変換する.
+
+    本プロジェクトの走行用ENU poseは2D座標として扱い、zは0.0へ正規化する
+    (`llh_to_enu_pose()` 参照)。一方、local tangent planeでは原点から離れるほど
+    地表が接平面から下がるため(距離d[m]に対し概ね d^2/2R)、z=0.0のまま
+    `enu_to_llh()` へ渡すと「原点の鉛直方向へ持ち上げた点」を逆投影することになる。
+    原点の鉛直方向は遠方では地表の鉛直方向から d/R だけ傾いているため、
+    水平位置に (d^2/2R) * (d/R) の誤差が出る(原点52.7km先で約1.8m)。
+
+    そこで、指定した地表高度と整合する接平面zを反復的に求めてから逆投影し、
+    水平位置の誤差を除去する。`llh_to_enu()` との往復が一致することを保証する。
+
+    Args:
+        x (float): map frameのX座標 [m]。
+        y (float): map frameのY座標 [m]。
+        projection (ProjectionConfig): 投影設定。
+        ground_altitude (float): 対象点の楕円体高 [m]。既定は0.0。
+        iterations (int): 反復回数。数kmから数十kmの範囲では3回で収束する。
+
+    Returns:
+        LlhPoint: 水平位置が(x, y)と整合するWGS84 LLH。
+    """
+
+    z = 0.0
+    for _ in range(max(iterations, 1)):
+        candidate = enu_to_llh(EnuPoint(x, y, z), projection)
+        z = llh_to_enu(
+            LlhPoint(candidate.latitude, candidate.longitude, ground_altitude), projection
+        ).z
+    return enu_to_llh(EnuPoint(x, y, z), projection)
+
+
 def bearing_from_map_delta(dx: float, dy: float, projection: ProjectionConfig) -> float:
     """map frame差分から真北基準CW bearing[deg]を算出する."""
 
