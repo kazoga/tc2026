@@ -4,9 +4,21 @@
 
 本書は、次期 `robot_console` GUIの正式画面仕様を定義する。対象は、PyQt5ローカル操作UIとHTML遠隔観測UIである。
 
-**実装状態:** 本書は次期UIの目標仕様であり、現行の正式UIは `tkinter` 版である。PyQt5の4タブ画面とHTML遠隔観測UIは未実装であり、現行操作はREADMEと `robot_console_詳細設計書.md` に従う。
+**実装状態:** 本書が定義するPyQt5の4タブ画面とHTML遠隔観測UIは実装済みであり、正式UIである。未実装の項目は 1.1節「未実装項目」に列挙する。
 
 ROS 2ノード、Core、Snapshot、HTML観測UIとの構造的な役割分担は `robot_console_gui_architecture_design.md` を正とする。本書では、実際の業務フローから各画面の役割、想定操作、レイアウト、表示内容、入力方式を具体化する。
+
+### 1.1 未実装項目
+
+以下は本書に仕様があるが未実装である。実装時は該当節を正とする。
+
+| 項目 | 該当節 | 現状 |
+| --- | --- | --- |
+| 信号停止・停止線の区別表示（`signal_stop_active` / `line_stop_active`） | 6.7 | `FollowerState` に該当フィールドが無く、`Route` のwaypointフラグ（`signal_stop` / `line_stop`）と follower の `WAITING_STOP` から導出する必要がある。現在はどちらも既定値のまま。 |
+| 目標到達判定（`arrival_threshold_m` / `within_arrival_threshold`） | 6.4 | 到達判定しきい値を配信するtopicが無く（`route_follower` のパラメータ）、目標距離は常に「未到達」と表示される。 |
+| Node Healthチップのログレベル表示（`last_log_level`） | 6.8 | `LogManager` のWARN/ERROR抽出結果をSnapshotへ載せていない。 |
+| 起動予定に含まれない重要profileの警告（`required_but_not_selected`） | 6.8 | 常に `False`。重要基盤profileの定義が未確定。 |
+| `/mission_info`・`/rtk_gps/fix`・`/rtk_gps/heading` の購読 | 7章 | 未購読。GPSカードは `/rtk_gps/.../rtk_status` のみで表示している。 |
 
 ## 2. 基本方針
 

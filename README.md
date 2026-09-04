@@ -43,15 +43,16 @@ ROS 2 Jazzy ワークスペース。
 | [`src/yolo_detector`](src/yolo_detector/README.md)          | USB カメラ画像を YOLO (PyTorch / NCNN) で物体検出し、検出画像・`Detection2DArray` を配信 |
 | [`src/traffic_signal_recognizer`](src/traffic_signal_recognizer/README.md) | YOLO検出結果から信号のGO/STOPを判定し、判定画像を配信 |
 | [`src/road_blockage_detector`](src/road_blockage_detector/README.md) | YOLO検出結果と自己位置から道路封鎖を判定し、判定画像を配信 |
-| [`src/robot_console`](src/robot_console/README.md)          | 走行状態・障害物回避・経路進捗・ノード起動を一画面で監視する tkinter GUI ダッシュボード |
+| [`src/robot_console`](src/robot_console/README.md)          | 走行状態・障害物回避・経路進捗・ノード起動を一画面で監視する PyQt5 GUI ダッシュボードとHTML遠隔観測UI |
 
 ワークスペース横断の仕様書は [`docs/`](docs/)、パッケージ固有の設計書は各パッケージ
 配下の `docs/` を参照。
 
 ## 開発状態
 
-- `robot_console` の現行正式UIは tkinter 版である。PyQt5ローカルUIとHTML遠隔観測UIは
-  `src/robot_console/docs/` に設計を定義しているが、まだ実装していない。
+- `robot_console` の正式UIは PyQt5 版（`robot_console_qt`）である。遠隔観測用の
+  HTML UI（`robot_console_web`）も同じ `ConsoleCore` の状態を表示する。
+  旧 tkinter 版（`robot_console`）は当面残すが、正式UIとしては扱わない。
 - `localization_fusion` 実装前の暫定構成では、GNSS入力がある場合に
   `geo_pose_converter` のENU出力を `/localization/pose_enu` として使用する。
 - 走行制御はENU、OSM・GUI表示はLLHを使用し、`geo_pose_converter` が両者を変換する。

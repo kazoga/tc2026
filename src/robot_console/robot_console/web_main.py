@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from typing import List, Optional
@@ -26,6 +27,14 @@ def _parse_args(argv: List[str]) -> argparse.Namespace:
     parser.add_argument(
         '--port', type=int, default=DEFAULT_PORT, help=f'bindするポート（既定: {DEFAULT_PORT}）'
     )
+    parser.add_argument(
+        '--console-log-directory',
+        default=os.environ.get('ROBOT_CONSOLE_LOG_DIR'),
+        help=(
+            'robot_console 管理の子プロセス stdout/stderr 保存先。'
+            '未指定時は ROBOT_CONSOLE_LOG_DIR を参照します'
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -34,7 +43,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     args = _parse_args(argv if argv is not None else sys.argv[1:])
 
-    core = ConsoleCore()
+    core = ConsoleCore(log_directory=args.console_log_directory)
     ros_handle = start_ros_thread(core, node_name='robot_console_web')
 
     server = WebObservationServer(

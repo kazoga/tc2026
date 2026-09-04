@@ -89,12 +89,16 @@ def _launch_setup(context: LaunchContext, *args, **kwargs) -> List[Node]:
     remappings = [
         (from_name, LaunchConfiguration(arg_name)) for arg_name, from_name, *_ in _TOPIC_CONFIGS
     ]
+    # 正式UIはPyQt5版（robot_console_qt）である。旧tkinter版（robot_console）は
+    # entry pointとしては残すが、本launchからは起動しない。
+    # 新UIはログ保存先をROSパラメータではなくCLI引数で受け取る（ConsoleCoreを
+    # Node生成前に構築するため）。
     node = Node(
         package='robot_console',
-        executable='robot_console',
-        name='robot_console',
+        executable='robot_console_qt',
+        name='robot_console_qt',
         output='screen',
-        parameters=[{'console_log_directory': log_dir}],
+        arguments=['--console-log-directory', log_dir],
         remappings=remappings,
     )
     return [node]
