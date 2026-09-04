@@ -326,9 +326,30 @@ class LaunchSettingsTab(QtWidgets.QWidget):
         self._config_group.setLayout(self._config_form)
         return self._config_group
 
-    def _update_config_panel(self) -> None:
+    def _clear_config_form(self) -> None:
+        """ノード設定編集パネルの既存ウィジェットを破棄する。
+
+        `QFormLayout.removeRow()` はウィジェットを即座に削除するため、引数編集
+        ウィジェット自身のシグナル処理中（`_on_argument_changed()` →
+        `_refresh_plan_table()` → `_update_config_panel()` → 本メソッド）に
+        呼ばれると、シグナル送出元のウィジェットが処理の途中で破棄される。
+        `takeRow()` でレイアウトから外し、破棄を `deleteLater()` で次のイベント
+        ループへ遅らせることでこの再入を避ける。
+        """
+
         while self._config_form.rowCount():
-            self._config_form.removeRow(0)
+            row = self._config_form.takeRow(0)
+            for item in (row.labelItem, row.fieldItem):
+                if item is None:
+                    continue
+                widget = item.widget()
+                if widget is None:
+                    continue
+                widget.setParent(None)
+                widget.deleteLater()
+
+    def _update_config_panel(self) -> None:
+        self._clear_config_form()
         self._argument_widgets = {}
 
         profile_id = self._selected_profile_id
