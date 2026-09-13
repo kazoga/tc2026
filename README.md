@@ -283,6 +283,18 @@ colcon はワークスペースのルートから実行する。
 
 ## GNSS/LIO・デジタルツイン・経路採取
 
+つくば2026の完成済み試験地図をGitに同梱している。
+[同梱地図の入口](src/obstacle_route_sim/maps/tsukuba2026/README.md)には、
+ネット接続不要の3D閲覧版と静止画像がある。再帰clone後、通常のROS依存導入・ビルドを行えば、
+地図のダウンロードや再生成なしで次の1コマンドから模擬確認を始められる。
+
+```bash
+source install/setup.bash
+ros2 run icart_bringup run_digital_twin --output log/digital_twin/session01 --start-ui
+```
+
+`preview.html` の閲覧だけならROS環境は不要。シミュレーションの実行にはROS/Gazebo等が必要。
+
 - [GNSS/LIO 融合](src/gnss_lio_fusion/README.md): 品質判定、時刻同期、方位推定
 - [共通起動](src/icart_bringup/README.md): 実機・模擬環境の選択とセッション準備
 - [経路採取・編集](src/route_survey/README.md): 手動走行から LLH 経路を保存

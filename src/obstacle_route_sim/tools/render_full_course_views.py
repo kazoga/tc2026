@@ -13,7 +13,7 @@ import numpy as np
 from PIL import Image
 
 
-def render(source: Path, output: Path) -> None:
+def render(source: Path, output: Path, *, no_photo: bool = False) -> None:
     """地形、物体メッシュ、樹木、概略経路を同じ座標で描画する."""
     data = json.loads((source / 'viewer_data.json').read_text())
     output.mkdir(parents=True, exist_ok=True)
@@ -22,7 +22,8 @@ def render(source: Path, output: Path) -> None:
     heights = np.array(grid['height']).reshape(grid['h'], grid['w'])
     xs = grid['ox'] + np.arange(grid['w']) * grid['res']
     ys = grid['oy'] + np.arange(grid['h']) * grid['res']
-    photo = np.asarray(Image.open(source / 'aerial_texture.jpg').convert('RGB')) / 255
+    photo = (np.array([[[.65, .73, .59]]]) if no_photo else
+             np.asarray(Image.open(source / 'aerial_texture.jpg').convert('RGB')) / 255)
     width, depth = data['dimensions']
     palette = {'buildings': '#c5ced7', 'vehicles': '#7598b8',
                'hedges': '#598348', 'street': '#73808a'}
@@ -92,7 +93,10 @@ def render(source: Path, output: Path) -> None:
                  fontsize=12,color='#4c6072')
         fig.text(.035,.080,'建物・樹木・車両・植栽を近似再構成。高さ・位置は未校正。全コース完走は未確認。',
                  fontsize=11,color='#4c6072')
-        fig.text(.035,.047,'写真：2024-01-10 ／ 国土地理院・© OpenStreetMap contributors・Esri / Vantor / Earthstar Geographics / GIS User Community',
+        credit = ('国土地理院DEMを加工 ／ © OpenStreetMap contributors (ODbL 1.0) ／ 航空写真なし・離隔調整済み試験地図'
+                  if no_photo else
+                  '写真：2024-01-10 ／ 国土地理院・© OpenStreetMap contributors・Esri / Vantor / Earthstar Geographics / GIS User Community')
+        fig.text(.035,.047,credit,
                  fontsize=8,color='#607487')
         fig.savefig(output / (name+'.png'), dpi=160, facecolor=fig.get_facecolor())
         plt.close(fig)
@@ -103,5 +107,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--no-photo', action='store_true', help='写真を使わず無地の地面で描画する')
     args = parser.parse_args()
-    render(args.source, args.output)
+    render(args.source, args.output, no_photo=args.no_photo)

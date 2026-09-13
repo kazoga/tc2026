@@ -1,5 +1,8 @@
 # obstacle_route_sim
 
+つくば2026の全周デジタルツインは [maps/tsukuba2026](maps/tsukuba2026/README.md) に
+固定地図・オフライン閲覧版・静止画像を同梱している。clone後の確認にはこの固定版を使う。
+
 `obstacle_route_sim` は、Gazebo Harmonic 上で直線・S字・クランクの道路 world、差動二輪ロボット、2D LiDAR、Mid-360 相当 3D LiDAR、pylon 障害物を起動し、既存の route stack と接続して障害物回避・ルート復帰を検証するためのパッケージである。
 
 詳細設計は `docs/obstacle_route_sim_詳細設計書.md` を参照する。

@@ -3,6 +3,18 @@
 実機とデジタルツインで同じ経路・原点・融合・走行UIを使用する。
 起動直後はmanual_start待ちとし、走行開始は既存UIから行う。
 
+## 同梱されたつくば2026地図で確認する
+
+```bash
+ros2 run icart_bringup run_digital_twin --output log/digital_twin/session01 --start-ui
+```
+
+固定地図を検証・展開し、simulation専用の共通起動へ渡す。地図の再取得・再生成は不要。
+保存先は新規のみ。並行試験には `--domain-id 87` など別DDS domainを指定する。
+[同梱地図・閲覧・準備手順](../obstacle_route_sim/maps/tsukuba2026/README.md)を参照する。
+
+## 別の地図を使う
+
 ```bash
 ros2 run icart_bringup prepare_session --trial <IMU追加済み地形ディレクトリ> --output <新規設定ディレクトリ>
 ros2 run icart_bringup run_session --session <設定ディレクトリ>/session.yaml --environment simulation --start-ui

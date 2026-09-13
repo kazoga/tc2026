@@ -11,4 +11,5 @@ setup(name='icart_bringup', version='0.1.0', packages=['icart_bringup'],
       maintainer='Kazuki Ogata', maintainer_email='kaz.ogata1988@gmail.com',
       description='実機とデジタルツインの共通起動', license='Apache-2.0',
       entry_points={'console_scripts': ['prepare_session = icart_bringup.session_core:main',
+                                          'run_digital_twin = icart_bringup.digital_twin_core:main',
                                           'run_session = icart_bringup.session_core:run_main']})

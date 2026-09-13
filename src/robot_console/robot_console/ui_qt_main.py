@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import signal
 import sys
 from typing import List, Optional
 
@@ -72,7 +73,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     timer.start(SNAPSHOT_POLL_MS)
 
     window.show()
-    return app.exec_()
+    # launchからの終了通知をQtの終了イベントへ変換し、ROSスレッドも停止する。
+    previous = {sig: signal.signal(sig, lambda *_: app.quit())
+                for sig in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        return app.exec_()
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
 
 
 if __name__ == '__main__':

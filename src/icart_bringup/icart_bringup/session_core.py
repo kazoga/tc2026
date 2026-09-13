@@ -120,14 +120,19 @@ def run_main() -> None:
     parser.add_argument('--environment', choices=['real', 'simulation'], required=True)
     parser.add_argument('--start-ui', action='store_true')
     args = parser.parse_args()
-    data = load_session(args.session, args.environment)
-    domain = int(data.get('simulation_domain_id', 86) if args.environment == 'simulation'
+    launch_session(args.session, args.environment, start_ui=args.start_ui)
+
+
+def launch_session(session: Path, environment: str, *, start_ui: bool = False) -> None:
+    """DDS設定を検査し、余分なros2 runプロセスを挟まずlaunchへ引き渡す."""
+    data = load_session(session, environment)
+    domain = int(data.get('simulation_domain_id', 86) if environment == 'simulation'
                  else data.get('real_domain_id', 0))
-    validate_domain(data, args.environment, domain)
+    validate_domain(data, environment, domain)
     os.environ['ROS_DOMAIN_ID'] = str(domain)
-    if args.environment == 'simulation':
+    if environment == 'simulation':
         os.environ['ROS_AUTOMATIC_DISCOVERY_RANGE'] = 'LOCALHOST'
     os.execvp('ros2', ['ros2', 'launch', 'icart_bringup', 'bringup.launch.py',
-                       'session:='+str(args.session.resolve()),
-                       'environment:='+args.environment,
-                       'start_ui:='+str(args.start_ui).lower()])
+                       'session:='+str(session.resolve()),
+                       'environment:='+environment,
+                       'start_ui:='+str(start_ui).lower()])

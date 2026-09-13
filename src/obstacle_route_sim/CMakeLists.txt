@@ -4,7 +4,7 @@ project(obstacle_route_sim)
 find_package(ament_cmake REQUIRED)
 
 install(
-  DIRECTORY launch params
+  DIRECTORY launch params maps
   DESTINATION share/${PROJECT_NAME}
 )
 
@@ -84,6 +84,7 @@ install(
 
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_installed_programs tests/test_installed_programs.py)
   ament_add_pytest_test(test_route_corridor tests/test_route_corridor.py)
   ament_add_pytest_test(test_full_lio_review tests/test_full_lio_review.py)
   ament_add_pytest_test(test_lio_noise tests/test_lio_noise.py)
