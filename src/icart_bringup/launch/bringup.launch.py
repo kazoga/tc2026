@@ -1,0 +1,117 @@
+"""共通の走行・UI接口を保ち、実機とGazeboのセンサ入力だけを切り替える."""
+import os
+from pathlib import Path
+
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch.actions import (DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription,
+                            OpaqueFunction, SetEnvironmentVariable, RegisterEventHandler, EmitEvent)
+from launch.event_handlers import OnProcessExit
+from launch.events import Shutdown
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+
+from icart_bringup.session_core import load_session, validate_domain
+
+
+def setup(context) -> list:
+    """設定を先に検査し、シミュレーションから実機ドライバを起動させない."""
+    environment = LaunchConfiguration('environment').perform(context)
+    data = load_session(Path(LaunchConfiguration('session').perform(context)), environment)
+    validate_domain(data, environment, int(os.environ.get('ROS_DOMAIN_ID', '0')))
+    simulation = environment == 'simulation'
+    share = Path(get_package_share_directory('obstacle_route_sim'))
+    gps_base = '/rtk_gps' if simulation else data.get('gnss_namespace', '/rtk_gps/rtk_gps_um982_node')
+    projection = data['projection_params']
+    actions = []
+    def node(package: str, executable: str, params: list = None, remaps: list = None) -> Node:
+        return Node(package=package, executable=executable, output='screen',
+                    parameters=[*(params or []), {'use_sim_time': simulation}],
+                    remappings=remaps or [])
+    if simulation:
+        directory = Path(data['trial_directory'])
+        actions += [SetEnvironmentVariable('GZ_PARTITION', 'icart_session_'+str(os.getpid())),
+                    SetEnvironmentVariable('ROS_AUTOMATIC_DISCOVERY_RANGE', 'LOCALHOST'),
+                    SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', str(directory)+os.pathsep+
+                                           os.environ.get('GZ_SIM_RESOURCE_PATH', '')),
+                    ExecuteProcess(cmd=['gz', 'sim', '-s', '-r',
+                                   '--physics-engine', data.get('physics_engine', 'gz-physics-dartsim-plugin'),
+                                   data.get('trial_sdf', str(directory/'trial.sdf'))],
+                                   output='screen'),
+                    Node(package='ros_gz_bridge', executable='parameter_bridge', arguments=[
+                        '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
+                        '/model/icart_mini/pose@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
+                        '/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
+                        '/ypspur_ros/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+                        '/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+                        '/body_contacts@ros_gz_interfaces/msg/Contacts[gz.msgs.Contacts',
+                        '/sim/mid360/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
+                        '/mid360/livox/lidar/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked'],
+                         remappings=[('/model/icart_mini/pose', '/truth')], output='screen'),
+                    node('obstacle_route_sim', 'lio_sensor_adapter_node.py', [{
+                        'noise_profile': data.get('noise_profile', 'conservative'),
+                        'noise_seed': int(data.get('noise_seed', 1))}]),
+                    node('obstacle_route_sim', 'gnss_simulator_node.py', [projection, {
+                        'buildings_json': str(directory/'world.json') if data.get('building_gnss', True) else '',
+                        'heading_reference': 'antenna_baseline',
+                        'baseline_sigma_m': .002, 'baseline_float_sigma_m': .04,
+                        **{key: float(data.get(key, 0.)) for key in [
+                            'heading_fault_deg', 'heading_fault_after_s', 'heading_fault_duration_s']}}])]
+        fastlio = str(share/'params/fastlio_gazebo.yaml')
+    else:
+        # 接続先・デバイス設定は既存の実機launchへ委譲する。空なら別起動のドライバを使う。
+        if data.get('hardware_launch'):
+            actions.append(IncludeLaunchDescription(PythonLaunchDescriptionSource(data['hardware_launch'])))
+        fastlio = data.get('fastlio_config') or str(
+            Path(get_package_share_directory('fast_lio'))/'config/mid360.yaml')
+    actions += [node('fast_lio', 'fastlio_mapping', [fastlio,
+                {'pcd_save.pcd_save_en': False}], [('/Odometry', '/lio/odometry')]),
+                node('gnss_lio_fusion', 'fusion_node', [
+                    str(Path(get_package_share_directory('gnss_lio_fusion'))/'params/default.yaml'),
+                    projection, {'gnss_heading_offset_deg': 180.},
+                    *([data['fusion_params']] if data.get('fusion_params') else []),
+                    {'output_log': LaunchConfiguration('fusion_log').perform(context)}],
+                     [('/rtk_gps/fix', gps_base+'/fix'),
+                                  ('/rtk_gps/rtk_status', gps_base+'/rtk_status')]),
+                node('geo_pose_converter', 'geo_pose_converter_node', [projection],
+                     [('gnss/pose_enu', '/gnss/pose_enu'),
+                      ('rtk_gps/fix', gps_base+'/fix'), ('rtk_gps/heading', gps_base+'/heading'),
+                      ('rtk_gps/rtk_status', gps_base+'/rtk_status')]),
+                node('geo_pose_converter', 'route_geo_projector_node', [projection]),
+                node('route_planner', 'route_planner', [{
+                    'config_yaml_path': data['route_config'], 'csv_base_dir': data['csv_base_dir'],
+                    'projection_config_path': projection}]),
+                node('route_manager', 'route_manager', [{
+                    'start_label': str(data.get('start_label', '0')),
+                    'goal_label': str(data['goal_label']), 'checkpoint_labels': ['']}]),
+                node('route_follower', 'route_follower', [{'start_immediately': False}]),
+                node('obstacle_monitor', 'obstacle_monitor'),
+                node('robot_navigator', 'robot_navigator', params=[{
+                    'pose_timeout_sec': 1., 'odom_timeout_sec': 1.}], remaps=[
+                    ('odom', '/ypspur_ros/odom'), ('cmd_vel', '/cmd_vel/autonomous')]),
+                node('drive_mode_manager', 'drive_cmd_mux_node', [{'initial_mode': LaunchConfiguration('initial_drive_mode').perform(context)}],
+                     [('cmd_vel/autonomous', '/cmd_vel/fusion_limited')])]
+    if LaunchConfiguration('start_ui').perform(context).lower() == 'true':
+        actions.append(Node(package='robot_console', executable='robot_console_qt',
+                            output='screen', parameters=[{'use_sim_time': simulation}],
+                            arguments=['--business-environment',
+                                       'デジタルツイン' if simulation else '実機（融合）'],
+                            remappings=[('odom', '/ypspur_ros/odom')]))
+    # センサや制御プロセスが終了した際に、残りの起動群だけ走り続ける状態を避ける。
+    actions += [RegisterEventHandler(OnProcessExit(target_action=action,
+                on_exit=[EmitEvent(event=Shutdown(reason='共通走行プロセス終了'))]))
+                for action in list(actions) if isinstance(action, ExecuteProcess)]
+    return actions
+
+
+def generate_launch_description() -> LaunchDescription:
+    """DDS domainはUIを含む親シェルと一致させ、途中では変更しない."""
+    return LaunchDescription([
+        DeclareLaunchArgument('environment', default_value='simulation', choices=['simulation', 'real']),
+        DeclareLaunchArgument('session', description='prepare_sessionで生成したsession.yaml'),
+        DeclareLaunchArgument('fusion_log', default_value='', description='任意の融合JSONL保存先'),
+        DeclareLaunchArgument('initial_drive_mode', default_value='autonomous',
+                              choices=['autonomous', 'manual']),
+        DeclareLaunchArgument('start_ui', default_value='false', choices=['true', 'false']),
+        OpaqueFunction(function=setup)])
