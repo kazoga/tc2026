@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>livox_sdk2_vendor</name>
+  <version>0.1.0</version>
+  <description>Livox SDK2 をワークスペース内にビルドする vendor パッケージ</description>
+  <maintainer email="kaz.ogata1988@gmail.com">Kazuki Ogata</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>
