@@ -7,7 +7,8 @@ ROS 2 環境が有効な場合（`sensor_msgs` などが実際に import でき�
 
 また、`PyQt5` を使うテストがディスプレイの無い環境でも実行できるよう、他の
 モジュールが `PyQt5` をimportする前に `QT_QPA_PLATFORM=offscreen` を既定値
-として設定する。
+として設定する。offscreen では地図タブの表示切り替え時にOpenGLコンテキストを
+作成できない環境があるため、Qt Quick はソフトウェア描画を既定値にする。
 
 `opencv-python` は import 時に `QT_QPA_PLATFORM_PLUGIN_PATH` を自身が同梱する
 Qtプラグイン（cv2/qt/plugins、PyQt5と異なるQtビルド）へ書き換える。同一プロセス
@@ -53,6 +54,8 @@ from pathlib import Path
 import pytest
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+if os.environ['QT_QPA_PLATFORM'] == 'offscreen':
+    os.environ.setdefault('QT_QUICK_BACKEND', 'software')
 
 if not os.environ.get('VIRTUAL_ENV'):
     import warnings

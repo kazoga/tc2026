@@ -89,6 +89,9 @@ ros2 launch robot_console robot_console.launch.py \
 - ワークスペースの `requirements.txt` で `pytest-forked` も導入してください。
   QtWebEngine の状態をテスト間で共有しないよう各テストを別プロセスで実行します。
   未導入の場合は `pytest.ini` の必須プラグイン検査で実行前にエラーになります。
+- テストは既定で `QT_QPA_PLATFORM=offscreen` と
+  `QT_QUICK_BACKEND=software` を設定するため、ディスプレイのないCIでも地図タブの
+  切り替えを検証できます。これらの設定はテストにのみ適用します。
 - `tools/headless_route_stack_eval.py` は tkinter 画面を生成せず、`GuiCore` に
   GUI 操作相当の入力を与えて route stack の簡易回帰評価を行う補助ツールです。
   `route_planner`、`route_manager`、`route_follower`、`drive_mode_manager`、
