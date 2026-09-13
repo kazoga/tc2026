@@ -9,6 +9,7 @@ import copy
 from typing import Optional
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from geometry_msgs.msg import PoseWithCovarianceStamped
@@ -129,7 +130,7 @@ class GeoPoseConverterNode(Node):
             has_heading,
             self.projection,
         )
-        if msg.position_covariance:
+        if len(msg.position_covariance) == 9:
             enu_pose.pose.covariance[0] = msg.position_covariance[0]
             enu_pose.pose.covariance[7] = msg.position_covariance[4]
             enu_pose.pose.covariance[14] = msg.position_covariance[8]
@@ -143,9 +144,11 @@ def main(args: list[str] | None = None) -> None:
     node = GeoPoseConverterNode()
     try:
         rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__ == '__main__':

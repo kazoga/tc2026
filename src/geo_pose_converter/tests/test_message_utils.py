@@ -180,3 +180,28 @@ def test_enu_llh_round_trip_is_consistent_across_conversion_paths() -> None:
 
     assert math.isclose(restored.pose.pose.position.x, x, abs_tol=0.01)
     assert math.isclose(restored.pose.pose.position.y, y, abs_tol=0.01)
+
+
+def test_converter_accepts_ros_array_covariance_without_boolean_conversion() -> None:
+    """実際の NavSatFix の配列を使用し、配列 truth-value 例外を回帰確認する."""
+    from types import SimpleNamespace
+    from sensor_msgs.msg import NavSatFix
+    from rtk_gps_um982_msgs.msg import RtkStatus
+    from geo_pose_converter.geo_pose_converter_node import GeoPoseConverterNode
+
+    output = []
+    sink = SimpleNamespace(publish=output.append)
+    state = RtkStatus()
+    state.heading_deg = 90.0
+    node = SimpleNamespace(
+        projection=_projection(), child_frame_id='gps_link',
+        latest_status=state, pub_gnss_llh=sink, pub_gnss_enu=sink,
+    )
+    fix = NavSatFix()
+    fix.latitude, fix.longitude, fix.altitude = 36.0, 140.0, 25.0
+    fix.position_covariance = [0.01, 0., 0., 0., 0.02, 0., 0., 0., 0.03]
+    GeoPoseConverterNode._on_fix(node, fix)
+    assert len(output) == 2
+    assert output[-1].pose.covariance[0] == .01
+    assert output[-1].pose.covariance[7] == .02
+    assert output[-1].pose.covariance[14] == .03
