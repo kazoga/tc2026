@@ -154,7 +154,9 @@ class DashboardTab(QtWidgets.QWidget):
         self._gps_hdop_label = card.add_value_row('HDOP')
         self._gps_correction_label = card.add_value_row('Correction')
         self._gps_rtcm_label = card.add_value_row('RTCM')
-        self._gps_heading_label = card.add_value_row('Heading')
+        self._gps_heading_label = card.add_value_row('GNSS heading（北CW）')
+        self._fusion_heading_label = card.add_value_row('融合yaw（map CCW）')
+        self._fusion_quality_label = card.add_value_row('融合品質 / 基準距離')
         self._localization_source_label = card.add_value_row('Localization source')
         self._pose_freshness_label = card.add_value_row('Pose freshness')
         return card
@@ -239,6 +241,15 @@ class DashboardTab(QtWidgets.QWidget):
         self._gps_heading_label.setText(
             f'{gps.heading_deg:.1f} deg +/- {gps.heading_stddev_deg:.2f}'
         )
+        fusion = snapshot.fusion_state
+        fusion_mode = '初期FIX待ち' if fusion.mode == 'WAIT_INITIAL_FIX' else fusion.mode
+        self._fusion_heading_label.setText(
+            '-' if fusion.yaw_deg is None else
+            f'{fusion.yaw_deg:.1f}° / 推定σ {fusion.heading_sigma_deg:.2f}°')
+        self._fusion_quality_label.setText(
+            f'{fusion_mode} / {fusion.freshness.value}' if fusion.baseline_m is None else
+            f'{fusion_mode} / {fusion.baseline_m*1000:.1f} mm / {fusion.freshness.value}')
+        set_label_color(self._fusion_quality_label, freshness_color(fusion.freshness))
         self._localization_source_label.setText(localization.source)
         self._pose_freshness_label.setText(localization.freshness.value)
         set_label_color(self._pose_freshness_label, freshness_color(localization.freshness))

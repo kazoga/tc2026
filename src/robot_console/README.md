@@ -152,3 +152,41 @@ export ROS_LOG_DIR="$PWD/log/codex/${run_id}/ros"
 - ROS2 メッセージ：`tc_route_msgs`、`geometry_msgs`、`sensor_msgs`、`std_msgs`。
 
 以上の内容を参考に、運用開始前に `config/node_launch_profiles.yaml` や `config/robot_console.yaml`（必要に応じて作成）を実際の環境に合わせて整備してください。
+
+
+## GNSS/LIO融合とデジタルツイン
+
+正式launchはPyQt5 UIを起動する。起動設定の「デジタルツイン／自律走行」と
+「実機（融合）／自律走行」はicart_bringupの共通構成を使う。
+生成したsession.yamlをi-Cart融合profileで選択する。旧の個別profileと同時起動しない。
+GPS/PoseカードはGNSS北CW方位、融合map CCW yaw、推定方位σ、適応baselineを区別して表示する。
+実機private RTK topicと模擬公開topicの両方に対応するが、両環境は別DDS domainで実行する。
+
+[共通起動・環境切替](../icart_bringup/docs/共通起動設計.md)と
+[方位の実装評価](../gnss_lio_fusion/docs/方位実装評価.md)を参照する。
+
+## 正式UIの不足依存とローカル展開
+
+PyQt5正式入口はQt WebEngineを必要とする。通常は既存package.xmlに従い、
+`python3-pyqt5.qtwebengine`をaptで導入する。sudo認証が使えず、Ubuntu 24.04の
+基本PyQt5は導入済みの場合、次の補助手順で不足依存をローカル展開できる。
+
+```bash
+python3 src/robot_console/tools/prepare_ui_runtime.py --output log/codex/ui_local
+source src/robot_console/tools/activate_ui_runtime.bash log/codex/ui_local/runtime
+```
+
+補助ツールはaptの不足依存をサイズ・checksum照合して展開し、aptデータベースを変更しない。
+Qt 5はWebEngineの資源パスを環境変数だけで移設できないため、qt.confとQt resourceを生成する。
+`ROBOT_CONSOLE_QT_RESOURCE`は本UIだけで読み込み、通常のシステム導入時には不要である。
+[Qtのqt.conf探索仕様](https://doc.qt.io/qt-6.10/qt-conf.html)に沿い、この環境のQt 5で動作確認した。
+生成物はGitに追加しない。異なる場所へ移動した場合は補助ツールを再実行する。
+
+ヘッドレス検証には`--headless-tests`を付けて、Xvfbとpytest-forkedも展開できる。
+既存conftestのfork隔離を有効にして実行する。正式入口を模擬ROS graph（domain=86）へ
+接続し、4タブと実受信の地図・方位を保存する試験はtools/check_qt_entry.pyである。
+Xvfbの非公開仮想画面を使用し、実機への操作指令は送らない。
+
+CLI同時起動時は`--business-environment`で初期環境を指定できる。
+後からUIを起動してmanual_start履歴を取り逃した場合でも、鮮度OKのfollower RUNNING/AVOIDINGを
+運行フェーズ表示に反映する。コマンド値を推測して再配信することはしない。

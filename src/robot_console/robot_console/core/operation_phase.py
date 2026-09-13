@@ -152,7 +152,10 @@ def resolve_phase(
     if _has_status(launch_states, NodeLaunchStatus.STARTING):
         return PHASE_STARTING
 
-    if manual_start:
+    # UIの後起動で揮発性manual_startを取り逃しても、新しい実行状態を優先する。
+    fresh_running = (follower_freshness == FreshnessLevel.OK
+                     and follower_state in _FOLLOWER_DRIVING_STATES)
+    if manual_start or fresh_running:
         if pause_reason:
             return PHASE_PAUSED
         if follower_state in _FOLLOWER_DRIVING_STATES or route.state == 'running':

@@ -23,19 +23,26 @@ from __future__ import annotations
 import os
 
 
+_registered_resource = None
+
 def fix_qt_plugin_path_conflict() -> None:
     """`cv2` によるQtプラグインパスの書き換えをPyQt5自身のパスへ戻す。
 
     `cv2` が未importの環境やimportに失敗する環境では何もしない。
     """
 
-    try:
-        import cv2  # noqa: F401
-    except ImportError:
-        return
-
+    global _registered_resource
     try:
         from PyQt5 import QtCore
+    except ImportError:
+        return
+    resource = os.environ.get('ROBOT_CONSOLE_QT_RESOURCE')
+    if resource and resource != _registered_resource:
+        if not QtCore.QResource.registerResource(resource):
+            raise RuntimeError('ローカルQt資源設定を登録できません: '+resource)
+        _registered_resource = resource
+    try:
+        import cv2  # noqa: F401
     except ImportError:
         return
 

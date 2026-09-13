@@ -274,3 +274,20 @@ def test_cleanup_reports_exit_once(monkeypatch, is_simulator, return_code):
     assert (event[3] is not None) == (return_code != 0)
     assert events.empty()
     assert profile_id not in target
+
+
+def test_launch_stop_signals_parent_once_then_escalates_to_group(monkeypatch):
+    """launch自身の子停止とグループSIGINTが二重にならないことを確認する."""
+    import signal
+    from types import SimpleNamespace
+
+    parent_signals, group_signals = [], []
+    process = SimpleNamespace(args=['ros2', 'launch', 'icart_bringup', 'bringup.launch.py'],
+                              poll=lambda: None, send_signal=parent_signals.append)
+    manager = LaunchManager.__new__(LaunchManager)
+    waits = iter([False, True])
+    monkeypatch.setattr(manager, '_wait_process', lambda *_args, **_kwargs: next(waits))
+    monkeypatch.setattr(manager, '_send_signal', lambda _process, sig: group_signals.append(sig))
+    manager._terminate_process(process)
+    assert parent_signals == [signal.SIGINT]
+    assert group_signals == [signal.SIGTERM]

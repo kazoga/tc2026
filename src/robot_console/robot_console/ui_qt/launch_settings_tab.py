@@ -531,6 +531,14 @@ class LaunchSettingsTab(QtWidgets.QWidget):
 
         return dict(self._profiles_by_id)
 
+    def set_business_mode(self, environment: str, drive_mode: str) -> None:
+        """正式入口の初期選択を、タブ・Core・ダッシュボードへ同じ経路で反映する。"""
+        if (self._environment_combo.findText(environment) < 0
+                or self._drive_mode_combo.findText(drive_mode) < 0):
+            raise ValueError('未対応の実行環境・走行モードです')
+        self._environment_combo.setCurrentText(environment)
+        self._drive_mode_combo.setCurrentText(drive_mode)
+
     @property
     def environment(self) -> str:
         """現在選択中の実行環境を返す。"""

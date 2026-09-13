@@ -7,13 +7,20 @@ from setuptools import find_packages, setup
 package_name = 'robot_console'
 
 
-def collect_data_files(directory: str) -> List[str]:
-    """指定ディレクトリ配下のファイル一覧を返す。"""
+def collect_data_files(directory: str) -> List[tuple[str, List[str]]]:
+    """相対配置を保ち、キャッシュを除外して共有ファイルを収集する。"""
 
     base_path = Path(directory)
     if not base_path.exists():
         return []
-    return [str(path) for path in base_path.rglob('*') if path.is_file()]
+    grouped = {}
+    for path in sorted(base_path.rglob('*')):
+        if (not path.is_file() or '__pycache__' in path.parts
+                or '.pytest_cache' in path.parts or path.suffix in ('.pyc', '.pyo')):
+            continue
+        destination = str(Path('share') / package_name / path.parent)
+        grouped.setdefault(destination, []).append(str(path))
+    return list(grouped.items())
 
 
 setup(
@@ -28,8 +35,8 @@ setup(
         (f'share/{package_name}/config/node_params',
          glob('config/node_params/**/*.yaml', recursive=True)),
         (f'share/{package_name}/rviz', glob('rviz/*.rviz')),
-        (f'share/{package_name}/docs', collect_data_files('docs')),
-        (f'share/{package_name}/tools', collect_data_files('tools')),
+        *collect_data_files('docs'),
+        *collect_data_files('tools'),
         (f'share/{package_name}', ['package.xml']),
     ],
     install_requires=['setuptools', 'Pillow>=9.0', 'opencv-python>=4.5'],

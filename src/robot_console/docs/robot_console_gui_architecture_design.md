@@ -565,3 +565,23 @@ HTML UIには操作APIを提供しない。自己位置は現行 `/localization/
 | 2026-08-29 | 0.3 | simulator代替launch（`robot_simulator` / `laser_scan_simulator` / `camera_simulator_node`）と可視化profile（`route_markers` / `target_marker`）をprofile定義・起動グループへ追加。机上確認（実センサ・Gazebo無し）の起動グループを新設。 |
 | 2026-05-28 | 0.2 | tkinterを別UIとして残さない完全移行方針、`localization_fusion/pose_llh` とLLH route/targetへの将来移行前提を反映。 |
 | 2026-05-27 | 0.1 | UI改修向けアーキテクチャ、GPS/GNSS起動管理、profile定義駆動方針を初版として作成。 |
+
+
+## GNSS/LIO融合・デジタルツイン連接（2026-09-13追記）
+
+既存のprofile→起動管理、ROS Node→ConsoleCore→Snapshot→PyQt5の責務分担を維持する。
+`icart_fused_stack` profileを追加し、「実機（融合）／自律走行」と
+「デジタルツイン／自律走行」のプリセットでenvironmentを切り替える。
+元の「実機」「シミュレーション」「机上確認」は維持する。
+起動する地図と原点はsession.yamlで選択し、共通起動の仕様はicart_bringup設計書を参照する。
+
+ROS側は/fusion/statusを購読し、ConsoleCore.update_fusion_statusでFusionStateViewへ変換する。
+不正JSON・非有限値は捨て、未更新は既存のfreshnessで表示する。
+GPS/Poseカードへ融合yaw（map CCW）、推定σ、mode、適応baselineを追加する。
+GNSS heading（真北CW）と基準を明示し、両数値をそのまま比較しない。
+UI操作は従来のmanual_startを使い、新たな自律開始トピックは追加しない。
+
+2026-09-14追記: 6.3節の運行フェーズは、UI後起動でmanual_start履歴がない場合も、
+鮮度OKのRUNNING/AVOIDINGを走行中として扱う。古い状態はこの補完に使わない。
+WAIT_INITIAL_FIXは数値方位を出さず「初期FIX待ち」と表示する。
+共通launch停止時のSIGINT二重送信を回避し、正式UIのQt移設手順をREADMEへ記載した。

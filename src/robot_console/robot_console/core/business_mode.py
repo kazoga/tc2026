@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
-ENVIRONMENTS = ['実機', 'シミュレーション', '机上確認']
+ENVIRONMENTS = ['実機', 'シミュレーション', '机上確認', '実機（融合）', 'デジタルツイン']
 DRIVE_MODES = ['手動走行', '自律走行']
 
 
@@ -27,6 +27,16 @@ class LaunchPresetEntry:
 # docs/robot_console_gui_architecture_design.md 10章「起動グループ」および
 # docs/robot_console_gui_screen_function_design.md 3.1節「業務分類」に基づく。
 LAUNCH_PRESETS: Dict[Tuple[str, str], List[LaunchPresetEntry]] = {
+    ('実機（融合）', '手動走行'): [
+        LaunchPresetEntry('ypspur_ros2'), LaunchPresetEntry('drive_mode_manager'),
+    ],
+    ('デジタルツイン', '手動走行'): [],
+    ('実機（融合）', '自律走行'): [
+        LaunchPresetEntry('icart_fused_stack', overrides={'environment': 'real'}),
+    ],
+    ('デジタルツイン', '自律走行'): [
+        LaunchPresetEntry('icart_fused_stack', overrides={'environment': 'simulation'}),
+    ],
     ('実機', '手動走行'): [
         LaunchPresetEntry('ypspur_ros2'),
         LaunchPresetEntry('drive_mode_manager'),

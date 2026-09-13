@@ -362,3 +362,11 @@ def test_business_mode_selection_is_pushed_to_core(qt_app):
     window.launch_settings_tab._environment_combo.setCurrentText('シミュレーション')
 
     assert core.business_mode_calls[-1] == ('シミュレーション', '手動走行')
+
+
+def test_entry_environment_updates_both_tabs_and_core(qt_app):
+    core = _FakeConsoleCore()
+    window = MainWindow(core=core)
+    window.launch_settings_tab.set_business_mode('デジタルツイン', '自律走行')
+    assert core.business_mode_calls[-1] == ('デジタルツイン', '自律走行')
+    assert window.dashboard_tab.launch_control_card._environment_combo.currentText() == 'デジタルツイン'

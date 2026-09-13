@@ -34,8 +34,8 @@ from tc_route_msgs.msg import (
 from ..core.console_core import ConsoleCore
 
 DEFAULT_NODE_NAME = 'robot_console_gui'
-# rtk_gps_um982ノードのlaunch側namespace（rtk_gps）に合わせた絶対パス。
-RTK_STATUS_TOPIC = '/rtk_gps/rtk_gps_um982_node/rtk_status'
+# 実機launchと模擬UM982が共有する公開トピック。
+RTK_STATUS_TOPIC = '/rtk_gps/rtk_status'
 
 # route_manager の /active_route はTransient Local（ラッチ配信）で配信される
 # （route_manager_node.py の qos_tl()）。購読側が既定のVOLATILEのままだと、
@@ -79,6 +79,10 @@ class RobotConsoleNode(Node):
     def __init__(self, core: ConsoleCore, *, node_name: str = DEFAULT_NODE_NAME) -> None:
         super().__init__(node_name)
         self._core = core
+        self.create_subscription(String, '/fusion/status', self._core.update_fusion_status, 10)
+        # 既存実機ドライバのprivate topicとの互換性も維持する。
+        self.create_subscription(RtkStatus, '/rtk_gps/rtk_gps_um982_node/rtk_status',
+                                 self._core.update_gps_status, 10)
 
         self.create_subscription(RouteState, 'route_state', self._core.update_route_state, 10)
         self.create_subscription(

@@ -187,7 +187,16 @@ class LaunchManager:
 
         if process.poll() is not None:
             return
-        self._send_signal(process, signal.SIGINT)
+        # ros2 launch自身に終了を委譲する。子にも同時送信するとSIGINTが二重になる。
+        args = getattr(process, 'args', ())
+        if (isinstance(args, (list, tuple)) and len(args) > 1
+                and Path(str(args[0])).name == 'ros2' and args[1] == 'launch'):
+            try:
+                process.send_signal(signal.SIGINT)
+            except (ProcessLookupError, PermissionError, OSError):
+                self._send_signal(process, signal.SIGINT)
+        else:
+            self._send_signal(process, signal.SIGINT)
         if self._wait_process(process, timeout=5.0):
             return
         self._send_signal(process, signal.SIGTERM)

@@ -24,7 +24,8 @@ def _make_tab() -> LaunchSettingsTab:
 def test_tab_loads_all_profiles_grouped_by_category(qt_app):
     tab = _make_tab()
 
-    assert len(tab._profiles) == 15
+    assert len(tab._profiles) == 16
+    assert 'icart_fused_stack' in {p.profile_id for p in tab._profiles}
     assert tab._tree.topLevelItemCount() == 8  # profile.category の種類数
     assert set(tab._tree_items.keys()) == {p.profile_id for p in tab._profiles}
 

@@ -239,12 +239,24 @@ class LocalizationStateView:
 
 
 @dataclass
+class FusionStateView:
+    """融合の観測診断。数値は推定不確かさであり実誤差ではない。"""
+
+    mode: str = 'UNKNOWN'
+    yaw_deg: Optional[float] = None
+    heading_sigma_deg: Optional[float] = None
+    baseline_m: Optional[float] = None
+    freshness: FreshnessLevel = FreshnessLevel.UNKNOWN
+
+
+@dataclass
 class ConsoleSnapshot:
     """PyQt5 UI / HTML UI 共通のSnapshot（architecture_design.md 8章）。"""
 
     timestamp: datetime = field(default_factory=_utc_now)
     operation_state: OperationStateView = field(default_factory=OperationStateView)
     gps_state: GpsStateView = field(default_factory=GpsStateView)
+    fusion_state: FusionStateView = field(default_factory=FusionStateView)
     localization_state: LocalizationStateView = field(default_factory=LocalizationStateView)
     route_state: RouteView = field(default_factory=RouteView)
     target_state: TargetView = field(default_factory=TargetView)

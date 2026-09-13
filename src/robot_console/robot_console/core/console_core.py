@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+import json
+import math
 import threading
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -57,6 +59,7 @@ from .snapshot_model import (
     ConsoleSnapshot,
     DriveModeStateView,
     FollowerView,
+    FusionStateView,
     GpsStateView,
     HealthSummaryView,
     ImageReference,
@@ -113,6 +116,7 @@ class ConsoleCore:
         self._environment = 'unknown'
         self._drive_mode_selection = 'unknown'
         self._gps_state = GpsStateView()
+        self._fusion_state = FusionStateView()
         self._localization_state = LocalizationStateView()
         self._route_state = RouteView()
         self._target_state = TargetView()
@@ -541,6 +545,28 @@ class ConsoleCore:
             self._localization_state = replace(self._localization_state, **updates)
         self.freshness.mark_received('localization.pose_llh')
 
+    def update_fusion_status(self, msg: Any) -> None:
+        """融合JSONを表示専用Viewへ変換する。不正値でGUIを終了させない。"""
+        try:
+            data = json.loads(msg.data)
+            baseline = float(data['baseline']['reference_m'])
+            if not math.isfinite(baseline):
+                return
+            if data['mode'] == 'WAIT_INITIAL_FIX':
+                yaw, sigma = None, None
+            else:
+                yaw = math.degrees(float(data['yaw']))
+                sigma = float(data['heading_sigma_deg'])
+                if not all(math.isfinite(v) for v in [yaw, sigma]) or sigma < 0:
+                    return
+            view = FusionStateView(mode=str(data['mode']), yaw_deg=yaw,
+                                   heading_sigma_deg=sigma, baseline_m=baseline)
+        except (ValueError, TypeError, KeyError, AttributeError):
+            return
+        with self._lock:
+            self._fusion_state = view
+        self.freshness.mark_received('fusion')
+
     def update_gps_status(self, msg: Any) -> None:
         """`rtk_gps_um982_msgs/RtkStatus`（`rtk_gps/.../rtk_status`）を反映する。"""
 
@@ -605,6 +631,7 @@ class ConsoleCore:
             environment = self._environment
             drive_mode_selection = self._drive_mode_selection
             gps_state = self._gps_state
+            fusion_state = self._fusion_state
             localization_state = self._localization_state
             route_state = self._route_state
             target_state = self._target_state
@@ -680,6 +707,8 @@ class ConsoleCore:
             timestamp=now,
             operation_state=operation_state,
             gps_state=gps_state,
+            fusion_state=replace(fusion_state, freshness=self.freshness.evaluate(
+                'fusion', now=now)),
             localization_state=localization_state,
             route_state=route_state,
             target_state=target_state,

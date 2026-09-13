@@ -30,6 +30,23 @@
 #   default_arguments                   : user_arguments の既定値（未掲載の引数は既定値なし）。
 
 profiles:
+  - profile_id: icart_fused_stack
+    category: route_stack
+    display_name: i-Cart 融合・デジタルツイン
+    package: icart_bringup
+    launch_file: bringup.launch.py
+    param_argument: session
+    launch_order: 20
+    startup_group: optional
+    health_topics:
+      - /fusion/status
+      - /localization/pose_enu
+      - /scan
+    user_arguments:
+      - environment
+    default_arguments:
+      environment: simulation
+
   - profile_id: ypspur_ros2
     category: real_robot_base
     display_name: YP-Spur Coordinator

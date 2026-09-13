@@ -33,3 +33,10 @@ def test_fix_qt_plugin_path_conflict_is_idempotent():
     second = os.environ.get('QT_QPA_PLATFORM_PLUGIN_PATH')
 
     assert first == second
+
+
+def test_invalid_local_resource_fails_before_webengine(monkeypatch, tmp_path):
+    """不完全な移設環境をWebEngineのクラッシュまで持ち越さない."""
+    monkeypatch.setenv('ROBOT_CONSOLE_QT_RESOURCE', str(tmp_path/'missing.rcc'))
+    with pytest.raises(RuntimeError, match='資源設定'):
+        fix_qt_plugin_path_conflict()

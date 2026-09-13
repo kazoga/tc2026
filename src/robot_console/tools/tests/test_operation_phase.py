@@ -271,3 +271,17 @@ def test_waypoint_labels_show_goal_at_last_waypoint():
 
 def test_waypoint_labels_are_undetermined_before_any_route_reception():
     assert resolve_waypoint_labels(RouteView(), FollowerView()) == ('-', '-')
+
+
+def test_late_ui_join_uses_fresh_running_state_without_manual_start_history():
+    state = _build(route=RouteView(state='running', total_waypoints=3),
+                   follower=FollowerView(state='RUNNING'), manual_start=False,
+                   route_freshness=FreshnessLevel.OK, follower_freshness=FreshnessLevel.OK)
+    assert state.phase == PHASE_DRIVING
+
+
+def test_stale_running_state_does_not_override_missing_manual_start():
+    state = _build(route=RouteView(state='running', total_waypoints=3),
+                   follower=FollowerView(state='RUNNING'), manual_start=False,
+                   route_freshness=FreshnessLevel.STALE, follower_freshness=FreshnessLevel.STALE)
+    assert state.phase == PHASE_READY

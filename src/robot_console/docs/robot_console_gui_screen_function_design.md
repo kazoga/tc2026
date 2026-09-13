@@ -800,3 +800,23 @@ HTML UIは読み取り専用であることを実装上も保証する。HTTP AP
 | 2026-08-29 | 0.3 | 業務分類に机上確認を追加。profile別設定（4.7節）に不足していた`route_planner`/`route_follower`/`obstacle_monitor`/`road_blockage_detector`/`traffic_signal_recognizer`/可視化系のカードとsimulator代替トグルを追加。起動候補ツリー・Node Healthカードに`route_markers`/`target_marker`を追加。 |
 | 2026-05-28 | 0.2 | 共通ステータスバーを廃止し、実業務フロー起点の正式画面仕様へ改訂。 |
 | 2026-05-27 | 0.1 | 次期GUIの画面構成、GPS表示、profile定義駆動の起動管理を初版として作成。 |
+
+
+## GNSS/LIO融合・デジタルツイン連接（2026-09-13追記）
+
+既存のprofile→起動管理、ROS Node→ConsoleCore→Snapshot→PyQt5の責務分担を維持する。
+`icart_fused_stack` profileを追加し、「実機（融合）／自律走行」と
+「デジタルツイン／自律走行」のプリセットでenvironmentを切り替える。
+元の「実機」「シミュレーション」「机上確認」は維持する。
+起動する地図と原点はsession.yamlで選択し、共通起動の仕様はicart_bringup設計書を参照する。
+
+ROS側は/fusion/statusを購読し、ConsoleCore.update_fusion_statusでFusionStateViewへ変換する。
+不正JSON・非有限値は捨て、未更新は既存のfreshnessで表示する。
+GPS/Poseカードへ融合yaw（map CCW）、推定σ、mode、適応baselineを追加する。
+GNSS heading（真北CW）と基準を明示し、両数値をそのまま比較しない。
+UI操作は従来のmanual_startを使い、新たな自律開始トピックは追加しない。
+
+2026-09-14追記: 6.3節の運行フェーズは、UI後起動でmanual_start履歴がない場合も、
+鮮度OKのRUNNING/AVOIDINGを走行中として扱う。古い状態はこの補完に使わない。
+WAIT_INITIAL_FIXは数値方位を出さず「初期FIX待ち」と表示する。
+共通launch停止時のSIGINT二重送信を回避し、正式UIのQt移設手順をREADMEへ記載した。

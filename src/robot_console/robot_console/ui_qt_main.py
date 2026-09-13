@@ -19,7 +19,6 @@ from PyQt5 import QtCore, QtWidgets
 
 from robot_console.core.console_core import ConsoleCore
 from robot_console.ros.console_node import start_ros_thread
-from robot_console.ui_qt.main_window import MainWindow
 from robot_console.ui_qt.qt_environment import (
     enable_qtwebengine_shared_opengl_contexts,
     fix_qt_plugin_path_conflict,
@@ -41,6 +40,8 @@ def _parse_args(argv: List[str]) -> argparse.Namespace:
             '未指定時は ROBOT_CONSOLE_LOG_DIR を参照します'
         ),
     )
+    parser.add_argument('--business-environment', choices=['実機（融合）', 'デジタルツイン'],
+                        help='共通起動から渡す初期環境。未指定なら従来の初期値を使います')
     known, _ = parser.parse_known_args(argv)
     return known
 
@@ -53,6 +54,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     fix_qt_plugin_path_conflict()
     enable_qtwebengine_shared_opengl_contexts()
+    # 移設したQtの資源設定後にWebEngineを読み込む。
+    from robot_console.ui_qt.main_window import MainWindow
+
     app = QtWidgets.QApplication(raw_argv)
 
     core = ConsoleCore(log_directory=args.console_log_directory)
@@ -60,6 +64,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     app.aboutToQuit.connect(ros_handle.stop)
 
     window = MainWindow(core=core)
+    if args.business_environment:
+        window.launch_settings_tab.set_business_mode(args.business_environment, '自律走行')
 
     timer = QtCore.QTimer(window)
     timer.timeout.connect(lambda: window.update_snapshot(core.build_snapshot()))
