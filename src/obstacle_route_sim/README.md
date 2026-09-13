@@ -208,6 +208,14 @@ python3 src/robot_console/tools/gui_route_stack_eval.py \
 
 `w2` / `w3` の route/config は生成済みだが、GUI 走行確認は代表ケースとして `w5` を実施している。
 
+## terrain3d と i-Cart mini の追加検証
+
+添付 terrain3d の正規地形を Gazebo に変換し、i-Cart mini の駆動諸元と
+指定された GNSS / Top-URG / Mid-360 の高さを反映した合成通路試験を追加した。
+生成、期限付き走行、真値軌跡再生、自己位置途絶試験の手順と確認範囲は
+[terrain3d / i-Cart mini 検証](docs/terrain3d_icart_mini検証.md) を参照する。
+これは現地測量に基づく 2026 コース全体のモデルではない。
+
 ## 注意事項
 
 - `robot_console` から起動する場合、Gazebo 側は先に `sim_obstacle_route.launch.py` で起動しておく。
@@ -215,3 +223,56 @@ python3 src/robot_console/tools/gui_route_stack_eval.py \
 - Gazebo GUI 付き確認では GPU デバイス権限が必要になる場合がある。`render` / `video` group 追加後はログアウト・ログインしてから確認する。
 - `LIBGL_ALWAYS_SOFTWARE=1` は Gazebo/Ogre2 の安定性を落とす場合があるため、既定では使用しない。
 - 停止時に SIGINT 由来の `Traceback` が表示されることがある。profile が `STOPPED` に遷移し、新しい crash report が出ていなければ停止処理として扱う。
+
+## 公開地理地図と仮想 GNSS
+
+提供版 terrain3d の地理データ処理で市役所付近の地形・建物を構成し、
+仮想 NavSatFix / Imu / RtkStatus を既存の geo_pose_converter に接続した。
+[確認結果・再現手順・制限事項](docs/地理地図_GNSSシミュレーション検証.md)を参照する。
+
+## つくばチャレンジ 2026 全域モデル
+
+公式必須ルート約 2.224 km を含む地形・建物・航空写真由来の特徴物を生成する。
+生成方法、表示操作、25 秒の起動走行確認、未校正箇所は
+[全域デジタルツイン生成・レビュー](docs/つくば2026全域デジタルツイン.md) を参照する。
+全区間の完走は未確認である。
+
+## 地理ウェイポイント・建物近傍 GNSS・FAST-LIO
+
+調整地図の局所経路追従、固定障害物回避、建物近傍 FLOAT の比較結果と
+FAST-LIO 併用の前提は [評価記録](docs/地理ウェイポイント_FLOAT_FASTLIO評価.md) を参照する。
+
+## FAST-LIO のシミュレーション入力
+
+Gazebo IMU・有限点群・専用 FAST-LIO 設定と起動 launch を追加した。
+[接続・精度検証](docs/FASTLIOシミュレータ接続検証.md) に利用手順、試験結果、未再現範囲を記載する。
+
+## 全域点群地図の評価
+
+FAST-LIO 登録済み点群の分割保存、PCD 地図、航空写真・SDF 表面との比較は
+[全域 FAST-LIO 点群地図評価](docs/全域FASTLIO点群地図評価.md) を参照する。
+
+## FAST-LIO のセンサ誤差条件
+
+標準起動は field_assumed（測距・欠測・IMU bias・時刻差の仮定）を使用する。
+過去の理想寄りの条件は noise_profile:=reference、厳しい条件は conservative を指定する。
+評価ツールでは --lio-noise-profile と --lio-noise-seed を指定する。
+[誤差モデルと比較評価](docs/FASTLIOセンサ誤差モデル評価.md) に根拠と未再現範囲を記載する。
+conservative・seed=1で全周を実行した結果も同文書8章に記載した。
+GNSS制御は完走したが、FAST-LIOは剛体整合後も大きな内部変形が残った。
+review_full_lio_trial.pyで全経路照合・相対精度・剛体整合後の点群を再評価できる。
+
+## GNSS/LIO 融合の評価
+
+gnss_lio_fusionを用い、evaluate_terrain_trial.pyの--fusion --gnss --fastlio指定で
+融合位置による閉ループ走行を選択できる。--building-gnssで建物近傍FLOATを併用する。
+融合試験はbaseline観測のFIX標準偏差2 mm、FLOAT標準偏差40 mmを追加し、
+--baseline-shiftと--baseline-shift-afterで取付距離変化を試験できる。
+review_fusion_trial.pyで同一走行のセンサ比較と最大横ずれを画像化する。
+独立パッケージgnss_lio_fusionの詳細設計書に設定と制限を記載する。
+
+## 融合方位と既存UIによる走行検証
+
+実機と模擬環境の共通起動は[icart_bringup](../icart_bringup/README.md)に置く。
+[方位実装評価](../gnss_lio_fusion/docs/方位実装評価.md)に故障注入、
+修正再試験、全周記録再生と閉ループ試験の区別を記録する。

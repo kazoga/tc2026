@@ -1,0 +1,7 @@
+{
+  "name": "terrain3d-gazebo-export",
+  "version": "0.1.0",
+  "private": true,
+  "description": "User supplied terrain3d v0.4.1 geometry exporter dependencies",
+  "dependencies": { "three": "0.128.0" }
+}

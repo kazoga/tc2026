@@ -22,3 +22,9 @@ requests>=2.31,<3.0
 # ament_python の --symlink-install で setuptools 81.x は --editable 未認識となるため上限を置く。
 setuptools>=65.0,<69.0
 ultralytics>=8.3,<9.0
+
+# obstacle_route_sim の航空写真位置合わせの近傍探索で使用する。
+scipy>=1.11,<2.0
+
+# obstacle_route_sim の経路と障害物の離隔判定で使用する。
+shapely>=2.0,<3.0

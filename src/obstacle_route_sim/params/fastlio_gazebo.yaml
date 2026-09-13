@@ -1,0 +1,37 @@
+/**:
+  ros__parameters:
+    use_sim_time: true
+    feature_extract_enable: false
+    point_filter_num: 1
+    max_iteration: 4
+    filter_size_surf: 0.25
+    filter_size_map: 0.25
+    cube_side_length: 200.0
+    runtime_pos_log_enable: false
+    common.lid_topic: /sim/lio/points
+    common.imu_topic: /sim/lio/imu
+    common.time_sync_en: false
+    common.time_offset_lidar_to_imu: 0.0
+    # このローカル版の default_handler（XYZI・全点 offset=0）を明示する。
+    # 4 は MID360 固有 handler なので Gazebo PointCloud2 には使用しない。
+    preprocess.lidar_type: 0
+    preprocess.scan_line: 16
+    preprocess.blind: 0.6
+    preprocess.timestamp_unit: 0
+    preprocess.scan_rate: 10
+    mapping.acc_cov: 0.01
+    mapping.gyr_cov: 0.001
+    mapping.b_acc_cov: 0.0001
+    mapping.b_gyr_cov: 0.00001
+    mapping.det_range: 70.0
+    mapping.fov_degree: 360.0
+    mapping.extrinsic_est_en: false
+    mapping.extrinsic_T: [0.0, 0.0, 0.0]
+    mapping.extrinsic_R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    publish.path_en: true
+    publish.map_en: false
+    publish.scan_publish_en: true
+    publish.scan_bodyframe_pub_en: true
+    publish.dense_publish_en: true
+    pcd_save.pcd_save_en: false
+    pcd_save.interval: -1
