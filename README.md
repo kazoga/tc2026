@@ -273,7 +273,31 @@ pylon ありで障害物回避を確認する場合は、`obstacle_monitor` も�
 
 - `src/rtk_gps_um982/third_party/UM982-RTK-GPS-Library` (MIT)
 - `src/ypspur_ros2/third_party/yp-spur` (MIT) — Issue #245 のパッチを CMake が自動適用
+- `src/FAST_LIO` (GPL-2.0) — ROS 2 Jazzy 用の固定 revision。内部の ikd-Tree も再帰取得する
+- `src/livox_ros_driver2` (MIT) — FAST-LIO の Livox メッセージと実機ドライバ
+- `src/livox_sdk2_vendor/third_party/Livox-SDK2` — SDK 本体と同梱依存のライセンスは上流 `LICENSE.txt` を参照
+
+SDK は [`livox_sdk2_vendor`](src/livox_sdk2_vendor/README.md) が workspace 内へビルドする。
+ルートの `colcon.meta` が driver より先に SDK を構築する順序を指定するため、
+colcon はワークスペースのルートから実行する。
+
+## GNSS/LIO・デジタルツイン・経路採取
+
+- [GNSS/LIO 融合](src/gnss_lio_fusion/README.md): 品質判定、時刻同期、方位推定
+- [共通起動](src/icart_bringup/README.md): 実機・模擬環境の選択とセッション準備
+- [経路採取・編集](src/route_survey/README.md): 手動走行から LLH 経路を保存
+- [シミュレーション](src/obstacle_route_sim/README.md): 地形・センサ生成と評価
+- [検証用経路](src/route_planner/routes/tsukuba2026_digital_twin/README.md): 未測量の試験データ
+
+新規パッケージのテストもルートの `pytest` に含まれる。ROS 環境とビルド済み
+`install/setup.bash` を読み込み、有効な venv で実行する。
+GUI テストには Qt WebEngine と pytest-forked、地形生成には Node.js が必要。
+地理地形の生成には `src/obstacle_route_sim/tools/terrain3d` で `npm ci` も実行する。
+通常 install のツールを使う場合は、
+`npm ci --prefix "$(ros2 pkg prefix obstacle_route_sim)/lib/obstacle_route_sim/terrain3d"`
+で実行先へ依存を導入する。`node_modules` は Git と colcon の配布対象から除外する。
 
 ## ライセンス
 
-各パッケージは MIT。本リポジトリ全体としてのライセンスは [`LICENSE`](LICENSE) を参照。
+リポジトリ全体のライセンスは [`LICENSE`](LICENSE) を参照。
+各パッケージの宣言は `package.xml`、外部コードは各 submodule のライセンスに従う。
