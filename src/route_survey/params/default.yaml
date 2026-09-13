@@ -1,0 +1,12 @@
+route_survey:
+  ros__parameters:
+    spacing_m: 5.0
+    turn_deg: 25.0
+    start_button: 0
+    stop_button: 1
+    signal_button: 2
+    finish_button: 3
+    lidar_height_m: 0.6
+    lidar_forward_m: 0.0
+    max_pose_variance: 0.25
+    cloud_frame: body

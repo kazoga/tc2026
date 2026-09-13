@@ -1,0 +1,206 @@
+"""融合位置、FAST-LIO body点群、Joyを購読して経路採取する。速度指令は出さない."""
+from collections import deque
+import math
+from pathlib import Path
+
+import numpy as np
+import rclpy
+from rclpy.node import Node
+from rclpy.executors import ExternalShutdownException
+from rclpy.qos import qos_profile_sensor_data
+from geometry_msgs.msg import PoseWithCovarianceStamped
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Joy, PointCloud2, NavSatFix
+from rtk_gps_um982_msgs.msg import RtkStatus
+from sensor_msgs_py import point_cloud2
+from std_msgs.msg import String
+from geo_pose_converter.geo_core import load_projection_config_from_yaml, LlhPoint, llh_to_enu
+from route_survey.trace_core import Traces, finite
+
+from route_survey.survey_core import Pose, Survey, traversable_width
+from route_survey.storage_core import save
+
+
+def stamp(message) -> float:
+    return message.header.stamp.sec+message.header.stamp.nanosec*1e-9
+
+
+class Recorder(Node):
+    def __init__(self) -> None:
+        super().__init__('route_survey')
+        defaults = dict(output_directory='', projection_config='', spacing_m=5., turn_deg=25.,
+                        start_button=0, stop_button=1, signal_button=2, finish_button=3,
+                        lidar_height_m=.6, lidar_forward_m=0., max_pose_variance=.25,
+                        cloud_frame='body', gnss_fix_topic='/rtk_gps/fix',
+                        gnss_status_topic='/rtk_gps/rtk_status')
+        for key, value in defaults.items():
+            self.declare_parameter(key, value)
+        self.p = {key: self.get_parameter(key).value for key in defaults}
+        if not self.p['output_directory'] or not self.p['projection_config']:
+            raise ValueError('output_directoryとprojection_configが必要')
+        self.directory = Path(self.p['output_directory'])
+        self.directory.mkdir(parents=True, exist_ok=False)
+        self.projection = load_projection_config_from_yaml(self.p['projection_config'])
+        self.traces = Traces()
+        self.fusion_health = {}
+        self.pose_quality = {}
+        self.survey = Survey(self.p['spacing_m'], self.p['turn_deg'])
+        self.poses = deque(maxlen=100)
+        self.attitudes = deque(maxlen=100)
+        self.width = traversable_width(np.empty((0, 3)))
+        self.cloud_stamp = -1e9
+        self.voxels = {}
+        self.scan_window = deque(maxlen=60)
+        self.last_report = None
+        self.last_pose_receive = -1e9
+        self.status = self.create_publisher(String, '/route_survey/status', 10)
+        self.create_subscription(PoseWithCovarianceStamped, '/localization/pose_enu', self.pose, 10)
+        self.create_subscription(Odometry, '/lio/odometry', self.attitude, 10)
+        self.create_subscription(PointCloud2, '/cloud_registered_body', self.cloud,
+                                 qos_profile_sensor_data)
+        self.create_subscription(Joy, '/joy', self.joy, qos_profile_sensor_data)
+        self.create_subscription(NavSatFix, self.p['gnss_fix_topic'], self.gnss_fix,
+                                 qos_profile_sensor_data)
+        self.create_subscription(RtkStatus, self.p['gnss_status_topic'], self.gnss_status, 10)
+        self.create_subscription(String, '/fusion/status', self.health, 10)
+        self.create_timer(1., self.flush)
+        self.get_logger().info('経路採取待機: Joy 0開始 / 1停止 / 2信号停止 / 3終了')
+
+    def now(self) -> float:
+        return self.get_clock().now().nanoseconds*1e-9
+
+    def pose(self, message) -> None:
+        p = message.pose.pose.position
+        q = message.pose.pose.orientation
+        if message.header.frame_id != self.projection.map_frame_id:
+            return
+        variance = float(max(message.pose.covariance[0], message.pose.covariance[7]))
+        if not math.isfinite(variance) or variance < 0:
+            return
+        yaw = math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z))
+        health = (self.fusion_health if abs(stamp(message)-
+                  self.fusion_health.get('sim_s', -1e9)) <= .5 else {})
+        self.pose_quality = dict(position_variance=variance, mode=health.get('mode', 'UNKNOWN'),
+                                 uncertain=variance > self.p['max_pose_variance'])
+        self.traces.append('fused', dict(stamp=stamp(message), x=finite(p.x), y=finite(p.y),
+                                       yaw=finite(yaw), **self.pose_quality))
+        value = Pose(stamp(message), p.x, p.y, yaw)
+        if self.survey.update(value, self.current_width()):
+            self.poses.append(value)
+            self.last_pose_receive = self.now()
+
+    def health(self, message) -> None:
+        import json
+        try:
+            value = json.loads(message.data)
+            if isinstance(value, dict):
+                self.fusion_health = value
+        except (ValueError, TypeError):
+            pass
+
+    def gnss_status(self, message) -> None:
+        self.traces.append('statuses', dict(stamp=stamp(message), state=int(message.rtk_state),
+            satellites=int(message.num_satellites), hdop=finite(message.hdop),
+            baseline_m=finite(message.baseline_length_m),
+            correction_age_s=finite(message.correction_age_s),
+            heading_stddev_deg=finite(message.heading_stddev_deg)))
+
+    def gnss_fix(self, message) -> None:
+        lat, lon = finite(message.latitude), finite(message.longitude)
+        valid = (message.status.status >= 0 and lat is not None and lon is not None
+                 and -90 <= lat <= 90 and -180 <= lon <= 180)
+        point = (llh_to_enu(LlhPoint(lat, lon, self.projection.origin_altitude), self.projection)
+                 if valid else None)
+        self.traces.append('gnss', dict(stamp=stamp(message), latitude=lat, longitude=lon,
+            x=point.x if point else None, y=point.y if point else None,
+            navsat_status=int(message.status.status)))
+
+    def attitude(self, message) -> None:
+        q = message.pose.pose.orientation
+        roll = math.atan2(2*(q.w*q.x+q.y*q.z), 1-2*(q.x*q.x+q.y*q.y))
+        pitch = math.asin(np.clip(2*(q.w*q.y-q.z*q.x), -1, 1))
+        self.attitudes.append((stamp(message), roll, pitch))
+
+    def current_width(self) -> dict:
+        value = (traversable_width(np.empty((0, 3))) if
+                 abs(self.now()-self.cloud_stamp) > .5 or self.pose_quality.get('uncertain')
+                 else dict(self.width))
+        value['localization'] = dict(self.pose_quality)
+        return value
+
+    def cloud(self, message) -> None:
+        if message.header.frame_id != self.p['cloud_frame'] or not self.poses or not self.attitudes:
+            return
+        t = stamp(message)
+        pose = min(self.poses, key=lambda v: abs(v.stamp-t))
+        attitude = min(self.attitudes, key=lambda v: abs(v[0]-t))
+        if abs(pose.stamp-t) > .15 or abs(attitude[0]-t) > .15:
+            return
+        values = point_cloud2.read_points(message, field_names=['x', 'y', 'z'])
+        xyz = np.column_stack([values[k].reshape(-1) for k in ['x', 'y', 'z']])
+        xyz = xyz[np.isfinite(xyz).all(axis=1)]
+        roll, pitch = attitude[1:]
+        cr, sr, cp, sp = math.cos(roll), math.sin(roll), math.cos(pitch), math.sin(pitch)
+        rotation = np.array([[cp, sp*sr, sp*cr], [0, cr, -sr], [-sp, cp*sr, cp*cr]])
+        xyz = xyz @ rotation.T
+        xyz += [self.p['lidar_forward_m'], 0, self.p['lidar_height_m']]
+        # 観測ごとに融合位置へ重畳する。固定の真値位置合わせは使わない。
+        c, s = math.cos(pose.yaw), math.sin(pose.yaw)
+        world = xyz @ np.array([[c, s, 0], [-s, c, 0], [0, 0, 1]])
+        world += [pose.x, pose.y, 0]
+        # 下向き視野が狭いため、前方で見た地面を通過時にも使う。
+        if not self.scan_window or t-self.scan_window[-1][0] >= .5:
+            near_ground = (np.linalg.norm(xyz[:, :2], axis=1) < 8.) & (abs(xyz[:, 2]) < 2.)
+            self.scan_window.append((t, world[near_ground]))
+        while self.scan_window and t-self.scan_window[0][0] > 30.:
+            self.scan_window.popleft()
+        accumulated = np.concatenate([v for _, v in self.scan_window])-[pose.x, pose.y, 0]
+        accumulated = accumulated @ np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+        self.width = traversable_width(accumulated)
+        self.cloud_stamp = t
+        world = world[np.linalg.norm(xyz[:, :2], axis=1) < 15.]
+        for point in world:
+            self.voxels[tuple(np.floor(point/.15).astype(int))] = point
+        while len(self.voxels) > 100000:
+            self.voxels.pop(next(iter(self.voxels)))
+
+    def joy(self, message) -> None:
+        pressed = {i for i, value in enumerate(message.buttons) if value}
+        if not self.poses or self.now()-self.last_pose_receive > .5:
+            self.survey.buttons = pressed
+            return
+        changed = pressed != self.survey.buttons
+        self.survey.joy(pressed, self.poses[-1], self.current_width(),
+                        self.p['start_button'], self.p['stop_button'],
+                        self.p['signal_button'], self.p['finish_button'])
+        if changed:
+            self.flush()
+
+    def flush(self) -> None:
+        import json
+        state = dict(active=self.survey.active, count=len(self.survey.rows),
+                     pose_fresh=self.now()-self.last_pose_receive <= .5,
+                     width=self.current_width(), rejected_poses=self.survey.rejections)
+        if self.context.ok():
+            self.status.publish(String(data=json.dumps(state)))
+        report = (self.survey.active, len(self.survey.rows))
+        if report != self.last_report:
+            self.get_logger().info(f'経路採取: active={report[0]}, waypoint={report[1]}')
+            self.last_report = report
+        if self.survey.rows:
+            save(self.directory, self.survey.rows, self.projection,
+                 np.array(list(self.voxels.values())).reshape(-1, 3), self.survey.active,
+                 traces=self.traces.export())
+
+
+def main() -> None:
+    rclpy.init()
+    node = Recorder()
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
+    finally:
+        node.flush()
+        node.destroy_node()
+        rclpy.try_shutdown()

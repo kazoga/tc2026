@@ -1,0 +1,4 @@
+blocks:
+- name: digital_twin
+  segment_id: fixed/waypoints.csv
+  type: fixed
