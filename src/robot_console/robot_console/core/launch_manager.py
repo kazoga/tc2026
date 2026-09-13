@@ -301,12 +301,33 @@ class LaunchManager:
     def _cleanup_finished_process_locked(self) -> None:
         """監視用辞書から終了済みプロセスを除去する。"""
 
-        for key, process in list(self._processes.items()):
-            if process.poll() is not None:
-                self._processes.pop(key, None)
-        for key, process in list(self._sim_processes.items()):
-            if process.poll() is not None:
-                self._sim_processes.pop(key, None)
+        for is_simulator, target in ((False, self._processes), (True, self._sim_processes)):
+            for key, process in list(target.items()):
+                return_code = process.poll()
+                if return_code is not None:
+                    status_id = f"{key}:sim" if is_simulator else key
+                    self._report_exit_locked(target, key, status_id, process, return_code)
+
+    def _report_exit_locked(
+        self,
+        target: Dict[str, subprocess.Popen[str]],
+        dict_key: str,
+        status_id: str,
+        process: subprocess.Popen[str],
+        return_code: int,
+    ) -> None:
+        """ロック保持中に現在のプロセスだけを除去し、終了を一度だけ通知する。"""
+
+        if target.get(dict_key) is not process:
+            return
+        target.pop(dict_key)
+        status = NodeLaunchStatus.STOPPED
+        message = None
+        if return_code != 0:
+            status = NodeLaunchStatus.ERROR
+            message = f"プロセスが異常終了しました (return code={return_code})"
+        # 再起動時の RUNNING 通知より後に旧プロセスの終了を通知しない。
+        self._status_callback(status_id, status, None, message)
 
     def _prepare_log_file(self, profile_id: str, pid: int, stream_count: int) -> None:
         """ログファイルの作成準備を行う。"""
@@ -380,13 +401,7 @@ class LaunchManager:
             return_code = process.wait()
             with self._lock:
                 target = self._sim_processes if is_simulator else self._processes
-                target.pop(dict_key, None)
-            status = NodeLaunchStatus.STOPPED
-            message = None
-            if return_code != 0:
-                status = NodeLaunchStatus.ERROR
-                message = f"プロセスが異常終了しました (return code={return_code})"
-            self._status_callback(status_id, status, None, message)
+                self._report_exit_locked(target, dict_key, status_id, process, return_code)
 
         thread = threading.Thread(target=_monitor, daemon=True)
         thread.start()

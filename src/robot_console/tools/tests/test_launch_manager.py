@@ -1,13 +1,15 @@
 """LaunchManager の単体テスト。
 
 `subprocess.Popen` をフェイクへ差し替え、実際の `ros2 launch` は起動せずに
-起動コマンドの組み立てとsimulator引数変換のみを検証する。
+起動コマンド、simulator引数変換、再起動時のプロセス管理を検証する。
 """
 
 import queue
 import subprocess
 import threading
 from pathlib import Path
+
+import pytest
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -210,3 +212,65 @@ def test_is_running_reflects_process_lifecycle(monkeypatch):
     manager.launch(profile)
     assert manager.is_running(profile.profile_id) is True
     manager.stop(profile.profile_id)
+
+
+@pytest.mark.parametrize('is_simulator', [False, True])
+@pytest.mark.parametrize('return_code', [0, 1])
+def test_old_monitor_preserves_replacement(monkeypatch, is_simulator, return_code):
+    """旧プロセスの遅延した終了監視が再起動後の停止管理を壊さない。"""
+    manager, events = _make_manager(monkeypatch, [])
+    pending_monitors = []
+
+    class _DeferredThread:
+        def __init__(self, target, **_kwargs) -> None:
+            self.target = target
+
+        def start(self) -> None:
+            pending_monitors.append(self.target)
+
+    monkeypatch.setattr('robot_console.core.launch_manager.threading.Thread', _DeferredThread)
+    monkeypatch.setattr(manager, '_send_signal', lambda process, sig: process.send_signal(sig))
+    profile_id = 'robot_navigator'
+    status_id = f'{profile_id}:sim' if is_simulator else profile_id
+    target = manager._sim_processes if is_simulator else manager._processes
+    old_process = _FakePopen([])
+    old_process._returncode = return_code
+    target[profile_id] = old_process
+    manager._start_monitor_thread(profile_id, status_id, old_process, is_simulator)
+
+    # stop() 等の整理が先行し、旧監視の再開前に新しいプロセスが登録される。
+    with manager._lock:
+        manager._cleanup_finished_process_locked()
+    while not events.empty():
+        events.get_nowait()
+    replacement = _FakePopen([])
+    target[profile_id] = replacement
+    pending_monitors[0]()
+
+    assert target.get(profile_id) is replacement
+    assert events.empty()
+    manager.stop(profile_id)
+    assert replacement.poll() == 0
+    assert not manager.is_running(profile_id)
+
+
+@pytest.mark.parametrize('is_simulator', [False, True])
+@pytest.mark.parametrize('return_code', [0, 1])
+def test_cleanup_reports_exit_once(monkeypatch, is_simulator, return_code):
+    """監視より先に終了済みプロセスを整理しても終了状態を通知する。"""
+    manager, events = _make_manager(monkeypatch, [])
+    profile_id = 'robot_navigator'
+    status_id = f'{profile_id}:sim' if is_simulator else profile_id
+    target = manager._sim_processes if is_simulator else manager._processes
+    process = _FakePopen([])
+    process._returncode = return_code
+    target[profile_id] = process
+    with manager._lock:
+        manager._cleanup_finished_process_locked()
+        manager._cleanup_finished_process_locked()
+    expected_status = NodeLaunchStatus.STOPPED if return_code == 0 else NodeLaunchStatus.ERROR
+    event = events.get_nowait()
+    assert event[:3] == (status_id, expected_status, None)
+    assert (event[3] is not None) == (return_code != 0)
+    assert events.empty()
+    assert profile_id not in target

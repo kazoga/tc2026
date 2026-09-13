@@ -67,7 +67,7 @@ ConsoleSnapshot / ImageReference
 | `StateStore` | ROS topicから得た最新状態、受信時刻、入力元、派生状態を保持する。 |
 | `CommandQueue` | GUI操作から発生したtopic送信、launch操作、override操作をFIFOで保持する。 |
 | `LaunchProfileStore` | 起動対象profileを読み込み、カテゴリ、順序、引数、health topicを管理する。 |
-| `LaunchManager` | `ros2 launch` プロセス起動、停止、PID、終了コード、stdout/stderr収集を管理する。 |
+| `LaunchManager` | `ros2 launch` プロセス起動、停止、PID、終了コード、stdout/stderr収集を管理する。終了処理ではロック内でプロセス同一性を確認し、除去と終了通知を一度だけ行う。旧監視スレッドは再起動後のプロセスと状態を変更しない。 |
 | `LogManager` | profile別ログ、統合ログ、WARN/ERROR抽出、ログファイルパスを管理する。 |
 | `ImageStore` | 画像topicの最新フレーム、encoded bytes、PyQt5向けQImage変換、HTML向け画像参照を管理する。 |
 | `FreshnessMonitor` | topicごとの最終受信時刻から `OK / STALE / LOST / UNKNOWN` を判定する。 |
