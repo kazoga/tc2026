@@ -31,7 +31,9 @@ QtWebEngine内部の状態（プロファイル初期化まわり）が汚染さ
 プロセス内で先に走った状態から `os.fork()` すると、フォーク時に他スレッドが
 保持していたロックが子プロセスへ引き継がれずデッドロックすることを確認した。
 そのため、本ディレクトリ配下の全テストを一律 `pytest.mark.forked` 対象にする
-（`pytest_collection_modifyitems()` 参照、要 `python3-pytest-forked`）。
+（`pytest_collection_modifyitems()` 参照、要 `pytest-forked`）。
+依存はワークスペースの `requirements.txt` で導入し、`pytest.ini` の
+`required_plugins` で未導入時の実行を防ぐ。
 ワークスペース全体の `pytest` 実行時も、本ディレクトリ配下のテストのみが
 フォーク対象になり、他パッケージのテストには影響しない。
 
@@ -171,8 +173,7 @@ _THIS_DIR = Path(__file__).resolve().parent
 def pytest_collection_modifyitems(items: list) -> None:
     """本ディレクトリ配下の全テストを `pytest.mark.forked` 対象にする。
 
-    `python3-pytest-forked` が未導入の環境では `forked` マーカーは効果を持たず
-    通常通り実行される（QtWebEngine関連テストはその場合クラッシュし得る）。
+    `pytest-forked` はルートの `pytest.ini` で必須プラグインとして宣言する。
     """
 
     for item in items:

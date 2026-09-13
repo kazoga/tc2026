@@ -26,7 +26,7 @@
   <exec_depend>tc_route_msgs</exec_depend>
   <exec_depend>tc_geo_msgs</exec_depend>
   <exec_depend>rtk_gps_um982_msgs</exec_depend>
-  <test_depend>python3-pytest-forked</test_depend>
+  <!-- pytest-forked はワークスペースの requirements.txt で導入する。 -->
 
   <export>
     <build_type>ament_python</build_type>

@@ -16,6 +16,8 @@ opencv-python>=4.10,<4.12
 pandas>=2.1,<3.0
 Pillow>=10.0,<13.0
 pyserial>=3.5,<4.0
+# robot_console の QtWebEngine テストをプロセスごとに隔離する。
+pytest-forked>=1.6,<2.0
 # route_planner, route_manager, robot_console, obstacle_route_sim の YAML 設定で使用する。
 PyYAML>=6.0,<7.0
 requests>=2.31,<3.0

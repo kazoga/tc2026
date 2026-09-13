@@ -86,6 +86,9 @@ ros2 launch robot_console robot_console.launch.py \
 - GUI なしでロジックを確認したい場合は `python3 -m robot_console.gui_core` でユニットテスト用メインを実行できます（PyYAML / Pillow / OpenCV が未導入でもフォールバック動作）。
 - モック画面は `python3 tools/mock_ui.py` で起動し、ROS 環境なしに画面レイアウトと操作フローを確認できます。
 - `tools/tests/` 配下に pytest ベースのテストを収録しています。`pytest tools/tests` を実行してロジックの回帰を検出してください。
+- ワークスペースの `requirements.txt` で `pytest-forked` も導入してください。
+  QtWebEngine の状態をテスト間で共有しないよう各テストを別プロセスで実行します。
+  未導入の場合は `pytest.ini` の必須プラグイン検査で実行前にエラーになります。
 - `tools/headless_route_stack_eval.py` は tkinter 画面を生成せず、`GuiCore` に
   GUI 操作相当の入力を与えて route stack の簡易回帰評価を行う補助ツールです。
   `route_planner`、`route_manager`、`route_follower`、`drive_mode_manager`、
