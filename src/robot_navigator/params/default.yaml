@@ -7,6 +7,8 @@ robot_navigator:
     pos_tol: 0.5
     ang_tol: 0.25
     control_rate_hz: 20.0
+    pose_timeout_sec: 1.0
+    odom_timeout_sec: 1.0
     robot_width: 0.6
     marker_frame: "map"
     obstacle_distance_mode: "hint"
@@ -16,4 +18,3 @@ robot_navigator:
     log_csv_path: "/tmp/control_log.csv"
     enable_debug_pub: false
     use_nav2_action: false
-

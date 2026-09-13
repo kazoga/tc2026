@@ -143,3 +143,16 @@ ros2 run robot_navigator robot_navigator
 - default.yaml の `obst_fov_deg` や `enable_debug_pub` など未使用パラメータは Phase3 での
   ナビゲーション高度化向けに予約されています。
 - `robot_simulator_node` の TF 連携と組み合わせた統合試験手順書を docs 配下に追記予定です。
+
+## 入力途絶時の停止（2026-09-13）
+
+`pose_timeout_sec`、`odom_timeout_sec` はそれぞれ既定 1.0 秒である。
+`/localization/pose_enu` または odom が未受信、または受信間隔が閾値以上の場合、
+制御タイマーでゼロ速度を発行し、PID 積分・前回指令をクリアする。
+両入力の受信が復帰すると既存目標への追従を再開する。
+判定時刻は実機で `time.monotonic()`、`use_sim_time=true` ではROS時計とする。
+低速物理計算や一時停止のwall時間を模擬入力の欠測に数えない。
+ROSメッセージ自体のstampの鮮度はこの監視では検証しない。融合ノード側で別に監視する。
+古い内容の再配信、LiDAR の途絶、自己位置の品質低下、ノード自体の停止は別途対策が必要である。
+ROS 非依存の `input_watchdog_core.py` と境界・復帰テストを追加した。
+Gazebo と仮想 GNSS による停止確認は obstacle_route_sim の地理地図検証記録を参照する。

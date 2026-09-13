@@ -38,6 +38,8 @@ from std_msgs.msg import Bool
 from tc_route_msgs.msg import ObstacleAvoidanceHint, Route
 from visualization_msgs.msg import Marker
 
+from robot_navigator.input_watchdog_core import InputWatchdog
+
 
 @dataclass
 class DebugInfo:
@@ -75,6 +77,8 @@ class RobotNavigator(Node):
         self.declare_parameter('pos_tol_exit_margin', 0.2)
         self.declare_parameter('ang_tol', 0.25)
         self.declare_parameter('control_rate_hz', 20.0)
+        self.declare_parameter('pose_timeout_sec', 1.0)
+        self.declare_parameter('odom_timeout_sec', 1.0)
         self.declare_parameter('road_block_hold_sec', 5.0)
 
         # 旧実装の固定相当をパラメータ化
@@ -149,6 +153,11 @@ class RobotNavigator(Node):
         self.integral_w_limit: float = self.max_w / max(self.ki_w, 1.0e-6)
 
         # --- 内部状態 ---
+        self.input_watchdog = InputWatchdog({
+            'pose': float(self.get_parameter('pose_timeout_sec').value),
+            'odom': float(self.get_parameter('odom_timeout_sec').value),
+        })
+        self._stale_inputs: tuple[str, ...] = ()
         self.current_pose: Optional[Pose] = None
         self.current_velocity: Optional[Twist] = None
         self.current_goal: Optional[Pose] = None
@@ -260,14 +269,22 @@ class RobotNavigator(Node):
         except AttributeError:
             return name
 
+    def _input_time_seconds(self) -> float:
+        """模擬はROS時刻、実機は単調時計で受信期限を測る。計算の遅さを欠測にしない。"""
+        if self.get_parameter('use_sim_time').value:
+            return self.get_clock().now().nanoseconds*1e-9
+        return time.monotonic()
+
     # -------------------- コールバック群 --------------------
     def on_odom(self, msg: Odometry) -> None:
         """/odom から現在速度を保持する。"""
         self.current_velocity = msg.twist.twist
+        self.input_watchdog.receive('odom', self._input_time_seconds())
 
     def on_pose_enu(self, msg: PoseWithCovarianceStamped) -> None:
         """/localization/pose_enu から現在姿勢（Pose）を保持する。"""
         self.current_pose = msg.pose.pose
+        self.input_watchdog.receive('pose', self._input_time_seconds())
 
     def on_goal(self, msg: PoseStamped) -> None:
         """目標トピック（PoseStamped）から目標姿勢（Pose）を保持する。"""
@@ -402,6 +419,19 @@ class RobotNavigator(Node):
     # -------------------- 制御ループ --------------------
     def on_timer(self) -> None:
         """周期制御ロジック。必要な入力が揃ったら cmd_vel と Marker を発行し、CSV ログを追記する。"""
+        stale = self.input_watchdog.stale_inputs(self._input_time_seconds())
+        if stale:
+            if stale != self._stale_inputs:
+                self.get_logger().warn(f'入力未受信・途絶のため停止します: {", ".join(stale)}')
+            self._stale_inputs = stale
+            self.integral_w = 0.0
+            self.prev_yaw_error = 0.0
+            self.prev_cmd_vel = Twist()
+            self.cmd_pub.publish(Twist())
+            return
+        if self._stale_inputs:
+            self.get_logger().info('自己位置・odom の受信が復帰しました')
+            self._stale_inputs = ()
         if self._should_stop_due_to_road_block():
             self._publish_stop_for_road_block()
             return
