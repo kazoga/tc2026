@@ -1,3 +1,4 @@
+from glob import glob
 from setuptools import setup
 
 package_name = 'rtk_gps_um982'
@@ -18,6 +19,7 @@ setup(
          ['launch/rtk_gps_um982.launch.py']),
         ('share/' + package_name + '/config',
          ['config/default.yaml']),
+        ('share/' + package_name + '/docs', glob('docs/*.md')),
     ],
     install_requires=['setuptools', 'pyserial'],
     zip_safe=True,
@@ -29,6 +31,7 @@ setup(
     entry_points={
         'console_scripts': [
             'rtk_gps_um982_node = rtk_gps_um982.driver_node:main',
+            'ptp_trial = rtk_gps_um982.ptp_trial:main',
         ],
     },
 )

@@ -7,6 +7,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -24,9 +25,18 @@ def generate_launch_description() -> LaunchDescription:
         executable='rtk_gps_um982_node',
         name='rtk_gps_um982_node',
         namespace='rtk_gps',
-        parameters=[LaunchConfiguration('config')],
+        parameters=[LaunchConfiguration('config'), {
+            'time_sync.enabled': ParameterValue(LaunchConfiguration('time_sync'), value_type=bool),
+            'time_sync.chrony_socket': LaunchConfiguration('chrony_socket'),
+        }],
         output='screen',
         emulate_tty=True,
     )
 
-    return LaunchDescription([config_arg, node])
+    return LaunchDescription([
+        config_arg,
+        DeclareLaunchArgument('time_sync', default_value='false',
+                              description='RMC時刻をchrony SOCKへ配信する'),
+        DeclareLaunchArgument('chrony_socket', default_value='/run/chrony/um982.sock'),
+        node,
+    ])

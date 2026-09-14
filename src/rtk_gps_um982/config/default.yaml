@@ -7,6 +7,9 @@
     frame_id: gps_link
     stamp_source: gnss_utc        # gnss_utc | ros_time | pps_edge (phase 2)
     transport_delay_ms: 0
+    time_sync:
+      enabled: false
+      chrony_socket: /run/chrony/um982.sock
     ntrip:
       enabled: false
       host: ""
