@@ -16,6 +16,11 @@ def validate():
     solid = cq.importers.importStep(str(output / 'bracket_25deg.step'))
     assert solid.val().isValid() and len(solid.solids().vals()) == 1
     np.testing.assert_allclose(mesh.volume, solid.val().Volume(), rtol=.001)
+    assembly = cq.importers.importStep(str(output / 'assembly_reference.step')).val()
+    for x in (-85, 85):
+        # ねじ頭上の鉛直挿入経路。直径16mm・高さ150mmの工具包絡。
+        tool = cq.Workplane('XY', origin=(x, 0, 8.01)).circle(8).extrude(150).val()
+        assert assembly.intersect(tool).Volume() < 1e-5
     # ベース穴はTナット固定に必須。貫通していることを点の内外で確認。
     for x in (-85, 85):
         assert not solid.val().isInside(cq.Vector(x, 0, 4))
@@ -50,7 +55,7 @@ def validate():
                 for x in xs for y in ys]
     actual = [(c.dxf.center.x, c.dxf.center.y, c.dxf.radius) for c in circles]
     np.testing.assert_allclose(sorted(actual), sorted(expected), atol=1e-6)
-    print('PASS: 単一閉メッシュ、STEP有効性、外形、体積、M5貫通穴、板の6穴・C10、傾斜板との非干渉、ナット空間')
+    print('PASS: 単一閉メッシュ、STEP有効性、外形、体積、M5貫通穴、板の6穴・C10、傾斜板との非干渉、ナット空間、フレーム締付工具経路')
 
 
 if __name__ == '__main__':

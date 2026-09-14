@@ -2,12 +2,23 @@
 from pathlib import Path
 import math
 import numpy as np
+import cadquery as cq
 from PIL import Image, ImageDraw, ImageFont
 
 
 def render(parts, output: Path, angle: float) -> None:
+    parts = dict(parts)
+    # 締結説明用の簡略ねじ頭と、真上から挿入する工具の包絡。
+    parts['frame_bolts'] = cq.Compound.makeCompound([
+        cq.Workplane('XY', origin=(x, 0, 8)).circle(5).extrude(1).union(
+            cq.Workplane('XY', origin=(x, 0, 9)).circle(4.25).extrude(5)).val()
+        for x in (-85, 85)])
+    parts['tool_envelope'] = cq.Compound.makeCompound([
+        cq.Workplane('XY', origin=(x, 0, 16)).circle(8).extrude(70).val()
+        for x in (-85, 85)])
     colors={'bracket':(32,142,156), 'aluminum_plate':(193,204,218),
-            'sensor_envelope':(63,74,89),'frame_envelope':(145,157,173)}
+            'sensor_envelope':(63,74,89),'frame_envelope':(145,157,173),
+            'frame_bolts':(235,130,35),'tool_envelope':(75,185,110)}
     font_path='/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
     if not Path(font_path).exists():
         font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
@@ -16,7 +27,7 @@ def render(parts, output: Path, angle: float) -> None:
     for name,shape in parts.items():
         vertices, triangles=shape.tessellate(.2)
         meshes[name]=(np.array([v.toTuple() for v in vertices]),triangles)
-    for view in ['assembly','side','printed_part']:
+    for view in ['assembly','side','printed_part','fastening']:
         im=Image.new('RGB',(1600,1200),(246,248,252));d=ImageDraw.Draw(im)
         if view=='side':
             right=np.array([0,1,0.]);up=np.array([0,0,1.]);depth=np.array([1,0,0.])
@@ -24,7 +35,11 @@ def render(parts, output: Path, angle: float) -> None:
             depth=np.array([1.25,1.65,1.15]);depth/=np.linalg.norm(depth)
             right=np.cross(np.array([0,0,1.]),depth);right/=np.linalg.norm(right)
             up=np.cross(depth,right)
-        selected={'bracket':meshes['bracket']} if view=='printed_part' else meshes
+        selected = {k:v for k,v in meshes.items() if k not in ('frame_bolts','tool_envelope')}
+        if view == 'printed_part':
+            selected = {'bracket':meshes['bracket']}
+        elif view == 'fastening':
+            selected = meshes
         arrays=np.concatenate([v for v,t in selected.values()])
         xy=np.stack([arrays@right,arrays@up],axis=1)
         low,high=xy.min(axis=0),xy.max(axis=0)
@@ -61,10 +76,14 @@ def render(parts, output: Path, angle: float) -> None:
         im=Image.fromarray(pixels);d=ImageDraw.Draw(im)
         title={'assembly':'MID-360 / 25°前下がりブラケット',
                'side':'側面：前方へ25°下げる',
-               'printed_part':'3Dプリント部品：一体ブラケット'}[view]
+               'printed_part':'3Dプリント部品：一体ブラケット',
+               'fastening':'フレーム固定ねじ：外側2か所を真上から締付'}[view]
         d.text((75,45),title,font=font(48),fill=(23,40,62))
         d.text((75,115),'JTABS 150×60×2 mm対応 ｜ HFS5横梁・上面溝/M5固定',font=font(26),fill=(71,84,102))
-        if view=='side':
+        if view=='fastening':
+            d.text((75,1010),'緑：直径16 mmの工具包絡　橙：M5ねじ頭・ワッシャー',font=font(28),fill=(23,40,62))
+            d.text((75,1060),'板幅150 mm ／ 穴ピッチ170 mm ／ 板端と工具外周の隙間2 mm',font=font(28),fill=(23,40,62))
+        elif view=='side':
             d.line((1060,990,1450,990),fill=(219,104,48),width=8)
             d.polygon([(1450,990),(1418,973),(1418,1007)],fill=(219,104,48))
             d.text((1140,1020),'ロボット前方',font=font(30),fill=(148,60,20))
