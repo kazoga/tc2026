@@ -38,8 +38,23 @@ MID-360とのPTP同期は未確認。実機で別PC/別NICを使う場合は再�
 `ptp4l` と `chronyc` は調査時のPATHにはなかった。
 
 基板の提示URLは [AliExpress商品1005010071697174](https://www.aliexpress.com/item/1005010071697174.html)。
-商品本文は取得できず、基板名・端子仕様・選択バリエーションは未確認である。
-以下のピン情報はUM982モジュールの仕様であり、この市販基板での取り出し口は未確定とする。
+商品本文は取得できず、正確な基板型番・リビジョン・選択バリエーションは未確認である。
+[提供された基板説明写真](references/um982/UM982_carrier_board_ports.jpg)では、次の表記を確認できる。
+
+| 箇所 | 写真の表記 | 同期構成での用途候補 |
+| --- | --- | --- |
+| 上側COM3、TTL | GND / EVE / PPS / TX3 / RX3 / 5V | PPS・RMCをMID-360へ出す追加配線に使う |
+| 下側COM2、TTL | GND / TX2 / RX2 / 5V | PCの時刻入力等に使う予備UART |
+| 右側USB | 5V power supply / debugging COM1 | 既存PC接続を維持する候補 |
+
+写真の説明と現物が一致すること、各ポートの現在の用途、コネクタの向きは実物で照合する。
+「TTL」は3.3V信号を保証しない。5V端子は電源表記であり、TX/PPSの信号電圧の証拠にはならない。
+基板回路図または測定でPPS/TX3のHighレベルを確認してからMID-360へ接続する。
+EVEは写真の表記のみを記録し、PPS出力の代替には使わない。写真からコネクタ型番や
+相手側プラグから見たピン順を断定しない。
+
+既存配線を維持するPTP案を優先する判断は変えない。精度が不足して追加配線を選ぶ場合は、
+COM3のGND・PPS・TX3を用いる3信号接続が候補になる。RX3・EVE・5Vはこの同期入力に接続しない。
 
 根拠: [Livox公式同期手順](https://livox-wiki-en.readthedocs.io/en/latest/tutorials/new_product/common/time_sync.html)。
 
@@ -52,22 +67,22 @@ UM982のモジュール端子番号と市販基板のコネクタ番号は同一
 | 接続元 | MID-360 M12端子 | 純正分岐ケーブルの色 |
 | --- | --- | --- |
 | UM982基板のPPS出力（モジュールではpin 30） | pin 8、3.3V LVTTL入力 | 紫/白 |
-| UM982の専用UART TX（COM2等） | pin 10、3.3V LVTTL GPS入力 | 灰/白 |
+| UM982基板COM3のTX3 | pin 10、3.3V LVTTL GPS入力 | 灰/白 |
 | 信号GND | pin 2/3に接続する機能ケーブルGND | 黒 |
 
 3.3V信号であることを基板仕様で確認する。RS-232や5V UARTは直接接続せず、
 適切なレベル変換を挟む。電源9–27V線と信号入力を混同しない。
 色だけで判断せず、使用ケーブルの端子表と導通で照合する。
 
-COM2を専用出力にできる場合の設定候補（まだ送信していない）:
+COM3を専用出力にできる場合の設定候補（まだ送信していない）:
 
 ```text
-CONFIG COM2 9600 8 n 1
-GPRMC COM2 1
+CONFIG COM3 9600 8 n 1
+GPRMC COM3 1
 CONFIG PPS ENABLE GPS POSITIVE 100000 1000 0 0
 ```
 
-- COM2: 9600 baud、8 data bits、no parity、1 stop bit。RMCを1Hzで出力する。
+- COM3: 9600 baud、8 data bits、no parity、1 stop bit。RMCを1Hzで出力する。
 - PPS: 正極性、幅100000μs=100ms、周期1000ms=1Hz。RF/User遅延は初期値0。
 - PPSのGPS時系指定は秒境界の基準であり、ROS timestampにGPSTの秒数を入れる指示ではない。
   RMCの時刻・日付はUTCである。NMEA UTCへGPS-UTC閏秒を重ねて補正しない。
@@ -112,7 +127,7 @@ MID-360内蔵IMUを使い、点群のtimebase/点ごとのoffset_timeを保持�
 
 配線を維持する案では既存シリアルを単独所有する処理からNMEAを安全に分配し、chronyへ渡す
 仕組みを追加する。現driverにはこの配信機能がない。空きCOMを追加できる場合は、
-別COM（例COM3）でRMC/ZDAをgpsdへ渡す構成も選べる。
+別COM（直接同期案でCOM3を使う場合はCOM2）でRMC/ZDAをgpsdへ渡す構成も選べる。
 可能なら適切なPPS入力装置でPCにもPPSを分配する。通常のUSBシリアルの受信タイミングを
 高精度PPSとみなさない。基板のファンアウト能力・入力方式は別途確認する。
 空きCOMがなければ、受信ポートを単独所有するサービスがROS/gpsdへ配信する構成を設計する。

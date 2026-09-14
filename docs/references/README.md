@@ -27,4 +27,7 @@ Wikiの相対画像は同梱していないため、図は公式閲覧版を参�
 - [livox_eth_protocol_mid360.md](mid360/livox_eth_protocol_mid360.md) — 公式Wikiの原文、47,164 bytes。
   取得元: https://raw.githubusercontent.com/Livox-SDK/livox_wiki_en/90fd009e40cf31ff1960826676ca2bbfc19e9216/source/tutorials/new_product/mid360/livox_eth_protocol_mid360.md
 
+- [UM982_carrier_board_ports.jpg](um982/UM982_carrier_board_ports.jpg) — ユーザー提供の基板説明写真、原本維持。
+  COM3のPPS/TX3等の表記を確認できる。基板リビジョンと信号電圧は未確認。
+
 改変確認: このディレクトリで `sha256sum -c SHA256SUMS` を実行する。
