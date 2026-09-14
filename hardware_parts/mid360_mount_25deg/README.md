@@ -36,7 +36,7 @@ MID-360底面の48×36mm取付ピッチに合わせています。
 
 ## ファイルと寸法
 
-物理部品の製造データをROSパッケージと分けて`hardware/`に配置しています。
+物理部品の製造データをROSパッケージと分けて`hardware_parts/`に配置しています。
 
 | exports内のファイル | 用途 |
 | --- | --- |
@@ -112,9 +112,9 @@ M5ナット周辺の空間を検証しています。実機適合・造形・強
 ```bash
 python3 -m venv /tmp/mid360-cad-venv
 source /tmp/mid360-cad-venv/bin/activate
-pip install -r hardware/mid360_mount_25deg/requirements.txt
-python hardware/mid360_mount_25deg/build_model.py
-python hardware/mid360_mount_25deg/validate_model.py
+pip install -r hardware_parts/mid360_mount_25deg/requirements.txt
+python hardware_parts/mid360_mount_25deg/build_model.py
+python hardware_parts/mid360_mount_25deg/validate_model.py
 ```
 
 プレビューの日本語にはNoto Sans CJKを使用します。CAD交換形式は自動生成ファイルとして扱い、

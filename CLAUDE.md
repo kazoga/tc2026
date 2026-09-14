@@ -53,6 +53,7 @@ GitHub リポジトリに登録し、開発メンバ間で共通利用するこ�
 ├── .claude/
 │   └── skills/
 ├── docs/
+├── hardware_parts/
 ├── src/
 ├── build/
 ├── install/
@@ -63,6 +64,10 @@ GitHub リポジトリに登録し、開発メンバ間で共通利用するこ�
 - `src/<package_name>/` を 1 つの ROS 2 パッケージの基本単位として扱う。
 - `requirements.txt` はワークスペース共通の Python pip 依存関係を管理するファイルとして扱う。
 - ワークスペース全体に関わる資料は `docs/` 配下に置く。
+- 物理的な取付部品のCADソース、配布用STL・STEP、組立説明は
+  `hardware_parts/<part_name>/` にまとめ、同じGitリポジトリで管理する。
+  製造・閲覧用の成果物は管理対象とし、CADのキャッシュや一時ファイルは含めない。
+  メーカー資料は `docs/references/` に置き、部品の説明から参照する。
 - 特定パッケージに閉じる資料は `src/<package_name>/docs/` 配下に置く。
 - `build/`, `install/`, `log/` は colcon の生成物として扱い、直接修正しない。ただし
   ビルド確認のためのクリーンでは削除してよい。

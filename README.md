@@ -48,6 +48,12 @@ ROS 2 Jazzy ワークスペース。
 ワークスペース横断の仕様書は [`docs/`](docs/)、パッケージ固有の設計書は各パッケージ
 配下の `docs/` を参照。
 
+## ハードウェアパーツ
+
+実機の取付部品のCAD、3Dプリント用STL、組立説明は
+[`hardware_parts/`](hardware_parts/README.md) に部品単位で配置する。
+ROSパッケージは `src/`、センサのメーカー資料は `docs/references/` で管理する。
+
 ## 開発状態
 
 - `robot_console` の正式UIは PyQt5 版（`robot_console_qt`）である。遠隔観測用の
