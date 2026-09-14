@@ -1271,6 +1271,7 @@ function normalize(scene){
     const n = Object.assign({type:"go2", name:"ロボット "+(i+1)}, rb);
     n.id = n.id || ("rb"+(i+1)); n.x=+n.x||0; n.y=+n.y||0; n.yaw=+n.yaw||0;
     n.sensors = Object.assign({lidar:true, camera:true, lidarRange:30, fov:90, camW:1280, camH:720}, n.sensors||{});
+    n.sensors.lidarPitchDownDeg ??= -(n.sensors.pitchDeg??0);
     return n;
   });
   S.models = S.models||{}; S.modelSeq = +S.modelSeq||1;
@@ -3399,18 +3400,54 @@ function rayPolygon(origin,direction,o,max){
  if(Math.abs(direction[2])>1e-12)for(const z of [o.z0,o.z1]){const t=(z-origin[2])/direction[2],x=origin[0]+t*direction[0],y=origin[1]+t*direction[1];if(t>=0&&t<=max&&C.inPoly(x,y,rings[0])&&!rings.slice(1).some(h=>C.inPoly(x,y,h)))cand.push(t);}
  return cand.length?Math.min(...cand):null;
 }
+// 前方は局所+Y。全周ビームを一緒に回転し、後方の俯角は前方と逆に変化する。
+function lidarSettings(robot,opt={}){
+ const s=robot.sensors||{},mount=opt.lidarPitchDownDeg??s.lidarPitchDownDeg??-(opt.pitchDeg??s.pitchDeg??0),
+ min=opt.minPitch??s.lidarMinElevationDeg??-7,max=opt.maxPitch??s.lidarMaxElevationDeg??52;
+ if(![mount,min,max].every(Number.isFinite)||Math.abs(mount)>89||min < -90||max > 90||min>max)throw Error('LiDAR角度は有限値で、取付角±89°以内、仰角−90〜90°の順序で指定してください');
+ return {mountPitchDownDeg:mount,minElevationDeg:min,maxElevationDeg:max};
+}
+function lidarDirection(azimuth,elevation,mountPitchDownDeg,yaw){
+ const e=elevation*Math.PI/180,p=mountPitchDownDeg*Math.PI/180,
+ x=-Math.sin(azimuth)*Math.cos(e),y=Math.cos(azimuth)*Math.cos(e),z=Math.sin(e),
+ yy=Math.cos(p)*y+Math.sin(p)*z,zz=-Math.sin(p)*y+Math.cos(p)*z;
+ return [Math.cos(yaw)*x-Math.sin(yaw)*yy,Math.sin(yaw)*x+Math.cos(yaw)*yy,zz];
+}
 function scan(world,scene,robot,opt={}){
  const channels=C.clamp(Math.round(opt.channels??8),1,32),columns=C.clamp(Math.round(opt.columns??180),4,720),min=opt.minRange??.15,max=C.clamp(opt.maxRange??robot.sensors?.lidarRange??30,1,300),height=opt.height??W.sensorHeight(robot),z=W.sample(world.grid,robot.x,robot.y);
  if(!Number.isFinite(z))throw Error('観測位置の標高が欠測または範囲外です');const origin=[robot.x,robot.y,z+height],idx=R.spatialIndex(world.obstacles,32),all=idx.queryBox([origin[0]-max,origin[1]-max,origin[0]+max,origin[1]+max]).filter(o=>o.source!=='canopy-proxy'),canopies=world.trees.filter(t=>Math.hypot(t.x-origin[0],t.y-origin[1])<=max+t.r),points=[],rays=[];
- const groundStep=Math.max(.05,Math.min(.5,world.grid.res/2)),yaw=robot.yaw||0;
+ const groundStep=Math.max(.05,Math.min(.5,world.grid.res/2)),yaw=robot.yaw||0,settings=lidarSettings(robot,opt);
  for(let ch=0;ch<channels;ch++)for(let col=0;col<columns;col++){
-  const pitch=((opt.pitchDeg??robot.sensors?.pitchDeg??0)+(channels===1?((opt.minPitch??-15)+(opt.maxPitch??15))/2:(opt.minPitch??-15)+ch/(channels-1)*((opt.maxPitch??15)-(opt.minPitch??-15))))*Math.PI/180,az=yaw+col/columns*Math.PI*2,dir=[-Math.sin(az)*Math.cos(pitch),Math.cos(az)*Math.cos(pitch),Math.sin(pitch)];let hit=max+1,label=null,unknown=false;
+  const elevation=channels===1?(settings.minElevationDeg+settings.maxElevationDeg)/2:settings.minElevationDeg+ch/(channels-1)*(settings.maxElevationDeg-settings.minElevationDeg),dir=lidarDirection(col/columns*Math.PI*2,elevation,settings.mountPitchDownDeg,yaw);let hit=max+1,label=null,unknown=false;
   for(const o of all){const t=o.type==='circle'?rayCylinder(origin,dir,o,max):rayPolygon(origin,dir,o,max);if(t!=null&&t>=min&&t<hit){hit=t;label=o.id;}}
   if(opt.canopy!==false)for(const t of canopies){const q=raySphere(origin,dir,[t.x,t.y,t.z+t.h*.7],[t.r,t.r,t.h*.3],max);if(q!=null&&q>=min&&q<hit){hit=q;label='canopy:'+t.id;}}
   for(let d=min;d<=Math.min(max,hit);d+=groundStep){const x=origin[0]+dir[0]*d,y=origin[1]+dir[1]*d,h=W.sample(world.grid,x,y);if(!Number.isFinite(h)){unknown=true;break;}if(origin[2]+dir[2]*d<=h){let lo=Math.max(min,d-groundStep),hi=d;for(let k=0;k<8;k++){const m=(lo+hi)/2,hz=W.sample(world.grid,origin[0]+dir[0]*m,origin[1]+dir[1]*m);if(origin[2]+dir[2]*m>hz)lo=m;else hi=m;}hit=(lo+hi)/2;label='terrain';break;}}
-  if(hit<=max&&label&&!unknown){const p=origin.map((x,i)=>+(x+dir[i]*hit).toFixed(5));points.push(p);rays.push({channel:ch,column:col,range:+hit.toFixed(5),entityId:label});}else rays.push({channel:ch,column:col,range:null,status:unknown?'unknown':'no-return'});
+  if(hit<=max&&label&&!unknown){const p=origin.map((x,i)=>+(x+dir[i]*hit).toFixed(5));points.push(p);rays.push({channel:ch,column:col,range:+hit.toFixed(5),entityId:label,pointIndex:points.length-1});}else rays.push({channel:ch,column:col,range:null,status:unknown?'unknown':'no-return'});
  }
- return {schemaVersion:1,model:'analytic-2.5d-reference-lidar-v1',worldId:world.id,robotId:robot.id,origin,channels,columns,maxRange:max,minRange:min,pitchDegrees:[opt.minPitch??-15,opt.maxPitch??15],groundStep,points,rays,limitations:['一時刻の幾何レイ。走査時間歪み・ノイズ・反射率・複数反射なし','障害物は通行性用の形状。CityJSONはAABB近似','未知の標高を通るレイはunknown。無反射とは区別']};
+ return {schemaVersion:1,model:'analytic-2.5d-reference-lidar-v2',worldId:world.id,robotId:robot.id,origin,channels,columns,maxRange:max,minRange:min,pitchDegrees:[settings.minElevationDeg,settings.maxElevationDeg],mountPitchDownDeg:settings.mountPitchDownDeg,groundStep,points,rays,limitations:['一時刻の幾何レイ。走査時間歪み・ノイズ・反射率・複数反射なし','障害物は通行性用の形状。CityJSONはAABB近似','未知の標高を通るレイはunknown。無反射とは区別']};
+}
+// 地形の通行性と、LiDARが地面を観測できた範囲は別に保持する。
+function observedTraversability(world,scene,robot,observation){
+ const g=world.grid,reference=W.traversability(world,scene,robot),ground=new Uint8Array(g.w*g.h),
+ mask=new Int8Array(g.w*g.h).fill(-1),radius=reference.profile.radius;
+ for(const ray of observation.rays){
+  if(ray.entityId!=='terrain'||ray.pointIndex==null)continue;
+  const p=observation.points[ray.pointIndex],x=Math.round((p[0]-g.ox)/g.res),y=Math.round((p[1]-g.oy)/g.res);
+  if(x>=0&&y>=0&&x<g.w&&y<g.h&&W.validAt(g,p[0],p[1]))ground[y*g.w+x]=1;
+ }
+ // 一つの接地点だけで車体全体の支持を確認した扱いにしない。
+ const offsets=[],n=Math.ceil(radius/g.res+.5);
+ for(let dy=-n;dy<=n;dy++)for(let dx=-n;dx<=n;dx++)if(Math.hypot(Math.max(0,Math.abs(dx)-.5),Math.max(0,Math.abs(dy)-.5))*g.res<=radius)offsets.push([dx,dy]);
+ for(let y=0;y<g.h;y++)for(let x=0;x<g.w;x++){
+  const i=y*g.w+x;if(!ground[i])continue;
+  if(!reference.mask[i]){if(![1,7].includes(reference.reason[i]))mask[i]=0;continue;}
+  if(offsets.every(([dx,dy])=>x+dx>=0&&y+dy>=0&&x+dx<g.w&&y+dy<g.h&&ground[(y+dy)*g.w+x+dx]))mask[i]=1;
+ }
+ return {model:'observed-reference-traversability-v1',registration:'nearest-grid-node',width:g.w,height:g.h,origin:[g.ox,g.oy],resolution:g.res,
+ mountPitchDownDeg:observation.mountPitchDownDeg,mask:Array.from(mask),observedGround:Array.from(ground),
+ legend:{'-1':'unknown-or-insufficient-ground-support',0:'observed-ground-reference-blocked',1:'observed-support-reference-passable'},
+ summary:{groundCells:ground.reduce((a,b)=>a+b,0),passableCells:mask.reduce((a,b)=>a+(b===1),0),unknownCells:mask.reduce((a,b)=>a+(b===-1),0)},
+ limitations:['単一スキャンと既知地形の参照判定。実測SLAM地図の安全認証ではない','無反射・上空通過・未観測は地面の空きとして扱わない','セル内の部分観測を代表点へ丸める。解像度未満の障害物は保証しない']};
 }
 function simulate(world,scene,opt={}){
  if(scene.robots.length>64)throw Error('経路干渉検査は64台以内です');
@@ -3431,7 +3468,7 @@ function simulate(world,scene,opt={}){
  }
  return {schemaVersion:1,model:'kinematic-static-2.5d-v1',worldId:world.id,settings:{dt,duration,speed},frames,events,summary:state.map(s=>({id:s.id,blockedSteps:s.blocked,pathComplete:s.next>=s.path.length&&s.path.length>1})),limitations:['速度一定の運動学リプレイ。ROS/SLAM/接触動力学なし','円形包絡体と静的通行性。経路計画・衝突回避制御ではなく干渉を検出して停止']};
 }
-globalThis.TerrainExperiments={raySphere,rayCylinder,rayPolygon,scan,simulate};
+globalThis.TerrainExperiments={raySphere,rayCylinder,rayPolygon,lidarSettings,lidarDirection,scan,observedTraversability,simulate};
 })();
 
 /*@endexperiments*/
@@ -8233,7 +8270,10 @@ refreshProps=function(){
   ['勾配上限 [°]','maxSlope',profile.maxSlope,0,85,1,'mobility'],
   ['段差残差 [m]','maxStep',profile.maxStep,0,2,.01,'mobility'],
   ['センサ高 [m]','height',TW.sensorHeight(rb),.05,100,.05,'sensors'],
-  ['仰俯角 [°]','pitchDeg',rb.sensors.pitchDeg??0,-89,89,1,'sensors']
+  ['カメラ仰俯角 [°]','pitchDeg',rb.sensors.pitchDeg??0,-89,89,1,'sensors'],
+  ['LiDAR前下がり [°]','lidarPitchDownDeg',rb.sensors.lidarPitchDownDeg??-(rb.sensors.pitchDeg??0),-89,89,1,'sensors'],
+  ['LiDAR最小仰角 [°]','lidarMinElevationDeg',rb.sensors.lidarMinElevationDeg??-7,-90,90,1,'sensors'],
+  ['LiDAR最大仰角 [°]','lidarMaxElevationDeg',rb.sensors.lidarMaxElevationDeg??52,-90,90,1,'sensors']
  ];
  for(const [label,key,value,min,max,step,section] of fields){const row=document.createElement('label');
  row.className='f2';
@@ -8399,18 +8439,23 @@ function captureCamera(){
  return {canvas:cv,metadata:{worldId:WORLD.id,robotId:rb.id,pose:p,model:'pinhole-reference-rgb-v1',fx:p.width/(2*Math.tan(p.hfov*D2R/2)),fy:p.width/(2*Math.tan(p.hfov*D2R/2)),cx:(p.width-1)/2,cy:(p.height-1)/2,limitations:['レンダラ基準画像。露光・歪み・ノイズは未校正','編集表示の単木上限を超えるシーンでは撮影を禁止','選択中のロボットと他ロボットはRGBフレームから非表示']}};
 }
 async function observationWorker(kind,options){
- await whenReady();const src=$('#app-main').textContent,extract=k=>src.split('/*@'+k+'*/')[1].split('/*@end'+k+'*/')[0],code=['core','geo','recon','world','experiments'].map(extract).join('\n')+`\nonmessage=e=>{try{const {kind,world,scene,robot,options}=e.data;const result=kind==='scan'?TerrainExperiments.scan(world,scene,robot,options):TerrainExperiments.simulate(world,scene,options);postMessage({result});}catch(error){postMessage({error:error.message});}};`,url=URL.createObjectURL(new Blob([code],{type:'text/javascript'})),worker=new Worker(url),rev=buildRevision,edit=editRevision;
+ await whenReady();const src=$('#app-main').textContent,extract=k=>src.split('/*@'+k+'*/')[1].split('/*@end'+k+'*/')[0],code=['core','geo','recon','world','experiments'].map(extract).join('\n')+`\nonmessage=e=>{try{const {kind,world,scene,robot,options}=e.data;const result=kind==='scan'?TerrainExperiments.scan(world,scene,robot,options):TerrainExperiments.simulate(world,scene,options);if(kind==='scan')result.observedTraversability=TerrainExperiments.observedTraversability(world,scene,robot,result);postMessage({result});}catch(error){postMessage({error:error.message});}};`,url=URL.createObjectURL(new Blob([code],{type:'text/javascript'})),worker=new Worker(url),rev=buildRevision,edit=editRevision;
  return new Promise((resolve,reject)=>{const clean=()=>{worker.terminate();URL.revokeObjectURL(url);$('#obs-stop').onclick=null;};$('#obs-stop').onclick=()=>{clean();reject(new DOMException('観測を中止しました','AbortError'));};worker.onerror=e=>{clean();reject(Error(e.message));};worker.onmessage=e=>{clean();if(rev!==buildRevision||edit!==editRevision){reject(Error('シーンが変更されたため観測結果を破棄しました'));return;}e.data.error?reject(Error(e.data.error)):resolve(e.data.result);};worker.postMessage({kind,world:WORLD,scene:JSON.parse(genJSON()),robot:robotSel(),options});});
 }
 let LAST_OBSERVATION=null,observationBusy=false;
 function initObservations(){
- const host=document.createElement('div');host.innerHTML=`<div class="modal" id="dlg-observe"><div class="sheet" style="width:min(850px,100%)"><header><h3>観測・再現実験</h3></header><div class="body"><p class="hint">選択したロボットから観測します。LiDARは静的2.5Dレイ、RGBは編集補助表示を除いたピンホール画像です。物理センサ校正やSLAMの結果ではありません。</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="obs-rgb">RGBを撮影・保存</button><button class="btn" id="obs-orb">RGBのORBを計測</button><button class="btn" id="obs-lidar">基準LiDARを生成</button><button class="btn" id="obs-replay">複数台の経路干渉を検査</button><button class="btn" id="obs-stop">中止（LiDAR／経路干渉）</button></div><p class="hint">経路干渉検査は scene.json の robots[].path（[x,y]の配列）を使用。一定速度0.5m/s・10秒の運動学モデルです。</p><pre id="obs-result" style="white-space:pre-wrap;color:var(--text);font-size:12px;max-height:430px;overflow:auto"></pre></div><footer><button class="btn" id="obs-close">閉じる</button></footer></div></div>`;document.body.appendChild(host.firstElementChild);
+ const host=document.createElement('div');host.innerHTML=`<div class="modal" id="dlg-observe"><div class="sheet" style="width:min(850px,100%)"><header><h3>観測・再現実験</h3></header><div class="body"><p class="hint">選択したロボットから観測します。LiDARは静的2.5Dレイ、RGBは編集補助表示を除いたピンホール画像です。物理センサ校正やSLAMの結果ではありません。</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="obs-rgb">RGBを撮影・保存</button><button class="btn" id="obs-orb">RGBのORBを計測</button><button class="btn" id="obs-lidar">基準LiDARを生成</button><button class="btn" id="obs-replay">複数台の経路干渉を検査</button><button class="btn" id="obs-stop">中止（LiDAR／経路干渉）</button></div><p class="hint">経路干渉検査は scene.json の robots[].path（[x,y]の配列）を使用。一定速度0.5m/s・10秒の運動学モデルです。</p><p class="hint">LiDAR地面観測：緑=支持範囲を観測し参照地形も通行可、赤=観測地面が参照判定で不可、灰=未確認。上が地図の+Y。</p><canvas id="obs-ground-map" style="display:none;width:min(100%,500px);image-rendering:pixelated"></canvas><pre id="obs-result" style="white-space:pre-wrap;color:var(--text);font-size:12px;max-height:430px;overflow:auto"></pre></div><footer><button class="btn" id="obs-close">閉じる</button></footer></div></div>`;document.body.appendChild(host.firstElementChild);
  $('#btn-observe').onclick=()=>{$('#dlg-observe').classList.add('on');$('#obs-result').textContent=S.robots.length?'対象: '+robotSel().name:'カタログからロボットを配置してください';};$('#obs-close').onclick=()=>$('#dlg-observe').classList.remove('on');
  const run=fn=>async()=>{if(observationBusy)return;if(!S.robots.length){toast('ロボットを配置してください');return;}observationBusy=true;['obs-rgb','obs-orb','obs-lidar','obs-replay'].forEach(id=>$('#'+id).disabled=true);$('#obs-result').textContent='実行中…';try{await whenReady();const r=await fn();$('#obs-result').textContent=JSON.stringify(r,null,2);}catch(e){$('#obs-result').textContent=e.message;}finally{observationBusy=false;['obs-rgb','obs-orb','obs-lidar','obs-replay'].forEach(id=>$('#'+id).disabled=false);}};
  const camera=()=>{if(WORLD.trees.length>TREES.length)throw Error('単木が編集表示上限を超えています。観測用に範囲を縮小してください');return captureCamera();};
  $('#obs-rgb').onclick=run(async()=>{const c=camera();LAST_OBSERVATION=c;dlBytes(c.metadata.robotId+'_rgb.png',canvasPNG(c.canvas),'image/png');dlBytes(c.metadata.robotId+'_camera.json',strBytes(JSON.stringify(c.metadata,null,2)),'application/json');return c.metadata;});
  $('#obs-orb').onclick=run(async()=>{const c=camera();const r=await fetch('/api/orb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:c.canvas.toDataURL('image/png'),maxFeatures:2000})});let data;try{data=await r.json();}catch(e){throw Error('ORB計測はstart_local.py経由で起動し、opencv-pythonを導入してください');}if(!r.ok)throw Error(data.error||'ORB計測失敗');const result={...data,...c.metadata};dlBytes(c.metadata.robotId+'_orb.json',strBytes(JSON.stringify(result,null,2)),'application/json');return result;});
- $('#obs-lidar').onclick=run(async()=>{const r=await observationWorker('scan',{channels:8,columns:180});dlBytes(r.robotId+'_lidar.json',strBytes(JSON.stringify(r,null,1)),'application/json');return {model:r.model,rays:r.rays.length,returns:r.points.length,limitations:r.limitations};});
+ $('#obs-lidar').onclick=run(async()=>{const r=await observationWorker('scan',{channels:16,columns:180});
+ const m=r.observedTraversability,cv=$('#obs-ground-map');cv.width=m.width;cv.height=m.height;cv.style.display='block';
+ const ctx=cv.getContext('2d'),im=ctx.createImageData(m.width,m.height);
+ for(let y=0;y<m.height;y++)for(let x=0;x<m.width;x++){const v=m.mask[y*m.width+x],k=((m.height-1-y)*m.width+x)*4,c=v===1?[40,160,90]:v===0?[200,65,55]:[180,185,195];im.data.set([...c,255],k);}
+ ctx.putImageData(im,0,0);
+dlBytes(r.robotId+'_lidar.json',strBytes(JSON.stringify(r,null,1)),'application/json');return {model:r.model,rays:r.rays.length,returns:r.points.length,mountPitchDownDeg:r.mountPitchDownDeg,observedTraversability:r.observedTraversability.summary,limitations:[...r.limitations,...r.observedTraversability.limitations]};});
  $('#obs-replay').onclick=run(async()=>{if(!S.robots.some(r=>r.path?.length>1))throw Error('robots[].pathに経路を設定してください（同梱サンプル参照）');const r=await observationWorker('simulate',{dt:.1,duration:10,speed:.5});dlBytes('multi_robot_replay.json',strBytes(JSON.stringify(r,null,1)),'application/json');return {model:r.model,frames:r.frames.length,pairEvents:r.events.length,summary:r.summary,limitations:r.limitations};});
 }
 

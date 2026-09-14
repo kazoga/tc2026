@@ -21,8 +21,10 @@ def child(parent: ET.Element, tag: str, text: object = None, **attrs: str) -> ET
     return element
 
 
-def make_robot(world: ET.Element) -> None:
+def make_robot(world: ET.Element, mid360_pitch_deg: float = 0.) -> None:
     """公開駆動諸元と仮定した搭載物による差動二輪モデルを追加する."""
+    if not math.isfinite(mid360_pitch_deg) or abs(mid360_pitch_deg) > 89:
+        raise ValueError('MID-360前下がり角は有限値で±89度以内にする')
     model = child(world, 'model', name='icart_mini')
     child(model, 'pose', '0 0 0.01 0 0 0')
     # 輪径・輪間隔は公式 param。車体・搭載物の質量慣性は未校正である。
@@ -104,7 +106,8 @@ def make_robot(world: ET.Element) -> None:
         child(ranges, tag, value)
     mid = copy.deepcopy(sensor)
     mid.set('name', 'mid360')
-    mid.find('pose').text = '0.1 0 0.39 0 0 0'
+    # SDFは前方+X・上+Z。+Y軸回りの正のpitchが前下がり。
+    mid.find('pose').text = f'0.1 0 0.39 0 {math.radians(mid360_pitch_deg):.12g} 0'
     mid.find('topic').text = '/mid360/livox/lidar'
     mid.find('update_rate').text = '10'
     mid.find('lidar/scan/horizontal/samples').text = '360'
@@ -133,8 +136,10 @@ def make_robot(world: ET.Element) -> None:
     child(pose, 'update_frequency', 40)
 
 
-def build(output: Path, scenario: str) -> None:
+def build(output: Path, scenario: str, mid360_pitch_deg: float = 0.) -> None:
     """シーン、衝突メッシュ、world、経路を同時生成する."""
+    if not math.isfinite(mid360_pitch_deg) or abs(mid360_pitch_deg) > 89:
+        raise ValueError('MID-360前下がり角は有限値で±89度以内にする')
     output.mkdir(parents=True, exist_ok=True)
     points = [(float(x), 0.0) for x in range(0, 31, 3)]
     if scenario == 'crank':
@@ -155,14 +160,17 @@ def build(output: Path, scenario: str) -> None:
                  sea=dict(level=-10), objects=objects,
                  vegetation=dict(trees=[dict(id='tree', x=8, y=-6, h=6, r=1.5)]),
                  robots=[dict(id='icart_mini', type='ugv', x=0, y=0, yaw=-math.pi/2,
-                              path=points, mobility=dict(width=.35, length=.45))])
+                              path=points, mobility=dict(width=.35, length=.45),
+                              sensors=dict(lidarPitchDownDeg=mid360_pitch_deg,
+                                           lidarMinElevationDeg=-7, lidarMaxElevationDeg=52,
+                                           height=.6))])
     (output/'scene.json').write_text(json.dumps(scene, ensure_ascii=False), encoding='utf-8')
     subprocess.run(['node', str(Path(__file__).parent/'terrain3d/export_world.cjs'),
                     str(output/'scene.json'), str(output)], check=True)
     tree = ET.parse(output/'environment.sdf')
     world = tree.getroot().find('world')
     child(world, 'plugin', filename='gz-sim-contact-system', name='gz::sim::systems::Contact')
-    make_robot(world)
+    make_robot(world, mid360_pitch_deg)
     ET.indent(tree)
     tree.write(output/'trial.sdf', encoding='utf-8', xml_declaration=True)
     with (output/'route.csv').open('w', newline='') as stream:
@@ -177,8 +185,9 @@ def build(output: Path, scenario: str) -> None:
                              3,3,0,0,1,-1])
     (output/'trial.json').write_text(json.dumps(dict(scenario=scenario, points=points,
         goal=points[-1], robot=dict(wheel_radius=.07455, tread=.30737),
+        mid360_pitch_deg=mid360_pitch_deg,
         limitations=['合成平坦地形', '搭載物・接地摩擦・慣性は未校正',
-                     'Top-URG は理想 GPU ray。Mid-360/SLAM/GNSS は含まない'])), encoding='utf-8')
+                     'Top-URG/MID-360は理想GPU ray。SLAM/GNSSは別途追加'])), encoding='utf-8')
 
 
 if __name__ == '__main__':
@@ -186,5 +195,7 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--scenario', choices=['straight', 'crank', 'blocker', 'contact_probe'],
                         default='straight')
+    parser.add_argument('--mid360-pitch-deg', type=float, default=0.,
+                        help='MID-360の前下がり角。度、正が下向き（例: 25）')
     arguments = parser.parse_args()
-    build(arguments.output, arguments.scenario)
+    build(arguments.output, arguments.scenario, arguments.mid360_pitch_deg)
