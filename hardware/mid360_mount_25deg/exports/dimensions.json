@@ -1,0 +1,35 @@
+{
+  "angle_down_deg": 25.0,
+  "units": "mm",
+  "printer_part_count": 1,
+  "bracket_bounds_mm": [
+    154.00000020000007,
+    108.75693464439806,
+    77.35795065393977
+  ],
+  "bracket_volume_cm3": 86.56371415190426,
+  "base_hole_pitch_mm": 134,
+  "base_hole_diameter_mm": 5.5,
+  "plate_size_mm": [
+    120,
+    140,
+    3
+  ],
+  "sensor_hole_pattern_mm": [
+    36,
+    48
+  ],
+  "sensor_hole_diameter_mm": 3.4,
+  "plate_support_hole_pattern_mm": [
+    100,
+    68
+  ],
+  "plate_support_hole_diameter_mm": 4.5,
+  "plate_exposed_top_area_estimate_mm2": 12575,
+  "all_brep_valid": true,
+  "single_printed_solid": true,
+  "assumed_frame": "MISUMI HFS5 top slot, M5 nuts; beam top width >=20mm",
+  "fit_verified_on_hardware": false,
+  "thermal_verified": false,
+  "strength_verified": false
+}
