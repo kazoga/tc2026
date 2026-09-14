@@ -261,68 +261,38 @@ ros2 launch rtk_gps_um982 rtk_gps_um982.launch.py \
 
 ### 13.1 全体方針
 
-UM982 の PPS は **Lidar 側にのみ** 配線し、PC への PPS 配線は行わない構成を前提とする
-(物理配線困難・USB-Serial 経由では精度が出ないため)。代わりに **GPS msg と Lidar packet を
-両方 GPS UTC でスタンプ** することで、PC system clock の精度に依存せず両者を直接同期する。
+MID-360への既存Ethernet配線を使うPTP案を第一候補とする。GNSSでPC時計を合わせ、
+PCをPTPマスター、MID-360をスレーブにする。追加配線が可能ならPPS＋RMC直接入力も選べる。
+PPS単独では日付・秒番号は確定しない。具体的な接続・設定・検証条件は
+[ワークスペースの同期提案](../../../docs/GNSS_FASTLIO時刻同期提案.md)を参照する。
 
-```
-                   ┌── PPS + NMEA ──► Lidar (内部時計を PPS 同期 → GPS UTC stamp)
-   UM982 ──────────┤
-                   └── Serial ──► rtk_gps_um982_node
-                                       │
-                                       ├─► msg.header.stamp = GNSS UTC
-                                       │
-                                       └─► (任意) gpsd ──► chrony (NMEA only refclock)
-                                                              │
-                                                              ▼
-                                                       system clock
-                                                       (±30〜50ms)
-```
+ROSメッセージは計測時刻をUTC由来のUnix epochで保持する。
+現行のGGA日付はPC時計から補われ、方位と位置の計測epochも厳密には結合されていない。
+PC時計は融合の待機・鮮度判定にも使われるため、独立に同期と監視が必要である。
+PPSの仕様だけからアプリケーション全体のμs精度を保証しない。
 
-- **GPS msg と Lidar packet は同じ GPS UTC epoch** → `message_filters::sync` 等で直接同期可
-- system clock は gpsd+chrony で NMEA only 同期 (PPS なし) → ±30〜50ms。GPS/Lidar 以外の
-  センサ (カメラ等) も GPS 時刻に近づく
-- chrony PPS 同期がなくても **GPS と Lidar の相対同期は μs 級** を維持
+### 13.2 stamp_sourceパラメータの現実装
 
-### 13.2 `stamp_source` パラメータ
+| 値 | 動作 |
+| --- | --- |
+| `gnss_utc` | `PositionData.timestamp`に`transport_delay_ms`を加算する |
+| `ros_time` | `clock.now()`で受信処理時刻を付ける |
+| `pps_edge` | 未実装。現状は`clock.now()`へフォールバックする |
 
-| 値           | 内容                                                                       |
-| ------------ | -------------------------------------------------------------------------- |
-| `gnss_utc` (既定) | `PositionData.timestamp` (NMEA UTC, Unix epoch) を `header.stamp` に。Lidar との直接同期が目的のときはこれ |
-| `ros_time`   | `node.get_clock().now()`。chrony PPS 同期済 (= system clock = GPS time) の環境用 |
-| `pps_edge`   | 受信フレーム内タイムタグ + 直前 PPS エッジを再構築。実装はフェーズ 2 以降 (要 /dev/pps0) |
+`transport_delay_ms`は原則0とする。観測時刻が既にGNSS由来なら、シリアル通信遅延の
+減算は計測時刻を過去へずらす誤補正になる。非ゼロ値は観測epochの固定ずれを実測した場合に限る。
 
-`gnss_utc` 使用時、シリアル受信からコールバックまでの遅延 (~5〜20ms 程度) を補正したい場合は
-`transport_delay_ms` を負方向に与える (例: 受信に 10ms かかるなら `transport_delay_ms: -10`)。
+### 13.3 PC時計の設定
 
-### 13.3 system clock 側の設定 (推奨手順)
+`scripts/chrony-gpsd.conf.sample`はNMEA SHM入力の手動設定例であり、自動導入しない。
+同じシリアルをdriverとgpsdで競合して読まない。専用ポートまたは単一所有者による分配を使う。
+`chronyc sources -v`の`*`、`chronyc tracking`のoffsetとLeap statusを確認する。
+`#?`は未選択・同期不能等を示し、同期成功とは判定しない。精度は実測する。
 
-パッケージ同梱の `scripts/` に以下を置き、README で適用手順を説明する。実際の `/etc/` 配置は
-パッケージインストールでは行わず手動。
+### 13.4 今後の実装
 
-```
-scripts/
-├── chrony-gpsd.conf.sample      # chrony.conf 追記分 (refclock SHM 0 ...)
-├── gpsd.default.sample          # /etc/default/gpsd の例 (DEVICES=/dev/ttyUSB0)
-└── README.md                    # 適用手順 (apt install / systemctl enable)
-```
-
-設定の骨子 (PPS なし、NMEA SHM のみ):
-
-```
-# /etc/chrony/chrony.conf 追記分
-refclock SHM 0 refid GPS precision 1e-1 offset 0.0 delay 0.2
-```
-
-期待精度: ±30〜50ms (PPS あり時の ±1μs に比べると粗いが、ROS msg 同士の同期には十分)。
-
-### 13.4 将来 PPS を引けるようになった場合
-
-- PC が RPi/Jetson なら GPIO + pps-gpio overlay で `/dev/pps0` を作る
-- 計算機を変える必要がなければ、別途 GPSDO 付き Stratum 1 NTP サーバを LAN に立てる
-- Lidar が PTP grandmaster 対応なら PTP 経由で PC 時計同期
-
-いずれの場合も `stamp_source: ros_time` に切り替えれば node の修正なしで対応可能。
+RMC/ZDAによる日付確定、位置/方位epoch結合、同期喪失の通知・拒否、PC時計監視、
+再同期時の履歴リセットを追加する。実機時刻や配線はこの設計書では変更しない。
 
 ---
 

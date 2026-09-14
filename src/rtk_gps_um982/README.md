@@ -83,9 +83,12 @@ ros2 run rtk_gps_um982 rtk_gps_um982_node \
 
 ## 時刻同期
 
-PPS は **Lidar 側にのみ** 配線する前提。GPS msg は GNSS UTC を `header.stamp` に
-入れるため、Lidar packet (PPS 同期) と同じ epoch で比較できる。
-詳細は [`docs/design.md`](docs/design.md) §13 と [`scripts/README.md`](scripts/README.md) を参照。
+MID-360はPTP（Ethernet経由）、またはPPS＋RMC（UART経由）で同期する。
+Ethernetと電源のみを維持する場合は、GNSSでPC時計を合わせてPCをPTPマスターにする。
+`stamp_source=gnss_utc`、`transport_delay_ms=0`を初期値とし、受信遅延を観測時刻から引かない。
+現実装にはGGAの日付のPC依存と位置・方位のepoch結合不足があり、同期精度は未検証である。
+詳細は[時刻同期提案](../../docs/GNSS_FASTLIO時刻同期提案.md)、
+[`docs/design.md`](docs/design.md) §13、[`scripts/README.md`](scripts/README.md)を参照する。
 
 ## トラブルシューティング
 

@@ -1,32 +1,23 @@
-# scripts/ ― system 時刻同期サンプル
+# scripts/ — system時刻同期サンプル
 
-これらのファイルは **手動配置** が前提のサンプルです。`colcon build` でシステムに
-インストールされることはありません。
+`chrony-gpsd.conf.sample`は手動設定例であり、colconによるシステムへの自動導入は行わない。
+全体構成は[同期提案](../../../docs/GNSS_FASTLIO時刻同期提案.md)を参照する。
 
-## 構成 (PPS なし、NMEA only)
+## 入力の共有
 
-UM982 を **シリアル 2 系統に分配** し、片方を `rtk_gps_um982_node`、もう片方を
-`gpsd` に渡します。chrony は gpsd の共有メモリから時刻を読み取ります。
+GNSS driverとgpsdで同じttyを同時に開かない。別COMを用いるか、単一の受信処理が
+NMEAを複製する仕組みを追加する。既存driverにはgpsd/chrony向け配信機能がない。
+単なるsocatの直列接続だけでは複数の読み手への複製は成立しない。
+NTRIP送信や設定コマンドの書き込みも、シリアル所有者に集約する。
 
-```
-UM982 ──tty── socat (pty分配) ──┬── /dev/ttyUSB-ROS ──► rtk_gps_um982_node
-                                 └── /dev/ttyUSB-GPSD ──► gpsd ──► chrony (SHM 0)
-```
+## 適用と確認
 
-または、ROS ノード側を停止しているときだけ chrony 同期を有効化する運用でも可。
+1. chrony/gpsdを導入し、専用ポートまたは実装済みの分配先を決める。
+2. gpsdの入力デバイスとSHM出力を確認する。
+3. サンプルを参考にchronyのrefclockを設定する。遅延値は実測して調整する。
+4. `chronyc sources -v`の選択済み`*`、`chronyc tracking`のoffsetとLeap statusを確認する。
+   `#? GPS`は同期成功を意味しない。
+5. 時計のstepをROS起動前に完了し、起動後もoffsetを監視する。
 
-## 適用手順 (例)
-
-1. パッケージインストール
-   ```bash
-   sudo apt install chrony gpsd gpsd-clients
-   ```
-2. `chrony-gpsd.conf.sample` を `/etc/chrony/chrony.conf` の末尾に追記
-3. `/etc/default/gpsd` で `DEVICES=` を設定 (PTY 分配時はそのデバイス名)
-4. `sudo systemctl restart gpsd chrony`
-5. 同期確認: `chronyc sources` で `#? GPS` が出ること
-
-## 期待精度
-
-- PPS なし: ±30〜50 ms
-- 詳細は `../docs/design.md` §13 を参照
+NMEAのみの精度はUSB・通信負荷等に依存する。必要精度に達しなければ対応PPS入力を追加する。
+同一ttyの競合を避けるためだけに運用中の時刻同期を停止する構成は採用しない。
