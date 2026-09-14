@@ -63,19 +63,19 @@ def render(parts, output: Path, angle: float) -> None:
                'side':'側面：前方へ25°下げる',
                'printed_part':'3Dプリント部品：一体ブラケット'}[view]
         d.text((75,45),title,font=font(48),fill=(23,40,62))
-        d.text((75,115),'HFS5横梁・上面溝/M5固定を想定 ｜ 現物適合は未確認',font=font(26),fill=(71,84,102))
+        d.text((75,115),'JTABS 150×60×2 mm対応 ｜ HFS5横梁・上面溝/M5固定',font=font(26),fill=(71,84,102))
         if view=='side':
             d.line((1060,990,1450,990),fill=(219,104,48),width=8)
             d.polygon([(1450,990),(1418,973),(1418,1007)],fill=(219,104,48))
             d.text((1140,1020),'ロボット前方',font=font(30),fill=(148,60,20))
             d.text((80,1020),'横梁は紙面の奥行方向',font=font(30),fill=(40,55,74))
         elif view=='assembly':
-            labels=[('印刷ブラケット',colors['bracket']),('アルミ板 120×140×3 mm',colors['aluminum_plate']),('MID-360簡略外形',colors['sensor_envelope'])]
+            labels=[('印刷ブラケット',colors['bracket']),('既存JTABS 150×60×2 mm',colors['aluminum_plate']),('MID-360簡略外形',colors['sensor_envelope'])]
             for i,(label,color) in enumerate(labels):
                 x=75+i*500
                 d.rectangle((x,1045,x+25,1070),fill=color)
                 d.text((x+40,1035),label,font=font(26),fill=(23,40,62))
         else:
             d.text((75,1040),'底面を下に印刷。上桟の下面はサポート要。単位：mm',font=font(28),fill=(23,40,62))
-        d.text((75,1140),'設計試作 v1 ｜ アルミ板・センサ・フレームは印刷対象外',font=font(23),fill=(88,102,117))
+        d.text((75,1140),'設計試作 v2 ｜ 実機適合・強度未確認。既存板はメーカー放熱推奨条件未達',font=font(23),fill=(88,102,117))
         im.save(output/(view+'.png'))

@@ -6,47 +6,58 @@ import argparse
 
 import cadquery as cq
 
+PLATE_PART_NUMBER = 'JTABS-AM-A60-B150-T2-X30-G100-N5-L6-V48-W36-NA3-CC10'
+
+
+def existing_plate():
+    """MISUMI図面のAを前後Y、Bを横Xに向け、板中心を原点にする。"""
+    outline = [(-65, -30), (65, -30), (75, -20), (75, 20),
+               (65, 30), (-65, 30), (-75, 20), (-75, -20)]
+    plate = cq.Workplane('XY').polyline(outline).close().extrude(2)
+    # N5はφ5.5。Y（図面）は省略され、(B-G)/2=25。
+    for x in (-50, 50):
+        plate = plate.cut(cq.Workplane('XY').center(x, 0).circle(2.75).extrude(3))
+    # NA3はφ3.5。S省略=(B-W)/2=57。A方向L6とL+V54。
+    for x in (-18, 18):
+        for y in (-24, 24):
+            plate = plate.cut(cq.Workplane('XY').center(x, y).circle(1.75).extrude(3))
+    return plate
+
 
 def build(output: Path) -> dict:
     angle = 25.
     output.mkdir(parents=True, exist_ok=True)
-    height = 52.
+    height = 30.
     c = math.cos(math.radians(angle))
     slope = math.tan(math.radians(angle))
     # 上側の支持面: z = height - y * tan(angle)
-    end = 60*c
+    end = 27*c
     outer = [(-end, 0), (end, 0), (end, height-end*slope),
              (-end, height+end*slope)]
-    inner_end = 46*c
+    inner_end = 20*c
     inner = [(-inner_end, 6), (inner_end, 6),
              (inner_end, height-inner_end*slope-8/c),
              (-inner_end, height+inner_end*slope-8/c)]
-    base = cq.Workplane('XY').box(154, 24, 8, centered=(True, True, False))
+    base = cq.Workplane('XY').box(190, 24, 8, centered=(True, True, False))
     for x in (-50, 50):
-        side = cq.Workplane('YZ', origin=(x-6, 0, 0)).polyline(outer).close().extrude(12)
-        window = cq.Workplane('YZ', origin=(x-7, 0, 0)).polyline(inner).close().extrude(14)
+        side = cq.Workplane('YZ', origin=(x-8, 0, 0)).polyline(outer).close().extrude(16)
+        window = cq.Workplane('YZ', origin=(x-9, 0, 0)).polyline(inner).close().extrude(18)
         base = base.union(side.cut(window))
-    for x in (-67, 67):
+    for x in (-85, 85):
         base = base.cut(cq.Workplane('XY').center(x, 0).circle(2.75).extrude(10))
 
     def tilt(shape):
         return shape.rotate((0, 0, 0), (1, 0, 0), -angle).translate((0, 0, height))
 
-    plate = cq.Workplane('XY').box(120, 140, 3, centered=(True, True, False))
+    plate = existing_plate()
     for x in (-50, 50):
-        for y in (-34, 34):
-            # M4はアルミ板と上桟を貫通。下面の開口からワッシャー・ナットを入れる。
-            hole = cq.Workplane('XY', origin=(x, y, -20)).circle(2.25).extrude(25)
-            base = base.cut(tilt(hole))
-            plate = plate.cut(hole)
-    # 公式底面図の48×36を回転し、ケーブルを後方に向ける。
-    for x in (-18, 18):
-        for y in (-24, 24):
-            plate = plate.cut(cq.Workplane('XY').center(x, y).circle(1.7).extrude(4))
+        # 既存板のN5穴2個で固定。下の窓からM5ナットを入れる。
+        hole = cq.Workplane('XY', origin=(x, 0, -16)).circle(2.75).extrude(20)
+        base = base.cut(tilt(hole))
 
     # 外観・干渉検討用の簡略モデル。メーカーの詳細形状ではない。
-    body = cq.Workplane('XY', origin=(0, 0, 3)).box(65, 65, 39.5, centered=(True, True, False))
-    dome = cq.Workplane('XY', origin=(0, 0, 42.5)).circle(25).extrude(20.5)
+    body = cq.Workplane('XY', origin=(0, 0, 2)).box(65, 65, 39.5, centered=(True, True, False))
+    dome = cq.Workplane('XY', origin=(0, 0, 41.5)).circle(25).extrude(20.5)
     connector = cq.Workplane('XZ', origin=(0, -32.5, 17)).circle(7).extrude(8)
     sensor = tilt(body.union(dome).union(connector))
     beam = cq.Workplane('XY', origin=(0, 0, -20)).box(220, 20, 20, centered=(True, True, False))
@@ -62,13 +73,12 @@ def build(output: Path) -> dict:
         raise RuntimeError('印刷部品が一体につながっていない')
     cq.exporters.export(base, str(output/'bracket_25deg.stl'), tolerance=.05, angularTolerance=.1)
     cq.exporters.export(base, str(output/'bracket_25deg.step'))
-    cq.exporters.export(plate, str(output/'aluminum_plate_120x140x3.step'))
-    # 1:1加工図に使う2D輪郭（底面平面を直接投影し穴を保持）。
-    cq.exporters.export(plate.faces('<Z').wires(), str(output/'aluminum_plate_drill.dxf'))
+    cq.exporters.export(plate, str(output/'misumi_jtabs_reference.step'))
+    cq.exporters.export(plate.faces('<Z').wires(), str(output/'misumi_jtabs_reference.dxf'))
     assembly = cq.Assembly()
     for name, shape in parts.items():
         assembly.add(shape, name=name)
-    assembly.save(str(output/'assembly_reference.step'))
+    assembly.export(str(output/'assembly_reference.step'))
     cq.exporters.export(cq.Compound.makeCompound(list(parts.values())),
                         str(output/'assembly_reference.stl'), tolerance=.1)
     from preview_model import render
@@ -77,11 +87,14 @@ def build(output: Path) -> dict:
     results = dict(angle_down_deg=angle, units='mm', printer_part_count=1,
                    bracket_bounds_mm=[bounds.xlen,bounds.ylen,bounds.zlen],
                    bracket_volume_cm3=base.val().Volume()/1000,
-                   base_hole_pitch_mm=134, base_hole_diameter_mm=5.5,
-                   plate_size_mm=[120,140,3], sensor_hole_pattern_mm=[36,48],
-                   sensor_hole_diameter_mm=3.4, plate_support_hole_pattern_mm=[100,68],
-                   plate_support_hole_diameter_mm=4.5,
-                   plate_exposed_top_area_estimate_mm2=120*140-65*65,
+                   base_hole_pitch_mm=170, base_hole_diameter_mm=5.5,
+                   plate_part_number=PLATE_PART_NUMBER,
+                   plate_size_mm=[150,60,2], plate_corner_chamfer_mm=10,
+                   sensor_hole_pattern_mm=[36,48], sensor_hole_diameter_mm=3.5,
+                   plate_support_hole_count=2, plate_support_hole_pitch_mm=100,
+                   plate_support_hole_diameter_mm=5.5,
+                   plate_exposed_top_area_estimate_mm2=150*60-4*10*10/2-65*60-2*math.pi*2.75**2,
+                   manufacturer_thermal_recommendation_met=False,
                    all_brep_valid=True, single_printed_solid=True,
                    assumed_frame='MISUMI HFS5 top slot, M5 nuts; beam top width >=20mm',
                    fit_verified_on_hardware=False, thermal_verified=False, strength_verified=False)

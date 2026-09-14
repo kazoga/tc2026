@@ -3,29 +3,30 @@
   "units": "mm",
   "printer_part_count": 1,
   "bracket_bounds_mm": [
-    154.00000020000007,
-    108.75693464439806,
-    77.35795065393977
+    190.00000020000007,
+    48.940620699979185,
+    41.41154801649666
   ],
-  "bracket_volume_cm3": 86.56371415190426,
-  "base_hole_pitch_mm": 134,
+  "bracket_volume_cm3": 60.492955040045324,
+  "base_hole_pitch_mm": 170,
   "base_hole_diameter_mm": 5.5,
+  "plate_part_number": "JTABS-AM-A60-B150-T2-X30-G100-N5-L6-V48-W36-NA3-CC10",
   "plate_size_mm": [
-    120,
-    140,
-    3
+    150,
+    60,
+    2
   ],
+  "plate_corner_chamfer_mm": 10,
   "sensor_hole_pattern_mm": [
     36,
     48
   ],
-  "sensor_hole_diameter_mm": 3.4,
-  "plate_support_hole_pattern_mm": [
-    100,
-    68
-  ],
-  "plate_support_hole_diameter_mm": 4.5,
-  "plate_exposed_top_area_estimate_mm2": 12575,
+  "sensor_hole_diameter_mm": 3.5,
+  "plate_support_hole_count": 2,
+  "plate_support_hole_pitch_mm": 100,
+  "plate_support_hole_diameter_mm": 5.5,
+  "plate_exposed_top_area_estimate_mm2": 4852.483411114455,
+  "manufacturer_thermal_recommendation_met": false,
   "all_brep_valid": true,
   "single_printed_solid": true,
   "assumed_frame": "MISUMI HFS5 top slot, M5 nuts; beam top width >=20mm",
