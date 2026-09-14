@@ -1,6 +1,7 @@
 """地形生成物と共通走行設定を結ぶ、ROS非依存のセッション設定."""
 import argparse
 import json
+import math
 import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -33,6 +34,12 @@ def load_session(filename: Path, environment: str) -> dict:
             if not Path(data[key]).exists():
                 raise ValueError(key+'が存在しない')
     if environment == 'simulation':
+        density = float(data.get('pedestrian_density', .1))
+        if not math.isfinite(density) or density < 0:
+            raise ValueError('pedestrian_density は有限の非負値が必要')
+        fix_radius = float(data.get('gnss_start_fix_radius_m', 10.))
+        if not math.isfinite(fix_radius) or fix_radius < 0:
+            raise ValueError('gnss_start_fix_radius_m は有限の非負値が必要')
         for name in ['trial.sdf', 'world.json', 'trial.json']:
             if not data.get('trial_directory') or not (Path(data['trial_directory'])/name).is_file():
                 raise ValueError('IMU追加済みtrial_directoryに'+name+'が必要')
@@ -90,6 +97,7 @@ def prepare(trial: Path, output: Path) -> None:
         trial_directory=os.path.relpath(trial.resolve(), output.resolve()),
         start_label=route_rows[0]['label'], goal_label=route_rows[-1]['label'],
         noise_profile='conservative', noise_seed=1, building_gnss=True,
+        gnss_start_fix_radius_m=10.0,
         hardware_launch='', fastlio_config=''), allow_unicode=True))
 
 

@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path, PurePosixPath
 import shutil
 import tarfile
@@ -80,13 +81,21 @@ def main() -> None:
     parser.add_argument('--start-ui', action='store_true', help='運行UIも起動する')
     parser.add_argument('--domain-id', type=int, choices=range(1, 233), default=86,
                         metavar='1..232', help='模擬環境のDDS domain（既定86）')
+    parser.add_argument('--pedestrian-density', type=float, default=.1,
+                        help='歩行者の目標密度 [人/100m²]。0で追加停止。既定0.1')
+    parser.add_argument('--pedestrian-seed', type=int, default=42)
     args = parser.parse_args()
+    if not math.isfinite(args.pedestrian_density) or args.pedestrian_density < 0:
+        parser.error('--pedestrian-density は有限の非負値が必要')
     try:
         session = prepare_bundle(bundle_directory(), args.output)
     except (ValueError, OSError, KeyError, tarfile.TarError) as error:
         parser.exit(1, str(error)+'\n')
     data = json.loads(session.read_text())
     data['simulation_domain_id'] = args.domain_id
+    data['pedestrian_density'] = args.pedestrian_density
+    data['pedestrian_seed'] = args.pedestrian_seed
+    data['gnss_start_fix_radius_m'] = 10.0
     session.write_text(json.dumps(data, indent=2)+'\n')
     print('固定地図を展開しました: '+str(session), flush=True)
     if args.prepare_only:

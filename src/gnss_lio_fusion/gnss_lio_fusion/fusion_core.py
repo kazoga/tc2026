@@ -200,7 +200,7 @@ class FusionFilter:
                     heading_sigma_deg=math.degrees(math.sqrt(self.p[2, 2])),
                     heading_accepted=self.heading.accepted, heading_rejected=self.heading.rejected,
                     heading_reason=self.heading.reason,
-                    speed_limit_mps=(.9 if recent and sigma < .5 and self.p[2, 2] < math.radians(5)**2
-                                     else .4 if sigma < 1. else .25),
+                    speed_limit_mps=(1.1 if recent and sigma < .5 and self.p[2, 2] < math.radians(5)**2
+                                     else .6 if sigma < 1. else .25),
                     baseline=self.baseline_status, accepted_gps=self.accepted_gps,
                     rejected_gps=self.rejected_gps, rejected_lio=self.rejected_lio)

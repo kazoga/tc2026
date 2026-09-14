@@ -23,7 +23,8 @@ def prepare(output: Path) -> None:
     archives.mkdir(parents=True,exist_ok=True)
     runtime.mkdir(exist_ok=True)
     command = ['apt-get','--print-uris','--yes','--download-only','install',
-               'ros-jazzy-ros-gz-sim','ros-jazzy-ros-gz-bridge','ruby']
+               'ros-jazzy-ros-gz-sim','ros-jazzy-ros-gz-bridge','ruby',
+               'python3-shapely','python3-protobuf']
     listing = subprocess.check_output(command,text=True)
     entries = [shlex.split(line) for line in listing.splitlines() if line.startswith("'")]
     (output/'apt-resolution.txt').write_text(listing)

@@ -55,9 +55,15 @@ def setup(context) -> list:
                     node('obstacle_route_sim', 'gnss_simulator_node.py', [projection, {
                         'buildings_json': str(directory/'world.json') if data.get('building_gnss', True) else '',
                         'heading_reference': 'antenna_baseline',
+                        'start_fix_radius_m': float(data.get('gnss_start_fix_radius_m', 10.)),
                         'baseline_sigma_m': .002, 'baseline_float_sigma_m': .04,
                         **{key: float(data.get(key, 0.)) for key in [
                             'heading_fault_deg', 'heading_fault_after_s', 'heading_fault_duration_s']}}])]
+        actions.append(node('obstacle_route_sim', 'pedestrian_simulator_node.py', [{
+            'world_sdf': data.get('trial_sdf', str(directory/'trial.sdf')),
+            'world_json': str(directory/'world.json'),
+            'density': float(data.get('pedestrian_density', .1)),
+            'seed': int(data.get('pedestrian_seed', 42))}]))
         fastlio = str(share/'params/fastlio_gazebo.yaml')
     else:
         # 接続先・デバイス設定は既存の実機launchへ委譲する。空なら別起動のドライバを使う。

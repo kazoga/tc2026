@@ -30,11 +30,12 @@ class GnssSimulator(Node):
                         baseline_nominal_m=.5, baseline_sigma_m=0., baseline_float_sigma_m=0.,
                         baseline_shift_m=0., baseline_shift_after_s=0.,
                         heading_fault_deg=0., heading_fault_after_s=0., heading_fault_duration_s=0.,
-                        heading_reference='vehicle_forward')
+                        heading_reference='vehicle_forward', start_fix_radius_m=0.)
         self.values = {k: self.declare_parameter(k, v).value for k, v in defaults.items()}
         for key in ['horizontal_sigma_m', 'vertical_sigma_m', 'heading_sigma_deg',
                     'latency_sec', 'dropout_sec', 'dropout_duration_sec',
-                    'baseline_sigma_m', 'baseline_float_sigma_m', 'baseline_shift_after_s']:
+                    'baseline_sigma_m', 'baseline_float_sigma_m', 'baseline_shift_after_s',
+                    'start_fix_radius_m']:
             if not math.isfinite(self.values[key]) or self.values[key] < 0:
                 raise ValueError(key+' は有限の非負値が必要')
         if not all(math.isfinite(self.values[k]) for k in ['baseline_nominal_m', 'baseline_shift_m']):
@@ -106,6 +107,12 @@ class GnssSimulator(Node):
             yaw += math.pi
         effect = self.environment.sample(t.translation.x,t.translation.y,
             1/self.values['rate_hz']) if getattr(self,'environment',None) else None
+        # A fixed region around the first valid robot position, not a region that follows it.
+        if getattr(self, 'start_xy', None) is None:
+            self.start_xy = (t.translation.x, t.translation.y)
+        radius = self.values.get('start_fix_radius_m', 0.)
+        if radius > 0 and math.dist(self.start_xy, (t.translation.x, t.translation.y)) <= radius:
+            effect = None
         floating = bool(effect and effect['floating'])
         heading_sigma = self.values.get('float_heading_sigma_deg',5.) if floating else self.values['heading_sigma_deg']
         yaw += math.radians(self.random.gauss(0, heading_sigma))

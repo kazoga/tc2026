@@ -105,3 +105,18 @@ def test_nonfinite_baseline_configuration_is_rejected_before_learning() -> None:
         AdaptiveBaseline(BaselineConfig(adapt_tau_s=math.nan))
     with pytest.raises(ValueError):
         AdaptiveBaseline(BaselineConfig(min_satellites=0))
+
+
+def test_speed_limit_after_float_and_uncertainty_growth() -> None:
+    f = initialized()
+    f.p = np.diag([.15**2, .15**2, math.radians(1.)**2])
+    assert f.diagnostics(0.)['speed_limit_mps'] == pytest.approx(1.1)
+    # FLOAT observations outlast the last FIX, while relative motion remains valid.
+    for i in range(1, 21):
+        stamp = i * .1
+        assert f.advance(stamp, np.zeros(3))
+        assert f.observe_gps(stamp, np.zeros(3), 3, 20, .5, .36, 5.)
+    assert f.diagnostics(2.)['speed_limit_mps'] == pytest.approx(.6)
+    # The more restrictive tier still applies at one metre of position uncertainty.
+    f.p[:2, :2] = np.eye(2)
+    assert f.diagnostics(2.)['speed_limit_mps'] == pytest.approx(.25)

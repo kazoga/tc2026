@@ -63,6 +63,7 @@ install(
     tools/evaluate_fusion_replay.py
     tools/evaluate_heading_replay.py
     tools/build_geographic_trial.py
+    tools/pedestrian_simulator_node.py
     tools/gnss_simulator_node.py
     tools/build_terrain_trial.py
     tools/evaluate_terrain_trial.py
@@ -73,6 +74,7 @@ install(
 
 install(
   FILES
+    tools/pedestrian_core.py
     tools/gnss_environment_core.py
     tools/lio_noise_core.py
     tools/lio_evaluation_core.py
@@ -84,6 +86,7 @@ install(
 
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_pedestrians tests/test_pedestrians.py)
   ament_add_pytest_test(test_installed_programs tests/test_installed_programs.py)
   ament_add_pytest_test(test_route_corridor tests/test_route_corridor.py)
   ament_add_pytest_test(test_full_lio_review tests/test_full_lio_review.py)

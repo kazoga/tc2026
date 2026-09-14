@@ -4,7 +4,7 @@ terrain_runtime_root=$(realpath "${1:?deb 展開ディレクトリを指定し�
 terrain_ros_prefix="$terrain_runtime_root/opt/ros/${ROS_DISTRO:-jazzy}"
 export PATH="$terrain_runtime_root/usr/bin:$terrain_ros_prefix/opt/gz_tools_vendor/bin:$PATH"
 export AMENT_PREFIX_PATH="$terrain_ros_prefix:${AMENT_PREFIX_PATH:-}"
-export PYTHONPATH="$terrain_ros_prefix/lib/python3.12/site-packages:${PYTHONPATH:-}"
+export PYTHONPATH="$terrain_runtime_root/usr/lib/python3/dist-packages:$terrain_ros_prefix/lib/python3.12/site-packages:${PYTHONPATH:-}"
 export LD_LIBRARY_PATH="$terrain_runtime_root/usr/lib/x86_64-linux-gnu:$terrain_ros_prefix/lib:${LD_LIBRARY_PATH:-}"
 export GZ_CONFIG_PATH=""
 for terrain_vendor in "$terrain_ros_prefix"/opt/*; do

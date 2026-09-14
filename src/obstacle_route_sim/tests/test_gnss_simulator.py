@@ -101,3 +101,22 @@ def test_um982_raw_heading_is_master_to_slave(monkeypatch):
     assert status.heading_deg == pytest.approx(180., abs=1e-6)
     vehicle_yaw = math.radians(90-status.heading_deg+180.)
     assert math.sin(vehicle_yaw) == pytest.approx(1.)
+
+
+def test_start_fix_region_is_fixed_in_space_and_restores_building_effects(monkeypatch):
+    node = fixture(monkeypatch)
+    node.values.update(rate_hz=10., float_heading_sigma_deg=5., start_fix_radius_m=10.)
+    node.environment = SimpleNamespace(sample=lambda x,y,dt:
+        dict(floating=True,bias=(1.2,1.2),sigma_m=.6))
+    node.get_logger = lambda: SimpleNamespace(info=lambda message: None)
+    MODULE.GnssSimulator.sample(node)
+    assert node.queue[-1][2].rtk_state == node.queue[-1][2].STATE_RTK_FIX
+    assert node.queue[-1][1][0].position_covariance[0] == 0.
+    node.truth.transform.translation.x = 10.1
+    MODULE.GnssSimulator.sample(node)
+    assert node.queue[-1][2].rtk_state == node.queue[-1][2].STATE_RTK_FLOAT
+    assert node.queue[-1][1][0].position_covariance[0] == pytest.approx(1.8)
+    node.truth.transform.translation.x = 2.
+    MODULE.GnssSimulator.sample(node)
+    assert node.queue[-1][2].rtk_state == node.queue[-1][2].STATE_RTK_FIX
+    assert node.start_xy == (0., 0.)

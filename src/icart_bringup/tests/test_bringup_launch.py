@@ -52,6 +52,14 @@ def test_real_launch_has_no_simulator_and_sim_has_one_fusion(monkeypatch, tmp_pa
         assert packages.count('fast_lio') == 1
         assert ('obstacle_route_sim' in packages) == (mode == 'simulation')
         assert ('ros_gz_bridge' in packages) == (mode == 'simulation')
+        pedestrians = [item for item in captured
+                       if item['executable'] == 'pedestrian_simulator_node.py']
+        assert len(pedestrians) == int(mode == 'simulation')
+        if pedestrians:
+            assert pedestrians[0]['parameters'][0]['density'] == .1
+            gnss = next(item for item in captured if item['executable'] == 'gnss_simulator_node.py')
+            assert gnss['parameters'][1]['start_fix_radius_m'] == 10.
+            assert pedestrians[0]['parameters'][0]['world_json'] == str(tmp_path/'world.json')
         navigator = next(item for item in captured if item['package'] == 'robot_navigator')
         params = {key: value for entry in navigator['parameters'] if isinstance(entry, dict)
                   for key, value in entry.items()}
