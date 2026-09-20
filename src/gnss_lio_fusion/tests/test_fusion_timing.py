@@ -29,7 +29,10 @@ def test_lio_interpolation_uses_measurement_time_and_wraps_yaw() -> None:
 
 def test_lio_lever_arm_is_removed_before_planar_prediction() -> None:
     node = SimpleNamespace(filter=FusionFilter(), lios=deque(), events=[],
-                           values={'lio_height_m': .6, 'lio_yaw_offset_deg': 0.})
+                           values={'lio_height_m': .6, 'lio_yaw_offset_deg': 0.,
+                                   'lio_forward_m': 0., 'lio_left_m': 0.,
+                                   'lio_mount_roll_deg': 0., 'lio_mount_pitch_deg': 0.,
+                                   'lio_mount_yaw_deg': 0.})
     msg = Odometry()
     msg.header.stamp.sec = 1
     pitch = .2

@@ -170,3 +170,7 @@ GUI 表示、Joy 入力、実機走行の確認はローカル環境で行いま
 
 詳細は [`docs/drive_mode_manager_詳細設計書.md`](docs/drive_mode_manager_詳細設計書.md) と
 [`docs/ps3_joy_sim_設計書.md`](docs/ps3_joy_sim_設計書.md) を参照してください。
+
+`drive_cmd_mux_node.allow_auto_resume`（既定true）をfalseにすると、
+manualモードからのL1解放による自律復帰を禁止する。採取用共通launchで使用する。
+手動中のL1 deadmanと入力timeoutは維持し、通常の自律起動の既定動作は変えない。

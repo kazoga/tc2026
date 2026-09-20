@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from .freshness import FreshnessLevel
+from .bag_recorder import BagState
 from .launch_profile import LaunchProfileState
 
 
@@ -221,6 +222,24 @@ class GpsStateView:
 
 
 @dataclass
+class NtripStateView:
+    state: str = 'UNKNOWN'
+    host: str = ''
+    port: int = 0
+    mountpoint: str = ''
+    station_id: str = ''
+    station_label: str = ''
+    site: str = ''
+    transport_connected: bool = False
+    rtcm_bytes_total: int = 0
+    rtcm_bytes_per_s: float = 0.
+    last_rtcm_age_s: Optional[float] = None
+    reconnect_count: int = 0
+    last_error: str = ''
+    freshness: FreshnessLevel = FreshnessLevel.UNKNOWN
+
+
+@dataclass
 class LocalizationStateView:
     """自己位置の表示用データ（architecture_design.md 6.2節 LocalizationView）。"""
 
@@ -254,8 +273,10 @@ class ConsoleSnapshot:
     """PyQt5 UI / HTML UI 共通のSnapshot（architecture_design.md 8章）。"""
 
     timestamp: datetime = field(default_factory=_utc_now)
+    bag_state: BagState = field(default_factory=BagState)
     operation_state: OperationStateView = field(default_factory=OperationStateView)
     gps_state: GpsStateView = field(default_factory=GpsStateView)
+    ntrip_state: NtripStateView = field(default_factory=NtripStateView)
     fusion_state: FusionStateView = field(default_factory=FusionStateView)
     localization_state: LocalizationStateView = field(default_factory=LocalizationStateView)
     route_state: RouteView = field(default_factory=RouteView)

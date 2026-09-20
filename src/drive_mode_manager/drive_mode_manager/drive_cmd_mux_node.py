@@ -41,6 +41,7 @@ class DriveCmdMuxNode(Node):
 
     def _load_config(self) -> DriveModeConfig:
         self.declare_parameter('initial_mode', 'autonomous')
+        self.declare_parameter('allow_auto_resume', True)
         self.declare_parameter('manual_transition_trigger', 'l1_ps_button_hold')
         self.declare_parameter('manual_transition_hold_s', 2.0)
         self.declare_parameter('manual_to_auto_l1_released_s', 1.0)
@@ -58,6 +59,7 @@ class DriveCmdMuxNode(Node):
                 'l1_ps_button_hold として扱います。'
             )
         return DriveModeConfig(
+            allow_auto_resume=bool(self.get_parameter('allow_auto_resume').value),
             initial_mode=str(self.get_parameter('initial_mode').value),
             manual_transition_hold_s=float(self.get_parameter('manual_transition_hold_s').value),
             manual_to_auto_l1_released_s=float(

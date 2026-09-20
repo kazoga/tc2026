@@ -79,6 +79,8 @@ class RobotConsoleNode(Node):
     def __init__(self, core: ConsoleCore, *, node_name: str = DEFAULT_NODE_NAME) -> None:
         super().__init__(node_name)
         self._core = core
+        self.create_subscription(String, '/rtk_gps/rtk_gps_um982_node/ntrip_status',
+                                 core.update_ntrip_status, 10)
         self.create_subscription(String, '/fusion/status', self._core.update_fusion_status, 10)
         # 既存実機ドライバのprivate topicとの互換性も維持する。
         self.create_subscription(RtkStatus, '/rtk_gps/rtk_gps_um982_node/rtk_status',

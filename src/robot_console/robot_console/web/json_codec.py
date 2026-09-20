@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from ..core.event_priority import sort_by_priority
+from ..core.gnss_display import gnss_rows
 from ..core.route_adapter import traveled_waypoint_count
 from ..core.snapshot_model import (
     ConsoleSnapshot,
@@ -99,6 +100,7 @@ def build_snapshot_payload(snapshot: ConsoleSnapshot) -> Dict[str, Any]:
             'odom_topic': drive.odom_topic,
             'odom_freshness': drive.odom_freshness.value,
         },
+        'gnss_details': dict(zip(('base', 'receiver'), gnss_rows(snapshot))),
         'gps': {
             'rtk_state': gps.rtk_state,
             'num_satellites': gps.num_satellites,

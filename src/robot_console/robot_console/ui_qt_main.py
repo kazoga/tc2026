@@ -4,7 +4,7 @@
 イベントループとは別スレッドのrclpy executorを起動する
 （robot_console_gui_architecture_design.md 14.1節）。`QTimer` で
 `ConsoleCore.build_snapshot()` を定期ポーリングし、`MainWindow.update_snapshot()`
-経由で4タブへ配布する。本entry pointが正式UIであり、旧tkinter版
+経由で5タブへ配布する。本entry pointが正式UIであり、旧tkinter版
 （`robot_console`）は当面コードを残すが正式UIとしては扱わない。
 """
 
@@ -61,6 +61,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     app = QtWidgets.QApplication(raw_argv)
 
     core = ConsoleCore(log_directory=args.console_log_directory)
+    app.aboutToQuit.connect(core.bag_recorder.close)
     ros_handle = start_ros_thread(core, node_name='robot_console_qt')
     app.aboutToQuit.connect(ros_handle.stop)
 

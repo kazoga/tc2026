@@ -1,0 +1,63 @@
+# 運転中の自動切替はしない。停止・再起動して選択する。
+# availableは恒久保証ではない。check_rtk_stationで当日のRTCM受信を検査する。
+checked_date: '2026-09-20'
+sources:
+  - https://rtk.silentsystem.jp/
+  - http://ntrip1.bizstation.jp:2101/
+sites:
+  inagi:
+    default_station: tokyo_6c10214a
+    stations: [tokyo_6c10214a, tokyo_c4cae992, none, custom]
+  tsukuba:
+    default_station: tsukuba_takashima
+    stations: [tsukuba_takashima, joso_yasuda, none, custom]
+stations:
+  tokyo_6c10214a:
+    label: 稲城近郊候補・Tokyo 6C10214A
+    host: ntrip1.bizstation.jp
+    port: 2101
+    mountpoint: 6C10214A
+    latitude: 35.74
+    longitude: 139.47
+    coordinate_reference: Current（caster表示。元期座標の経路との整合確認が必要）
+    source: http://ntrip1.bizstation.jp:2101/
+    note: 稲城既存経路起点から約10.5km。局座標はsourcetableの丸め値。
+  tokyo_c4cae992:
+    label: 稲城近郊候補・Tokyo C4CAE992
+    host: ntrip1.bizstation.jp
+    port: 2101
+    mountpoint: C4CAE992
+    latitude: 35.78
+    longitude: 139.41
+    coordinate_reference: JGD2011_B（caster表示）
+    source: http://ntrip1.bizstation.jp:2101/
+    note: 稲城既存経路起点から約16.7km。局座標はsourcetableの丸め値。
+  tsukuba_takashima:
+    label: つくば・高島土地建物登記事務所
+    host: ntrip1.bizstation.jp
+    port: 2101
+    mountpoint: 3041F3CA
+    latitude: 36.11435713
+    longitude: 140.07701944
+    coordinate_reference: JGD2011_B（caster表示）
+    source: https://rtk.silentsystem.jp/
+    note: 掲示板の公開局。caster概略座標は36.10,140.08。
+  joso_yasuda:
+    label: 常総・安田土地家屋調査士事務所
+    host: ntrip1.bizstation.jp
+    port: 2101
+    mountpoint: 10D85AA2
+    latitude: 36.106801804
+    longitude: 139.996162240
+    coordinate_reference: 元期（公開局情報。現地確認が必要）
+    source: https://rtk.silentsystem.jp/
+    note: つくばの予備候補。
+  none:
+    label: NTRIPを使用しない（単独測位・外部RTCM入力）
+  custom:
+    label: 独自局・契約済みサービス（別YAMLで指定）
+excluded:
+  - name: 川崎西
+    reason: 公開欄の表示によらず、コメントで2023-12-25配信終了。
+  - name: かなめ測量つくば本社
+    reason: 2025-12-22廃止。古いKANAME-ANX-RTCM3を既定局にしない。

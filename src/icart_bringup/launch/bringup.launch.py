@@ -13,6 +13,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 from icart_bringup.session_core import load_session, validate_domain
+from icart_bringup.hardware_core import read_yaml, validate_runtime
 
 
 def setup(context) -> list:
@@ -24,6 +25,9 @@ def setup(context) -> list:
     share = Path(get_package_share_directory('obstacle_route_sim'))
     gps_base = '/rtk_gps' if simulation else data.get('gnss_namespace', '/rtk_gps/rtk_gps_um982_node')
     projection = data['projection_params']
+    hardware = read_yaml(Path(data['hardware_config'])) if not simulation and data.get('hardware_config') else None
+    if hardware:
+        validate_runtime(hardware)
     actions = []
     def node(package: str, executable: str, params: list = None, remaps: list = None) -> Node:
         return Node(package=package, executable=executable, output='screen',
@@ -68,7 +72,8 @@ def setup(context) -> list:
     else:
         # 接続先・デバイス設定は既存の実機launchへ委譲する。空なら別起動のドライバを使う。
         if data.get('hardware_launch'):
-            actions.append(IncludeLaunchDescription(PythonLaunchDescriptionSource(data['hardware_launch'])))
+            actions.append(IncludeLaunchDescription(PythonLaunchDescriptionSource(data['hardware_launch']),
+                launch_arguments=({'hardware_config': data['hardware_config']}.items() if hardware else [])))
         fastlio = data.get('fastlio_config') or str(
             Path(get_package_share_directory('fast_lio'))/'config/mid360.yaml')
     actions += [node('fast_lio', 'fastlio_mapping', [fastlio,
@@ -94,10 +99,23 @@ def setup(context) -> list:
                 node('route_follower', 'route_follower', [{'start_immediately': False}]),
                 node('obstacle_monitor', 'obstacle_monitor'),
                 node('robot_navigator', 'robot_navigator', params=[{
-                    'pose_timeout_sec': 1., 'odom_timeout_sec': 1.}], remaps=[
+                    'pose_timeout_sec': 1., 'odom_timeout_sec': 1.,
+                    'obstacle_timeout_sec': 1. if hardware else 0.}], remaps=[
                     ('odom', '/ypspur_ros/odom'), ('cmd_vel', '/cmd_vel/autonomous')]),
-                node('drive_mode_manager', 'drive_cmd_mux_node', [{'initial_mode': LaunchConfiguration('initial_drive_mode').perform(context)}],
+                node('drive_mode_manager', 'drive_cmd_mux_node', [{'initial_mode': LaunchConfiguration('initial_drive_mode').perform(context),
+                    'allow_auto_resume': context.launch_configurations.get('allow_auto_resume', 'true') == 'true',
+                    **({'l1_button_index': hardware['joy']['enable_button'],
+                        'ps_button_index': hardware['joy']['ps_button']} if hardware else {})}],
                      [('cmd_vel/autonomous', '/cmd_vel/fusion_limited')])]
+    if hardware or context.launch_configurations.get('start_teleop', 'false') == 'true':
+        joy = hardware['joy'] if hardware else {}
+        actions.append(node('drive_mode_manager', 'manual_teleop_node', [{
+            key: joy[key] for key in ['linear_axis', 'angular_axis', 'enable_button',
+                                     'linear_scale', 'angular_scale'] if key in joy}]))
+        if context.launch_configurations.get('joy_input', 'joy_node') == 'joy_node':
+            actions.append(node('joy', 'joy_node', [{
+                'device_id': joy.get('device_id', 0), 'device_name': joy.get('device_name', ''),
+                'deadzone': .05, 'autorepeat_rate': 20.}]))
     if LaunchConfiguration('start_ui').perform(context).lower() == 'true':
         actions.append(Node(package='robot_console', executable='robot_console_qt',
                             output='screen', parameters=[{'use_sim_time': simulation}],
@@ -119,5 +137,8 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument('fusion_log', default_value='', description='任意の融合JSONL保存先'),
         DeclareLaunchArgument('initial_drive_mode', default_value='autonomous',
                               choices=['autonomous', 'manual']),
+        DeclareLaunchArgument('start_teleop', default_value='false', choices=['true', 'false']),
+        DeclareLaunchArgument('joy_input', default_value='joy_node', choices=['joy_node', 'external']),
+        DeclareLaunchArgument('allow_auto_resume', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('start_ui', default_value='false', choices=['true', 'false']),
         OpaqueFunction(function=setup)])

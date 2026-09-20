@@ -31,3 +31,13 @@ review_fusion_trial.pyは同一融合走行のGPS/LIO観測比較と経路横ず
 車輪odomはLIO異常・不整合・途絶時の退避に使用する。通常はLIOを優先する。
 退避中もURG停止は維持し、GPS_WHEEL/WHEEL_PRIORITYと退避回数を診断に出す。
 車輪スリップを見抜けるという意味ではない。
+
+## 傾斜したMID-360と前後アンテナ配置
+
+`lio_mount_roll_deg/pitch_deg/yaw_deg`はIMUの車体に対する取付角、
+`lio_forward_m/left_m/height_m`は車体からIMU原点への位置とする。
+LIOから車体の3D姿勢を求め、レバーアームを除いた平面位置を融合する。
+`master_forward_m/left_m/height_m`で主アンテナ位置を補正する。
+`publish_base_tf`（既定false）をtrueにするとmap→base_link平面TFも配信する。
+実機設定はicart_bringupのprepare_real_sessionが一括生成する。
+LiDAR内部extrinsicに車体の25度取付角を足さない。

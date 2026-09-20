@@ -61,6 +61,7 @@ from .snapshot_model import (
     FollowerView,
     FusionStateView,
     GpsStateView,
+    NtripStateView,
     HealthSummaryView,
     ImageReference,
     LocalizationStateView,
@@ -93,8 +94,11 @@ class ConsoleCore:
         *,
         profile_store: Optional[LaunchProfileStore] = None,
         log_directory: Optional[str] = None,
+        bag_directory: Optional[str] = None,
     ) -> None:
         self._lock = threading.Lock()
+        from .bag_recorder import BagRecorder
+        self.bag_recorder = BagRecorder(bag_directory)
 
         self._profile_store = profile_store or LaunchProfileStore()
         self._profiles: List[LaunchProfile] = self._profile_store.load()
@@ -116,6 +120,8 @@ class ConsoleCore:
         self._environment = 'unknown'
         self._drive_mode_selection = 'unknown'
         self._gps_state = GpsStateView()
+        self._ntrip_state = NtripStateView()
+        self.freshness.set_threshold('ntrip', 2.5, 5.)
         self._fusion_state = FusionStateView()
         self._localization_state = LocalizationStateView()
         self._route_state = RouteView()
@@ -567,6 +573,14 @@ class ConsoleCore:
             self._fusion_state = view
         self.freshness.mark_received('fusion')
 
+    def update_ntrip_status(self, msg: Any) -> None:
+        from .gnss_display import parse_ntrip_status
+        view = parse_ntrip_status(msg.data)
+        if view is not None:
+            with self._lock:
+                self._ntrip_state = view
+            self.freshness.mark_received('ntrip')
+
     def update_gps_status(self, msg: Any) -> None:
         """`rtk_gps_um982_msgs/RtkStatus`（`rtk_gps/.../rtk_status`）を反映する。"""
 
@@ -631,6 +645,7 @@ class ConsoleCore:
             environment = self._environment
             drive_mode_selection = self._drive_mode_selection
             gps_state = self._gps_state
+            ntrip_state = self._ntrip_state
             fusion_state = self._fusion_state
             localization_state = self._localization_state
             route_state = self._route_state
@@ -705,8 +720,10 @@ class ConsoleCore:
 
         return ConsoleSnapshot(
             timestamp=now,
+            bag_state=self.bag_recorder.snapshot(),
             operation_state=operation_state,
             gps_state=gps_state,
+            ntrip_state=replace(ntrip_state, freshness=self.freshness.evaluate('ntrip', now=now)),
             fusion_state=replace(fusion_state, freshness=self.freshness.evaluate(
                 'fusion', now=now)),
             localization_state=localization_state,

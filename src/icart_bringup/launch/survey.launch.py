@@ -19,16 +19,16 @@ def setup(context):
     actions = [IncludeLaunchDescription(PythonLaunchDescriptionSource(str(
         Path(get_package_share_directory('icart_bringup'))/'launch/bringup.launch.py')),
         launch_arguments={'environment': environment, 'session': session,
-                          'start_ui': 'true', 'initial_drive_mode': 'manual'}.items()),
-        Node(package='drive_mode_manager', executable='manual_teleop_node', output='screen'),
+                          'start_ui': 'true', 'initial_drive_mode': 'manual',
+                          'allow_auto_resume': 'false', 'start_teleop': 'true',
+                          'joy_input': joy_input}.items()),
         Node(package='route_survey', executable='recorder', output='screen', parameters=[
             LaunchConfiguration('recorder_params').perform(context),
+            *([data['recorder_params']] if data.get('recorder_params') else []),
             {'output_directory': LaunchConfiguration('output').perform(context),
              'projection_config': data['projection_params'],
              'gnss_fix_topic': gps+'/fix', 'gnss_status_topic': gps+'/rtk_status',
              'use_sim_time': environment=='simulation'}])]
-    if joy_input == 'joy_node':
-        actions.append(Node(package='joy', executable='joy_node'))
     return actions
 
 

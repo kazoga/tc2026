@@ -10,9 +10,10 @@ from sensor_msgs.msg import Imu, NavSatFix
 from std_msgs.msg import String
 
 from rtk_gps_um982_msgs.msg import RtkStatus
-from um982 import UM982Client
+from rtk_gps_um982.ntrip_client import CorrectedUM982Client as UM982Client
 
 from rtk_gps_um982 import converters
+from rtk_gps_um982.ntrip_status import NtripStatus
 from rtk_gps_um982.time_sync_core import RmcClockRelay
 from rtk_gps_um982.time_sync_client import ClockRelayClient
 
@@ -34,6 +35,9 @@ class Um982DriverNode(Node):
                 ('time_sync.enabled', False),
                 ('time_sync.chrony_socket', '/run/chrony/um982.sock'),
                 ('ntrip.enabled', False),
+                ('ntrip.station_id', ''),
+                ('ntrip.station_label', ''),
+                ('ntrip.site', ''),
                 ('ntrip.host', ''),
                 ('ntrip.port', 2101),
                 ('ntrip.mountpoint', ''),
@@ -111,10 +115,22 @@ class Um982DriverNode(Node):
                     user=user, password=password,
                 )
 
+        # 実際に起動した接続設定を保持。パラメータ変更だけで接続先表示を変えない。
+        self._ntrip_fields = {key: p('ntrip.'+key).value for key in (
+            'enabled', 'host', 'port', 'mountpoint', 'station_id', 'station_label', 'site')}
+        self._ntrip_status = NtripStatus()
+        self._pub_ntrip = self.create_publisher(String, '~/ntrip_status', 10)
+        self._ntrip_timer = self.create_timer(1., self._publish_ntrip_status)
+
         self.get_logger().info(
             f'rtk_gps_um982_node up (port={self._port} baud={self._baud} '
             f'rate={self._output_rate}Hz stamp={self._stamp_source})'
         )
+
+    def _publish_ntrip_status(self) -> None:
+        data = self._ntrip_status.sample(
+            self._client._ntrip_client, now=time.monotonic(), **self._ntrip_fields)
+        self._pub_ntrip.publish(String(data=json.dumps(data, ensure_ascii=False, allow_nan=False)))
 
     def _on_position(self, pos) -> None:
         if self._relay is not None:

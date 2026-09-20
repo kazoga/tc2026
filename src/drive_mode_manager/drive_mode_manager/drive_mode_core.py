@@ -19,6 +19,7 @@ class DriveModeConfig:
     """走行モード管理の設定。"""
 
     initial_mode: str = 'autonomous'
+    allow_auto_resume: bool = True
     manual_transition_hold_s: float = 2.0
     manual_to_auto_l1_released_s: float = 1.0
     auto_resume_delay_s: float = 5.0
@@ -149,6 +150,9 @@ class DriveModeCore:
         reason: str,
     ) -> str:
         self._manual_hold_start_s = None
+        if not self._config.allow_auto_resume:
+            self._l1_release_start_s = None
+            return 'manual_locked'
         if l1_pressed:
             self._l1_release_start_s = None
             return 'manual_l1_hold'

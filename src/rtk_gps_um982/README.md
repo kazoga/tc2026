@@ -149,3 +149,19 @@ colcon test-result --verbose
 ## ライセンス
 
 MIT
+
+## 公開RTK局とNTRIP受信
+
+icart_bringupの地域別設定で稲城・つくばの公開局、補正なし、独自局を選択できる。
+NTRIP v1受信はワークスペース側アダプターでTCP分割と先頭データ保持を処理し、
+CRC一致のRTCM3のみシリアルへ渡す。無効なHTTP応答やSOURCETABLEを成功と扱わない。
+15秒有効RTCMが来ない接続は再接続する。ライブラリsubmoduleは変更しない。
+TLS・HTTP chunked必須のサービスは非対応。実機FIXは別途確認する。
+
+### 基地局診断
+
+`~/ntrip_status` (`std_msgs/String` JSON) を1 Hzで配信する。
+NTRIP接続状態、CRC確認済みRTCM量・速度・最終受信経過、再接続回数、通信エラー種別を
+位置コールバックとは独立して送る。認証情報は含めない。
+`ntrip.station_id`, `ntrip.station_label`, `ntrip.site` はUI向けの表示名（任意）。
+UI詳細は `robot_console/docs/gnss_station_ui.md` を参照。

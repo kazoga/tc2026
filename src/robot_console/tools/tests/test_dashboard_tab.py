@@ -51,6 +51,7 @@ def _sample_snapshot() -> ConsoleSnapshot:
             heading_deg=123.4,
             heading_stddev_deg=0.8,
             fix_freshness=FreshnessLevel.OK,
+            status_freshness=FreshnessLevel.OK,
         ),
         localization_state=LocalizationStateView(source='pose_enu', freshness=FreshnessLevel.OK),
         route_state=RouteView(

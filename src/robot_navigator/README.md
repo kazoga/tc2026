@@ -156,3 +156,7 @@ ROSメッセージ自体のstampの鮮度はこの監視では検証しない。
 古い内容の再配信、LiDAR の途絶、自己位置の品質低下、ノード自体の停止は別途対策が必要である。
 ROS 非依存の `input_watchdog_core.py` と境界・復帰テストを追加した。
 Gazebo と仮想 GNSS による停止確認は obstacle_route_sim の地理地図検証記録を参照する。
+
+`obstacle_timeout_sec`（既定0:監視無効）を正の秒数にすると、
+選択したscan/hint入力の未受信・途絶時に速度をゼロにする。
+icart_bringupの新しい実機profileは1秒を設定する。手動速度系には適用しない。

@@ -31,8 +31,8 @@ def freshness_color(level: FreshnessLevel) -> str:
 def rtk_state_color(rtk_state: str, fix_freshness: FreshnessLevel) -> str:
     """RTK状態と鮮度から6.6節の色ルールに従い表示色を返す。"""
 
-    if fix_freshness == FreshnessLevel.LOST:
-        return COLOR_ERROR
+    if fix_freshness != FreshnessLevel.OK:
+        return freshness_color(fix_freshness)
     state = rtk_state.upper()
     if state == 'RTK_FIX':
         return COLOR_OK
@@ -82,3 +82,11 @@ def launch_status_color(status: NodeLaunchStatus) -> str:
     if status == NodeLaunchStatus.STOPPING:
         return COLOR_WARN
     return COLOR_UNKNOWN
+
+
+def ntrip_color(ntrip):
+    if ntrip.freshness != FreshnessLevel.OK:
+        return freshness_color(ntrip.freshness)
+    return {'RECEIVING': COLOR_OK, 'STALE': COLOR_ERROR, 'ERROR': COLOR_ERROR,
+            'WAITING': COLOR_WARN, 'RECONNECTING': COLOR_WARN,
+            'CONNECTING': COLOR_NOTICE}.get(ntrip.state, COLOR_UNKNOWN)

@@ -16,6 +16,7 @@ from sensor_msgs_py import point_cloud2
 from std_msgs.msg import String
 from geo_pose_converter.geo_core import load_projection_config_from_yaml, LlhPoint, llh_to_enu
 from route_survey.trace_core import Traces, finite
+from gnss_lio_fusion.mount_core import base_from_sensor, rotation
 
 from route_survey.survey_core import Pose, Survey, traversable_width
 from route_survey.storage_core import save
@@ -31,7 +32,8 @@ class Recorder(Node):
         defaults = dict(output_directory='', projection_config='', spacing_m=5., turn_deg=25.,
                         start_button=0, stop_button=1, signal_button=2, finish_button=3,
                         lidar_height_m=.6, lidar_forward_m=0., max_pose_variance=.25,
-                        cloud_frame='body', gnss_fix_topic='/rtk_gps/fix',
+                        lidar_left_m=0., lidar_mount_roll_deg=0., lidar_mount_pitch_deg=0.,
+                        lidar_mount_yaw_deg=0., cloud_frame='body', gnss_fix_topic='/rtk_gps/fix',
                         gnss_status_topic='/rtk_gps/rtk_status')
         for key, value in defaults.items():
             self.declare_parameter(key, value)
@@ -117,9 +119,16 @@ class Recorder(Node):
 
     def attitude(self, message) -> None:
         q = message.pose.pose.orientation
-        roll = math.atan2(2*(q.w*q.x+q.y*q.z), 1-2*(q.x*q.x+q.y*q.y))
-        pitch = math.asin(np.clip(2*(q.w*q.y-q.z*q.x), -1, 1))
+        try:
+            _, (roll, pitch, _) = base_from_sensor(
+                [0., 0., 0.], [q.x, q.y, q.z, q.w], [0., 0., 0.], self.mount_rpy())
+        except ValueError:
+            return
         self.attitudes.append((stamp(message), roll, pitch))
+
+    def mount_rpy(self) -> list[float]:
+        return [math.radians(self.p['lidar_mount_'+axis+'_deg'])
+                for axis in ['roll', 'pitch', 'yaw']]
 
     def current_width(self) -> dict:
         value = (traversable_width(np.empty((0, 3))) if
@@ -140,10 +149,10 @@ class Recorder(Node):
         xyz = np.column_stack([values[k].reshape(-1) for k in ['x', 'y', 'z']])
         xyz = xyz[np.isfinite(xyz).all(axis=1)]
         roll, pitch = attitude[1:]
-        cr, sr, cp, sp = math.cos(roll), math.sin(roll), math.cos(pitch), math.sin(pitch)
-        rotation = np.array([[cp, sp*sr, sp*cr], [0, cr, -sr], [-sp, cp*sr, cp*cr]])
-        xyz = xyz @ rotation.T
-        xyz += [self.p['lidar_forward_m'], 0, self.p['lidar_height_m']]
+        tilt = rotation(roll, pitch)
+        # body点群はIMU座標。取付回転を除き、車体傾斜・位置を反映する。
+        xyz = (xyz @ rotation(*self.mount_rpy()).T +
+               [self.p['lidar_forward_m'], self.p['lidar_left_m'], self.p['lidar_height_m']]) @ tilt.T
         # 観測ごとに融合位置へ重畳する。固定の真値位置合わせは使わない。
         c, s = math.cos(pose.yaw), math.sin(pose.yaw)
         world = xyz @ np.array([[c, s, 0], [-s, c, 0], [0, 0, 1]])

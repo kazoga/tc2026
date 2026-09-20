@@ -119,3 +119,29 @@ def test_drive_and_manual_start_topics_are_subscribed():
             assert node.get_subscriptions_info_by_topic(topic), topic
     finally:
         node.destroy_node()
+
+
+def test_ntrip_status_reaches_snapshot_via_dds(monkeypatch):
+    import json
+    import time
+    from std_msgs.msg import String
+    from robot_console.core.gnss_display import ntrip_summary
+    monkeypatch.setenv('ROS_DOMAIN_ID', '193')
+    monkeypatch.setenv('ROS_AUTOMATIC_DISCOVERY_RANGE', 'LOCALHOST')
+    if not rclpy.ok():
+        rclpy.init()
+    c = _make_core()
+    node = RobotConsoleNode(c, node_name='test_ntrip_consumer')
+    producer = rclpy.create_node('test_ntrip_producer')
+    pub = producer.create_publisher(String, '/rtk_gps/rtk_gps_um982_node/ntrip_status', 10)
+    try:
+        deadline = time.monotonic()+5.
+        while time.monotonic() < deadline:
+            pub.publish(String(data=json.dumps(dict(state='RECEIVING', host='test',
+                port=2101, mountpoint='MOCK', rtcm_bytes_per_s=250., last_rtcm_age_s=.2))))
+            rclpy.spin_once(node, timeout_sec=.05)
+            if ntrip_summary(c.build_snapshot().ntrip_state) == '補正受信中':
+                break
+        assert c.build_snapshot().ntrip_state.mountpoint == 'MOCK'
+    finally:
+        producer.destroy_node();node.destroy_node()

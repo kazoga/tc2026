@@ -8,6 +8,9 @@
 
 from __future__ import annotations
 
+from ..core.gnss_display import ntrip_summary, FRESH
+from ..core.freshness import FreshnessLevel
+
 from typing import Optional
 
 from PyQt5 import QtWidgets
@@ -15,12 +18,13 @@ from PyQt5 import QtWidgets
 from robot_console.core.route_adapter import traveled_waypoint_count
 from robot_console.core.snapshot_model import ConsoleSnapshot
 
-from .widgets.color_rules import freshness_color, phase_color, rtk_state_color
+from .widgets.color_rules import freshness_color, phase_color, rtk_state_color, ntrip_color
 from .widgets.event_banner_card import EventBannerCard, sort_by_priority
 from .widgets.launch_control_card import LaunchControlCard
 from .widgets.manual_ops_card import ManualOpsCard
 from .widgets.node_health_card import NodeHealthCard
 from .widgets.status_card import StatusCard, set_label_color
+from .widgets.bag_card import BagCard
 from .widgets.typography import PHASE_DETAIL_FONT_POINT_SIZE, PHASE_STATUS_FONT_POINT_SIZE
 
 
@@ -38,6 +42,8 @@ class DashboardTab(QtWidgets.QWidget):
         self.event_banner_card = EventBannerCard()
         self.manual_ops_card = ManualOpsCard()
         self.node_health_card = NodeHealthCard()
+        self.bag_card = BagCard()
+        self.drive_cmd_vel_card.form_layout.addRow(self.bag_card)
 
         # 右列（起動操作→Node Health）と「操作が上・状態表示が下」の並びを
         # 揃えるため、左列もManual Ops（操作）を上、Event（状態表示）を下に
@@ -149,6 +155,8 @@ class DashboardTab(QtWidgets.QWidget):
     # ---------- GPS / Poseカード（6.6節） ----------
     def _build_gps_pose_card(self) -> StatusCard:
         card = StatusCard('GPS / Pose')
+        self._ntrip_label = card.add_value_row('基地局 / RTCM')
+        self._ntrip_mount_label = card.add_value_row('接続マウント')
         self._gps_rtk_label = card.add_value_row('RTK')
         self._gps_satellites_label = card.add_value_row('Satellites')
         self._gps_hdop_label = card.add_value_row('HDOP')
@@ -165,6 +173,7 @@ class DashboardTab(QtWidgets.QWidget):
     def update_snapshot(self, snapshot: ConsoleSnapshot) -> None:
         """`ConsoleSnapshot` の内容を各カードへ反映する。"""
 
+        self.bag_card.update_state(snapshot.bag_state)
         self._update_phase_header(snapshot)
         self._update_route_follower_card(snapshot)
         self._update_drive_cmd_vel_card(snapshot)
@@ -232,7 +241,12 @@ class DashboardTab(QtWidgets.QWidget):
         gps = snapshot.gps_state
         localization = snapshot.localization_state
 
-        self._gps_rtk_label.setText(gps.rtk_state)
+        ntrip = snapshot.ntrip_state
+        self._ntrip_label.setText(ntrip_summary(ntrip))
+        set_label_color(self._ntrip_label, ntrip_color(ntrip))
+        self._ntrip_mount_label.setText(ntrip.mountpoint or '—')
+        self._gps_rtk_label.setText(gps.rtk_state if gps.status_freshness == FreshnessLevel.OK
+                                    else FRESH[gps.status_freshness])
         set_label_color(self._gps_rtk_label, rtk_state_color(gps.rtk_state, gps.fix_freshness))
         self._gps_satellites_label.setText(f'{gps.num_satellites} sat')
         self._gps_hdop_label.setText(f'{gps.hdop:.2f}')
@@ -241,6 +255,10 @@ class DashboardTab(QtWidgets.QWidget):
         self._gps_heading_label.setText(
             f'{gps.heading_deg:.1f} deg +/- {gps.heading_stddev_deg:.2f}'
         )
+        if gps.status_freshness == FreshnessLevel.UNKNOWN:
+            for label in (self._gps_satellites_label, self._gps_hdop_label,
+                          self._gps_correction_label, self._gps_rtcm_label, self._gps_heading_label):
+                label.setText('—')
         fusion = snapshot.fusion_state
         fusion_mode = '初期FIX待ち' if fusion.mode == 'WAIT_INITIAL_FIX' else fusion.mode
         self._fusion_heading_label.setText(

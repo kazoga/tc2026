@@ -79,6 +79,7 @@ class RobotNavigator(Node):
         self.declare_parameter('control_rate_hz', 20.0)
         self.declare_parameter('pose_timeout_sec', 1.0)
         self.declare_parameter('odom_timeout_sec', 1.0)
+        self.declare_parameter('obstacle_timeout_sec', 0.0)
         self.declare_parameter('road_block_hold_sec', 5.0)
 
         # 旧実装の固定相当をパラメータ化
@@ -153,10 +154,16 @@ class RobotNavigator(Node):
         self.integral_w_limit: float = self.max_w / max(self.ki_w, 1.0e-6)
 
         # --- 内部状態 ---
-        self.input_watchdog = InputWatchdog({
+        timeouts = {
             'pose': float(self.get_parameter('pose_timeout_sec').value),
             'odom': float(self.get_parameter('odom_timeout_sec').value),
-        })
+        }
+        obstacle_timeout = float(self.get_parameter('obstacle_timeout_sec').value)
+        if not math.isfinite(obstacle_timeout) or obstacle_timeout < 0.:
+            raise ValueError('obstacle_timeout_secは有限の非負秒数が必要')
+        if obstacle_timeout > 0.:
+            timeouts['obstacle'] = obstacle_timeout
+        self.input_watchdog = InputWatchdog(timeouts)
         self._stale_inputs: tuple[str, ...] = ()
         self.current_pose: Optional[Pose] = None
         self.current_velocity: Optional[Twist] = None
@@ -365,6 +372,8 @@ class RobotNavigator(Node):
 
     def on_scan(self, msg: LaserScan) -> None:
         """/scan を処理して、前方矩形ウィンドウ内の最小前方距離を更新する。"""
+        if 'obstacle' in self.input_watchdog.timeouts:
+            self.input_watchdog.receive('obstacle', self._input_time_seconds())
         # ロボット幅の半分と検出最大距離を用意
         half_width = self.robot_width / 2.0
         max_detection_distance = self.obst_max_dist
@@ -393,6 +402,8 @@ class RobotNavigator(Node):
 
     def on_hint(self, msg: ObstacleAvoidanceHint) -> None:
         """ヒントメッセージから障害物距離を更新する。"""
+        if 'obstacle' in self.input_watchdog.timeouts:
+            self.input_watchdog.receive('obstacle', self._input_time_seconds())
         distance: Optional[float]
         if (
             msg.front_clearance_m is None

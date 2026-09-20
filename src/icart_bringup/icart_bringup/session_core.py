@@ -27,7 +27,7 @@ def load_session(filename: Path, environment: str) -> dict:
             raise ValueError(key+'が存在しない')
     optional = ['fusion_params']
     optional += (['trial_directory', 'trial_sdf'] if environment == 'simulation'
-                 else ['fastlio_config', 'hardware_launch'])
+                 else ['fastlio_config', 'hardware_launch', 'hardware_config', 'recorder_params'])
     for key in optional:
         if data.get(key):
             data[key] = str((filename.parent/data[key]).resolve())

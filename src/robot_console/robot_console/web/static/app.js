@@ -282,13 +282,31 @@ function renderEvents(events) {
 
 function renderGpsSummary(snapshot) {
   const fields = document.getElementById('gps-fields');
+  const baseRows = snapshot.gnss_details?.base || [];
+  const receiverRows = snapshot.gnss_details?.receiver || [];
+  const base = new Map(baseRows);
+  const receiver = new Map(receiverRows);
+  const fresh = snapshot.gps.status_freshness === 'OK';
   fields.innerHTML = '';
-  appendField(fields, 'RTK', snapshot.gps.rtk_state);
-  appendField(fields, 'Satellites', `${snapshot.gps.num_satellites} sat`);
-  appendField(fields, 'HDOP', formatNumber(snapshot.gps.hdop, 2, ''));
-  appendField(fields, 'Correction', formatNumber(snapshot.gps.correction_age_s, 2, ' s'));
-  appendField(fields, 'Heading', formatNumber(snapshot.gps.heading_deg, 1, ' deg'));
-  appendField(fields, 'Localization freshness', snapshot.localization.freshness);
+  appendField(fields, '測位', fresh
+    ? (receiver.get('測位状態') || snapshot.gps.rtk_state)
+    : (receiver.get('GNSS情報の更新') || '未受信'));
+  appendField(fields, '衛星数', fresh ? (receiver.get('受信衛星数') || '—') : '—');
+  appendField(fields, '基地局', base.get('状態') || '未受信');
+
+  // details要素自体を再作成せず、定期更新後もユーザーの開閉状態を保つ。
+  for (const [id, rows] of [
+    ['gnss-base-fields', baseRows],
+    ['gnss-receiver-fields', receiverRows],
+  ]) {
+    const detailFields = document.getElementById(id);
+    detailFields.innerHTML = '';
+    for (const [key, value] of rows) {
+      appendField(detailFields, key, value);
+    }
+  }
+  appendField(document.getElementById('gnss-receiver-fields'),
+    '自己位置の更新', snapshot.localization.freshness);
 }
 
 function renderSensorGrid(allPanels) {

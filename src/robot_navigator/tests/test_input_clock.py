@@ -54,3 +54,18 @@ def test_timer_publishes_stop_and_clears_controller_on_dropout() -> None:
     assert node.prev_cmd_vel == Twist()
     assert node.integral_w == node.prev_yaw_error == 0.
     assert node._stale_inputs == ('pose', 'odom')
+
+
+def test_missing_obstacle_stops_with_fresh_localization():
+    from geometry_msgs.msg import Twist
+    published = []
+    guard = InputWatchdog({'pose': 1., 'odom': 1., 'obstacle': 1.})
+    guard.receive('pose', 2.); guard.receive('odom', 2.)
+    guard.receive('obstacle', .5)
+    node = SimpleNamespace(input_watchdog=guard, _input_time_seconds=lambda: 2.,
+        _stale_inputs=(), get_logger=lambda: SimpleNamespace(warn=lambda _: None),
+        integral_w=1., prev_yaw_error=1., prev_cmd_vel=Twist(),
+        cmd_pub=SimpleNamespace(publish=published.append))
+    RobotNavigator.on_timer(node)
+    assert node._stale_inputs == ('obstacle',)
+    assert published == [Twist()]

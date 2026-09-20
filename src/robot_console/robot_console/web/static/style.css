@@ -216,3 +216,24 @@ th {
 .event-list .event-empty {
   color: var(--muted);
 }
+
+/* 基地局名・接続先が長くてもスマートフォン幅に収める。 */
+#gps-summary .fields {
+  grid-template-columns: minmax(0, 45%) minmax(0, 1fr);
+}
+#gps-summary .fields dt, #gps-summary .fields dd {
+  overflow-wrap: anywhere;
+}
+
+#gnss-details {
+  margin-top: 12px;
+}
+#gnss-details summary {
+  cursor: pointer;
+  padding: 10px 0;
+  color: var(--accent);
+}
+#gnss-details h3 {
+  font-size: 1rem;
+  margin: 12px 0 8px;
+}

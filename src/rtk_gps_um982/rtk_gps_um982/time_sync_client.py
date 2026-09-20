@@ -2,7 +2,7 @@
 
 import time
 
-from um982 import UM982Client
+from rtk_gps_um982.ntrip_client import CorrectedUM982Client as UM982Client
 
 from rtk_gps_um982.time_sync_core import RmcClockRelay
 

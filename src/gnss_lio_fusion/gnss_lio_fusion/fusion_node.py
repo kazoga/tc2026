@@ -18,6 +18,7 @@ from std_msgs.msg import String
 from rtk_gps_um982_msgs.msg import RtkStatus
 
 from geo_pose_converter.geo_core import LlhPoint, ProjectionConfig, llh_to_enu
+from .mount_core import base_from_sensor, horizontal_lever
 from .baseline_core import BaselineConfig
 from .motion_guard_core import MotionGuard
 from .fusion_core import FusionConfig, FusionFilter, wrap
@@ -36,10 +37,15 @@ class FusionNode(Node):
         defaults = dict(origin_latitude=0., origin_longitude=0., origin_altitude=0.,
                         map_yaw_offset_rad=0., buffer_s=.35, output_log='', baseline_cache='',
                         master_height_m=.7, lio_height_m=.6, gnss_heading_offset_deg=0.,
-                        lio_yaw_offset_deg=0., wheel_fallback_enabled=True)
+                        lio_yaw_offset_deg=0., wheel_fallback_enabled=True,
+                        lio_forward_m=0., lio_left_m=0., lio_mount_roll_deg=0.,
+                        lio_mount_pitch_deg=0., lio_mount_yaw_deg=0.,
+                        master_forward_m=0., master_left_m=0., publish_base_tf=False)
         self.values = {k: self.declare_parameter(k, v).value for k, v in defaults.items()}
         if not all(math.isfinite(self.values[k]) for k in [
-                'master_height_m', 'lio_height_m', 'gnss_heading_offset_deg', 'lio_yaw_offset_deg']):
+                'master_height_m', 'lio_height_m', 'gnss_heading_offset_deg', 'lio_yaw_offset_deg',
+                'lio_forward_m', 'lio_left_m', 'lio_mount_roll_deg', 'lio_mount_pitch_deg',
+                'lio_mount_yaw_deg', 'master_forward_m', 'master_left_m']):
             raise ValueError('取付位置・方位補正は有限値が必要')
         self.projection = ProjectionConfig(**{k: self.values[k] for k in
             ['origin_latitude', 'origin_longitude', 'origin_altitude', 'map_yaw_offset_rad']})
@@ -71,6 +77,10 @@ class FusionNode(Node):
         self.log = Path(self.values['output_log']).open('w') if self.values['output_log'] else None
         self.input_log = (Path(self.values['output_log']).with_suffix('.inputs.jsonl').open('w')
                           if self.values['output_log'] else None)
+        self.tf_broadcaster = None
+        if self.values['publish_base_tf']:
+            from tf2_ros import TransformBroadcaster
+            self.tf_broadcaster = TransformBroadcaster(self)
         self.pose_pub = self.create_publisher(PoseWithCovarianceStamped, '/localization/pose_enu', 10)
         self.health_pub = self.create_publisher(String, '/fusion/status', 10)
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel/fusion_limited', 10)
@@ -145,13 +155,12 @@ class FusionNode(Node):
             self.filter.lio_ok = False
             self.filter.rejected_lio += 1
             return
-        x, y, z, w = quat/norm
-        yaw = math.atan2(2*(w*z+x*y), 1-2*(y*y+z*z))
-        roll = math.atan2(2*(w*x+y*z), 1-2*(x*x+y*y))
-        pitch = math.asin(float(np.clip(2*(w*y-z*x), -1., 1.)))
+        position, (roll, pitch, yaw) = base_from_sensor(
+            [p.x, p.y, p.z], quat,
+            [self.values['lio_forward_m'], self.values['lio_left_m'], self.values['lio_height_m']],
+            [math.radians(self.values['lio_mount_'+axis+'_deg']) for axis in ['roll', 'pitch', 'yaw']])
         yaw = wrap(yaw+math.radians(self.values['lio_yaw_offset_deg']))
-        height = self.values['lio_height_m']
-        body = np.array([p.x-2*(x*z+w*y)*height, p.y-2*(y*z-w*x)*height, yaw])
+        body = np.array([position[0], position[1], yaw])
         if not np.isfinite(body).all() or (self.lios and t <= self.lios[-1][0]):
             return
         self.lios.append((t, body, roll, pitch))
@@ -206,12 +215,12 @@ class FusionNode(Node):
             self.predict_motion(t, raw, self.wheel_at(t))
             point = llh_to_enu(LlhPoint(msg.latitude, msg.longitude, msg.altitude), self.projection)
             yaw = wrap(math.radians(90-status.heading_deg+self.values['gnss_heading_offset_deg'])-self.projection.map_yaw_offset_rad)
-            h = self.values['master_height_m']
-            dx = h*(math.cos(yaw)*math.sin(pitch)*math.cos(roll)+math.sin(yaw)*math.sin(roll))
-            dy = h*(math.sin(yaw)*math.sin(pitch)*math.cos(roll)-math.cos(yaw)*math.sin(roll))
-            measured = np.array([point.x-dx, point.y-dy, yaw])
+            lever = [self.values['master_forward_m'], self.values['master_left_m'],
+                     self.values['master_height_m']]
+            offset = horizontal_lever(lever, roll, pitch, yaw)
+            measured = np.array([point.x-offset[0], point.y-offset[1], yaw])
             position_variance = max(msg.position_covariance[0], msg.position_covariance[4])
-            position_variance += h*h if attitude_missing else 0.
+            position_variance += float(np.dot(lever, lever)) if attitude_missing else 0.
             self.filter.observe_gps(t, measured, status.rtk_state, status.num_satellites,
                                     status.baseline_length_m, position_variance,
                                     status.heading_stddev_deg)
@@ -272,6 +281,15 @@ class FusionNode(Node):
         for axis in [2, 3, 4]:
             output.pose.covariance[axis*6+axis] = 1e6
         self.pose_pub.publish(output)
+        if self.tf_broadcaster is not None:
+            from geometry_msgs.msg import TransformStamped
+            transform = TransformStamped()
+            transform.header = output.header
+            transform.child_frame_id = 'base_link'
+            transform.transform.translation.x = output.pose.pose.position.x
+            transform.transform.translation.y = output.pose.pose.position.y
+            transform.transform.rotation = output.pose.pose.orientation
+            self.tf_broadcaster.sendTransform(transform)
         health = predicted.diagnostics(latest_t)
         health.update(motion_source=self.motion.source,
                       wheel_fallback_count=self.motion.fallback_count,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt5 import QtWidgets
+from PyQt5 import QtCore, QtWidgets
 
 
 class StatusCard(QtWidgets.QGroupBox):
@@ -19,6 +19,7 @@ class StatusCard(QtWidgets.QGroupBox):
         """`label_text: 値` の行を追加し、更新対象のQLabelを返す。"""
 
         value_label = QtWidgets.QLabel('-')
+        value_label.setTextFormat(QtCore.Qt.PlainText)
         self.form_layout.addRow(f'{label_text}:', value_label)
         return value_label
 

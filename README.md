@@ -319,3 +319,7 @@ GUI テストには Qt WebEngine と pytest-forked、地形生成には Node.js 
 
 リポジトリ全体のライセンスは [`LICENSE`](LICENSE) を参照。
 各パッケージの宣言は `package.xml`、外部コードは各 submodule のライセンスに従う。
+
+実機用の一括設定・稲城／つくばのRTK局選択は
+[実機ハードウェア統合](src/icart_bringup/docs/実機ハードウェア統合.md)を参照。
+昨年度構成のROS 2化、MID-360下向き25度とアンテナ位置、採取時の手動固定を含む。

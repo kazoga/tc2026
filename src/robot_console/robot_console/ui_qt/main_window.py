@@ -10,6 +10,7 @@ from ..core.console_core import ConsoleCore
 from ..core.snapshot_model import ConsoleSnapshot
 from .console_log_tab import ConsoleLogTab
 from .dashboard_tab import DashboardTab
+from .gnss_tab import GnssTab
 from .launch_settings_tab import LaunchSettingsTab
 from .localization_sensor_tab import LocalizationSensorTab
 from .widgets.scaled_canvas import ScaledCanvas
@@ -26,7 +27,7 @@ TAB_TITLE_CONSOLE_LOG = 'コンソールログ'
 
 
 class MainWindow(QtWidgets.QMainWindow):
-    """4タブ構成のPyQt5メインウィンドウ。
+    """5タブ構成のPyQt5メインウィンドウ。
 
     robot_console_gui_screen_function_design.md 2章の方針に従い、全タブ共通の
     上部ステータスバーは設けない。タブ内容はダッシュボードタブを既定表示とし、
@@ -49,12 +50,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.localization_sensor_tab = LocalizationSensorTab()
         self.launch_settings_tab = LaunchSettingsTab()
         self.console_log_tab = ConsoleLogTab()
+        self.gnss_tab = GnssTab()
 
         self.tab_widget = QtWidgets.QTabWidget()
         self.tab_widget.addTab(self.dashboard_tab, TAB_TITLE_DASHBOARD)
         self.tab_widget.addTab(self.localization_sensor_tab, TAB_TITLE_LOCALIZATION_SENSOR)
         self.tab_widget.addTab(self.launch_settings_tab, TAB_TITLE_LAUNCH_SETTINGS)
         self.tab_widget.addTab(self.console_log_tab, TAB_TITLE_CONSOLE_LOG)
+        self.tab_widget.addTab(self.gnss_tab, 'GNSS・基地局')
         self.tab_widget.setCurrentWidget(self.dashboard_tab)
 
         self.setCentralWidget(ScaledCanvas(self.tab_widget))
@@ -70,6 +73,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._on_launch_plan_changed()
 
         if self._core is not None:
+            self.dashboard_tab.bag_card.start_requested.connect(self._start_bag)
+            self.dashboard_tab.bag_card.stop_requested.connect(self._stop_bag)
             self.dashboard_tab.launch_control_card.launch_requested.connect(
                 self._core.request_launch
             )
@@ -120,10 +125,19 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.launch_settings_tab.environment, self.launch_settings_tab.drive_mode
             )
 
+    def _start_bag(self, directory: str) -> None:
+        self._core.bag_recorder.start(directory)
+        self.dashboard_tab.bag_card.update_state(self._core.bag_recorder.snapshot())
+
+    def _stop_bag(self) -> None:
+        self._core.bag_recorder.stop()
+        self.dashboard_tab.bag_card.update_state(self._core.bag_recorder.snapshot())
+
     def update_snapshot(self, snapshot: ConsoleSnapshot) -> None:
         """`ConsoleSnapshot` を各タブへ配布する（QTimer駆動でConsoleCoreから呼ばれる）。"""
 
         self.dashboard_tab.update_snapshot(snapshot)
+        self.gnss_tab.update_snapshot(snapshot)
         self.localization_sensor_tab.update_snapshot(snapshot)
         self.console_log_tab.update_snapshot(snapshot)
         self.launch_settings_tab.update_launch_states(snapshot.launch_profiles)
