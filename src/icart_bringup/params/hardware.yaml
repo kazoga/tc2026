@@ -10,35 +10,36 @@ mid360:
   # 工場LiDAR→IMU較正。車体への25度傾斜はここへ加えない。
   lidar_in_imu_xyz: [-0.011, -0.02329, 0.04412]
 gnss:
-  serial_port: /dev/ttyUSB0
+  serial_port: /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0
   baud: 115200
   master_above_lidar_m: 0.1
   slave_behind_master_m: 0.5
   heading_offset_deg: 180.0
   time_sync_enabled: false
 urg:
-  serial_port: /dev/ttyACM1
+  serial_port: /dev/serial/by-id/usb-Hokuyo_Data_Flex_for_USB_URG-Series_USB_Driver-if00
   baud: 115200
   xyz: [0.075, 0.0, 0.49]
   rpy_deg: [0.0, 0.0, 0.0]
   angle_min: -2.0
   angle_max: 2.0
 wheel:
-  serial_port: /dev/ttyACM0
+  serial_port: /dev/serial/by-id/usb-T-frog_project_T-frog_Driver-if00
   coordinator_param: /home/nkb/icart-middle.param
 camera:
   enabled: true
-  device: /dev/video0
+  device: /dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_B8DE396F-video-index0
   width: 640
   height: 480
   framerate: 5.0
   pixel_format: yuyv
 joy:
   device_id: 0
-  device_name: ''
+  device_name: 'Sony PLAYSTATION(R)3 Controller'
   linear_axis: 1
   angular_axis: 0
   enable_button: 4
-  ps_button: 16
+  # 現PCのSDL割り当て: L1=4、PS=10（16は十字キー右）。
+  ps_button: 10
   linear_scale: 1.2
   angular_scale: 1.5

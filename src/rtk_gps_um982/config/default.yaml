@@ -1,7 +1,7 @@
 /rtk_gps/rtk_gps_um982_node:
   ros__parameters:
     serial:
-      port: /dev/ttyUSB0
+      port: /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0
       baud: 115200
     output_rate_hz: 10
     frame_id: gps_link
