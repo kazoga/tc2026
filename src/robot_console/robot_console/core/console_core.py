@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from ..utils import NodeLaunchStatus, convert_image_message
+from .camera_overlay import CameraOverlayRenderer, PerceptionOverlayView
 from .drive_mode_adapter import (
     apply_cmd_vel_autonomous_msg,
     apply_cmd_vel_msg,
@@ -64,6 +65,7 @@ from .snapshot_model import (
     NtripStateView,
     HealthSummaryView,
     ImageReference,
+    PerceptionDecisionView,
     LocalizationStateView,
     ManualControlsView,
     ObstacleStateView,
@@ -80,6 +82,17 @@ _LAUNCH_STATUS_TO_HEALTH: Dict[NodeLaunchStatus, FreshnessLevel] = {
 }
 
 _SIMULATOR_SUFFIX = ':sim'
+
+# カメラ画像パネル。フロントカメラは1台のみで、信号認識・経路封鎖の検出枠は
+# 同じ画像へ重ねて描くため、パネルも1枚に統合する。
+CAMERA_PANEL_ID = 'front_camera'
+CAMERA_PANEL_TITLE = 'Front Camera'
+
+# 判定チップの表示名。
+PERCEPTION_TITLES: Dict[str, str] = {
+    'traffic_signal': '信号',
+    'road_blockage': '経路封鎖',
+}
 
 
 def _utc_now() -> datetime:
@@ -107,6 +120,9 @@ class ConsoleCore:
         self.log_manager = LogManager(profile_ids=[p.profile_id for p in self._profiles])
         self.image_store = ImageStore()
         self.freshness = FreshnessMonitor()
+        # 認識ノードは重畳画像を配信しないため、生画像への描画は本Coreが行う。
+        # Qt UI / HTML UI が同一の描画結果を共有できるよう実装を1つに保つ。
+        self.camera_overlay = CameraOverlayRenderer()
         self.launch_manager = LaunchManager(
             status_callback=self._on_launch_status,
             log_callback=self._on_launch_log,
@@ -234,11 +250,58 @@ class ConsoleCore:
         if self._frame_image_publisher is not None:
             self._frame_image_publisher(path)
 
+    # ---------- カメラ画像・認識結果（ros/console_node.pyから） ----------
+    def update_camera_image(self, topic: str, msg: Any, frame_stamp: Optional[float]) -> None:
+        """カメラ生画像を受け取り、保持中の認識結果を重畳して画像パネルへ反映する.
+
+        Args:
+            topic (str): 受信元のtopic名（画面のステータス行に表示する）.
+            msg (Any): `sensor_msgs/Image` 相当のメッセージ.
+            frame_stamp (Optional[float]): 本フレームの時刻 [s]. 認識結果との
+                対応付けに使う. 不明な場合は None.
+        """
+
+        image = convert_image_message(msg)
+        received_at = _utc_now()
+        if image is not None:
+            image = self.camera_overlay.render(
+                image, frame_stamp=frame_stamp, now=received_at
+            )
+            self.image_store.set(CAMERA_PANEL_ID, image)
+        with self._lock:
+            self._sensor_panel_refs[CAMERA_PANEL_ID] = ImageReference(
+                panel_id=CAMERA_PANEL_ID,
+                title=CAMERA_PANEL_TITLE,
+                topic=topic,
+                image_id=CAMERA_PANEL_ID,
+                width=image.width if image is not None else 0,
+                height=image.height if image is not None else 0,
+                updated_at=received_at,
+            )
+        self.freshness.mark_received(f'image.{CAMERA_PANEL_ID}', received_at)
+
+    def update_perception_overlay(self, overlay: PerceptionOverlayView) -> None:
+        """カメラ画像認識の結果を保持する.
+
+        重畳描画は次の生画像フレーム受信時に行う。認識レートは生画像より低い
+        ことがあるため、本メソッドの呼び出し頻度と描画頻度は一致しない。
+
+        Args:
+            overlay (PerceptionOverlayView): 受信した認識結果.
+        """
+
+        self.camera_overlay.update_overlay(overlay)
+        self.freshness.mark_received(
+            f'perception.{overlay.source}', overlay.received_at
+        )
+
     # ---------- センサ・画像更新（ros/console_node.pyから） ----------
     def update_sensor_image(self, panel_id: str, title: str, topic: str, msg: Any) -> None:
         """センサ・画像パネル向けのROS `sensor_msgs/Image` を反映する。"""
 
         image = convert_image_message(msg)
+        # 鮮度判定と画面の最終更新時刻表示で同じ値を使い、両者がずれないようにする。
+        received_at = _utc_now()
         if image is not None:
             self.image_store.set(panel_id, image)
         with self._lock:
@@ -249,8 +312,9 @@ class ConsoleCore:
                 image_id=panel_id,
                 width=image.width if image is not None else 0,
                 height=image.height if image is not None else 0,
+                updated_at=received_at,
             )
-        self.freshness.mark_received(f'image.{panel_id}')
+        self.freshness.mark_received(f'image.{panel_id}', received_at)
 
     # ---------- 起動管理コマンド（LaunchControlCard/LaunchSettingsTabから） ----------
     def request_launch(
@@ -661,6 +725,21 @@ class ConsoleCore:
             for panel_id, ref in sensor_panel_refs.items()
         ]
 
+        # 検出枠は画像へ重畳済みなので、ここでは判定結果だけをチップ用に渡す。
+        perception_decisions = [
+            PerceptionDecisionView(
+                source=overlay.source,
+                title=PERCEPTION_TITLES.get(overlay.source, overlay.source),
+                decision_text=overlay.decision_text,
+                status_note=overlay.status_note,
+                detection_count=sum(1 for d in overlay.detections if d.adopted),
+                freshness=self.freshness.evaluate(
+                    f'perception.{overlay.source}', now=now
+                ),
+            )
+            for overlay in self.camera_overlay.active_overlays(now=now)
+        ]
+
         localization_key = f'localization.{localization_state.source}'
         localization_state = replace(
             localization_state,
@@ -733,6 +812,7 @@ class ConsoleCore:
             obstacle_state=obstacle_state,
             drive_mode_state=drive_mode_state,
             sensor_panels=sensor_panels,
+            perception_decisions=perception_decisions,
             event_banners=event_banners,
             manual_controls=manual_controls,
             launch_profiles=launch_profiles,

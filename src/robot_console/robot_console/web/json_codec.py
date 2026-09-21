@@ -19,6 +19,7 @@ from ..core.snapshot_model import (
     EventBanner,
     HealthSummaryView,
     ImageReference,
+    PerceptionDecisionView,
     RouteWaypointView,
 )
 
@@ -36,6 +37,22 @@ def _panel_payload(panel: ImageReference) -> Dict[str, Any]:
         'height': panel.height,
         'updated_at': _iso(panel.updated_at),
         'freshness': panel.freshness.value,
+    }
+
+
+def _perception_payload(view: PerceptionDecisionView) -> Dict[str, Any]:
+    """画像認識の判定結果をHTML UI向けのペイロードへ変換する。
+
+    検出枠はConsoleCoreがカメラ画像へ重畳済みのため、ここには含めない。
+    """
+
+    return {
+        'source': view.source,
+        'title': view.title,
+        'decision_text': view.decision_text,
+        'status_note': view.status_note,
+        'detection_count': view.detection_count,
+        'freshness': view.freshness.value,
     }
 
 
@@ -157,6 +174,9 @@ def build_snapshot_payload(snapshot: ConsoleSnapshot) -> Dict[str, Any]:
         },
         'events': [_event_payload(event) for event in sort_by_priority(snapshot.event_banners)],
         'sensor_panels': [_panel_payload(panel) for panel in snapshot.sensor_panels],
+        'perception_decisions': [
+            _perception_payload(view) for view in snapshot.perception_decisions
+        ],
         'health': [_health_payload(item) for item in snapshot.health],
     }
 

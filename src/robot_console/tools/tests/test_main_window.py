@@ -5,11 +5,13 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 import pytest
+from PIL import Image
 from PyQt5 import QtWidgets
 
 from robot_console.core.freshness import FreshnessLevel
+from robot_console.core.image_store import ImageStore
 from robot_console.core.launch_profile import LaunchProfileState
-from robot_console.core.snapshot_model import ConsoleSnapshot, HealthSummaryView
+from robot_console.core.snapshot_model import ConsoleSnapshot, HealthSummaryView, ImageReference
 from robot_console.utils import NodeLaunchStatus
 from robot_console.ui_qt.main_window import (
     TAB_TITLE_CONSOLE_LOG,
@@ -174,6 +176,7 @@ class _FakeConsoleCore:
     """LaunchControlCard/ManualOpsCardのシグナル配線確認用の簡易ダブル。"""
 
     def __init__(self) -> None:
+        self.image_store = ImageStore()
         self.launched: list = []
         self.stopped: list = []
         self.manual_start_calls: list = []
@@ -371,3 +374,40 @@ def test_entry_environment_updates_both_tabs_and_core(qt_app):
     window.launch_settings_tab.set_business_mode('デジタルツイン', '自律走行')
     assert core.business_mode_calls[-1] == ('デジタルツイン', '自律走行')
     assert window.dashboard_tab.launch_control_card._environment_combo.currentText() == 'デジタルツイン'
+
+
+def test_sensor_panel_renders_image_from_core_image_store(qt_app):
+    """画像本体は `ConsoleCore.image_store` 経由で渡るため、共有されている必要がある。
+
+    `MainWindow` がタブへ `image_store` を渡さないと、タブ側が空の `ImageStore` を
+    生成し、画像を受信しても全パネルが `No Image` のままになる。
+    """
+
+    core = _FakeConsoleCore()
+    core.image_store.set('sensor_viewer', Image.new('RGB', (8, 8), color='blue'))
+    window = MainWindow(core=core)
+
+    window.update_snapshot(
+        ConsoleSnapshot(
+            sensor_panels=[
+                ImageReference(
+                    panel_id='sensor_viewer',
+                    title='Sensor Viewer',
+                    topic='/sensor_viewer',
+                    image_id='sensor_viewer',
+                    freshness=FreshnessLevel.OK,
+                )
+            ]
+        )
+    )
+
+    tab = window.localization_sensor_tab
+    assert tab._image_store is core.image_store
+    grid = tab._grid_layout
+    panel = next(
+        grid.itemAt(index).widget()
+        for index in range(grid.count())
+        if grid.itemAt(index).widget().title() == 'Sensor Viewer'
+    )
+    assert panel._image_label.pixmap() is not None
+    assert not panel._image_label.pixmap().isNull()

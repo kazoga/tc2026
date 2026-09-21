@@ -1,18 +1,13 @@
 #!/usr/bin/env python3
 """traffic_signal_recognizer ノードの実装モジュール."""
 
-import copy
-import threading
 from typing import List, Optional, Sequence, Tuple
-
-import cv2
-from cv_bridge import CvBridge
-import numpy as np
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from std_msgs.msg import Int32
+from tc_perception_msgs.msg import OverlayDetection, PerceptionOverlay
 from vision_msgs.msg import Detection2D, Detection2DArray
 
 from traffic_signal_recognizer.signal_recognition_core import (
@@ -44,13 +39,9 @@ class TrafficSignalRecognizerNode(Node):
             hold_go=self.hold_go,
         )
 
-        self.bridge = CvBridge()
         self.enabled = False
-        self.latest_image: Optional[np.ndarray] = None
-        self.image_lock = threading.Lock()
 
         self.create_subscription(Int32, self.recog_flag_topic, self._recog_flag_callback, 10)
-        self.create_subscription(Image, self.image_topic, self._image_callback, 10)
         self.create_subscription(
             Detection2DArray,
             self.detections_topic,
@@ -59,13 +50,19 @@ class TrafficSignalRecognizerNode(Node):
         )
 
         self.sig_recog_publisher = self.create_publisher(Int32, self.sig_recog_topic, 10)
-        self.decision_image_publisher = self.create_publisher(Image, self.decision_image_topic, 10)
+        # 表示用の重畳データは取りこぼしを許容し、road_blockage_detector 側の
+        # overlay と QoS を揃える（購読側が両者を同一設定で扱えるようにする）。
+        # 制御経路へ渡す判定値は sig_recog_topic 側で RELIABLE に配信する。
+        self.overlay_publisher = self.create_publisher(
+            PerceptionOverlay,
+            self.overlay_topic,
+            QoSProfile(depth=10, reliability=QoSReliabilityPolicy.BEST_EFFORT),
+        )
 
         self.get_logger().info(
             'traffic_signal_recognizer を起動しました。'
             f' recog_flag={self.recog_flag_topic}, detections={self.detections_topic}, '
-            f'image={self.image_topic}, sig_recog={self.sig_recog_topic}, '
-            f'decision_image={self.decision_image_topic}'
+            f'sig_recog={self.sig_recog_topic}, overlay={self.overlay_topic}'
         )
 
     def _declare_parameters(self) -> None:
@@ -73,12 +70,8 @@ class TrafficSignalRecognizerNode(Node):
 
         self.declare_parameter('recog_flag_topic', '/recog_flag')
         self.declare_parameter('detections_topic', '/perception/traffic_signal/detections')
-        self.declare_parameter('image_topic', '/usb_cam/image_raw')
         self.declare_parameter('sig_recog_topic', '/sig_recog')
-        self.declare_parameter(
-            'decision_image_topic',
-            '/perception/traffic_signal/decision_image',
-        )
+        self.declare_parameter('overlay_topic', '/perception/traffic_signal/overlay')
         self.declare_parameter('confidence_threshold', 0.8)
         self.declare_parameter('judge_count', 3)
         self.declare_parameter('go_status', 1)
@@ -91,16 +84,14 @@ class TrafficSignalRecognizerNode(Node):
         self.declare_parameter('class_names', ['red', 'green'])
         self.declare_parameter('hold_go', False)
         self.declare_parameter('publish_stop_when_disabled', False)
-        self.declare_parameter('publish_image_when_disabled', True)
 
     def _load_parameters(self) -> None:
         """宣言済みパラメータを読み込む."""
 
         self.recog_flag_topic = self._get_string_parameter('recog_flag_topic')
         self.detections_topic = self._get_string_parameter('detections_topic')
-        self.image_topic = self._get_string_parameter('image_topic')
         self.sig_recog_topic = self._get_string_parameter('sig_recog_topic')
-        self.decision_image_topic = self._get_string_parameter('decision_image_topic')
+        self.overlay_topic = self._get_string_parameter('overlay_topic')
         self.confidence_threshold = self._get_double_parameter('confidence_threshold')
         self.judge_count = self._get_int_parameter('judge_count')
         self.go_status = self._get_int_parameter('go_status')
@@ -113,7 +104,6 @@ class TrafficSignalRecognizerNode(Node):
         self.class_names = self._get_string_array_parameter('class_names')
         self.hold_go = self._get_bool_parameter('hold_go')
         self.publish_stop_when_disabled = self._get_bool_parameter('publish_stop_when_disabled')
-        self.publish_image_when_disabled = self._get_bool_parameter('publish_image_when_disabled')
 
     def _get_string_parameter(self, name: str) -> str:
         return self.get_parameter(name).get_parameter_value().string_value
@@ -150,21 +140,6 @@ class TrafficSignalRecognizerNode(Node):
         if not self.enabled and self.publish_stop_when_disabled:
             self._publish_sig_recog(self.stop_status)
 
-    def _image_callback(self, msg: Image) -> None:
-        """画像を保持し、無効時は監視画像としてそのまま再配信する."""
-
-        try:
-            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-        except Exception as exc:
-            self.get_logger().error(f'画像変換に失敗しました: {exc}')
-            return
-
-        with self.image_lock:
-            self.latest_image = cv_image.copy()
-
-        if not self.enabled and self.publish_image_when_disabled:
-            self.decision_image_publisher.publish(msg)
-
     def _detections_callback(self, msg: Detection2DArray) -> None:
         """Detection2DArray を受信し、信号判定を行う."""
 
@@ -174,7 +149,7 @@ class TrafficSignalRecognizerNode(Node):
         candidates = self._extract_candidates(msg.detections)
         decision = self.core.update(candidates)
         self._publish_sig_recog(decision.status)
-        self._publish_signal_image(msg.detections, decision)
+        self._publish_overlay(msg, decision)
 
         self.get_logger().debug(
             '信号認識: '
@@ -226,75 +201,60 @@ class TrafficSignalRecognizerNode(Node):
 
         self.sig_recog_publisher.publish(Int32(data=int(status)))
 
-    def _publish_signal_image(
-        self, detections: Sequence[Detection2D], decision: SignalDecision
-    ) -> None:
-        """信号判定を重畳した画像を publish する."""
+    def _publish_overlay(self, msg: Detection2DArray, decision: SignalDecision) -> None:
+        """重畳表示用の認識結果を publish する.
 
-        with self.image_lock:
-            if self.latest_image is None:
-                return
-            image = copy.deepcopy(self.latest_image)
+        本ノードは画像を購読・配信しない。`header` は判定根拠となった
+        `Detection2DArray` のものをそのまま引き継ぎ、`yolo_detector` が複製した
+        元画像フレームの stamp/frame_id を表示側へ伝える。
 
-        self._draw_decision_border(image, decision)
-        self._draw_detections(image, detections)
+        Args:
+            msg (Detection2DArray): 判定に使用した検出結果.
+            decision (SignalDecision): 判定結果.
+        """
 
-        try:
-            image_msg = self.bridge.cv2_to_imgmsg(image, encoding='bgr8')
-        except Exception as exc:
-            self.get_logger().error(f'信号認識画像の変換に失敗しました: {exc}')
-            return
-        self.decision_image_publisher.publish(image_msg)
+        overlay = PerceptionOverlay()
+        overlay.header = msg.header
+        overlay.source = 'traffic_signal'
+        overlay.detections = [
+            self._to_overlay_detection(detection) for detection in msg.detections
+        ]
+        overlay.decision = int(decision.status)
+        overlay.decision_text = 'GO' if decision.status == self.go_status else 'STOP'
+        overlay.status_note = ''
+        self.overlay_publisher.publish(overlay)
 
-    def _draw_decision_border(self, image: np.ndarray, decision: SignalDecision) -> None:
-        """GO/STOP 判定を画像枠として描画する."""
+    def _to_overlay_detection(self, detection: Detection2D) -> OverlayDetection:
+        """Detection2D を表示用の OverlayDetection へ変換する.
 
-        color = (0, 255, 0) if decision.status == self.go_status else (0, 0, 255)
-        height, width = image.shape[:2]
-        cv2.rectangle(image, (0, 0), (width - 1, height - 1), color, 5)
-        label = f'sig_recog={decision.status}'
-        cv2.putText(image, label, (12, 34), cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
+        confidence_threshold 未満の検出も `adopted=False` として残し、判定に
+        採用されなかった検出も表示側で確認できるようにする。
 
-    def _draw_detections(self, image: np.ndarray, detections: Sequence[Detection2D]) -> None:
-        """検出矩形を画像へ描画する."""
+        Args:
+            detection (Detection2D): 変換元の検出.
 
-        for detection in detections:
-            best = self._extract_best_result(detection)
-            if best is None:
-                continue
-            class_id, score = best
-            if score < self.confidence_threshold:
-                continue
+        Returns:
+            OverlayDetection: 表示用の検出 1 件.
+        """
 
-            class_name = self._resolve_class_name(class_id)
-            color = (0, 255, 0) if class_name.lower() == 'green' else (0, 0, 255)
-            x1, y1, x2, y2 = self._bbox_to_xyxy(detection)
-            cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
-            label = f'{class_name}:{score:.2f}'
-            cv2.putText(
-                image,
-                label,
-                (x1, max(y1 - 10, 0)),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                color,
-                2,
-            )
+        entry = OverlayDetection()
+        entry.center_x = float(detection.bbox.center.position.x)
+        entry.center_y = float(detection.bbox.center.position.y)
+        entry.size_x = float(detection.bbox.size_x)
+        entry.size_y = float(detection.bbox.size_y)
 
-    @staticmethod
-    def _bbox_to_xyxy(detection: Detection2D) -> Tuple[int, int, int, int]:
-        """Detection2D.bbox を OpenCV 描画用座標へ変換する."""
+        best = self._extract_best_result(detection)
+        if best is None:
+            entry.label = 'unknown'
+            entry.score = 0.0
+            entry.adopted = False
+            return entry
 
-        center_x = detection.bbox.center.position.x
-        center_y = detection.bbox.center.position.y
-        half_w = detection.bbox.size_x / 2.0
-        half_h = detection.bbox.size_y / 2.0
-        return (
-            int(center_x - half_w),
-            int(center_y - half_h),
-            int(center_x + half_w),
-            int(center_y + half_h),
-        )
+        class_id, score = best
+        entry.label = self._resolve_class_name(class_id)
+        entry.score = float(score)
+        entry.adopted = score >= self.confidence_threshold
+        return entry
 
 
 def main(args: Optional[Sequence[str]] = None) -> None:

@@ -57,19 +57,46 @@ def test_update_snapshot_reflects_summary(qt_app):
     assert tab._localization_freshness_label.text() == 'OK'
 
 
-def test_sensor_panels_from_snapshot_replace_defaults(qt_app):
+def test_sensor_panels_from_snapshot_merge_into_defaults(qt_app):
+    """受信済みパネルは既定枠を置き換えず、既定枠の上に重ねて反映される。"""
+
     tab = LocalizationSensorTab()
     snapshot = ConsoleSnapshot(
         sensor_panels=[
             ImageReference(panel_id='route_map', title='Route Map', topic='/active_route'),
-            ImageReference(panel_id='sensor_viewer', title='Sensor Viewer', topic='/sensor_viewer'),
+            ImageReference(
+                panel_id='sensor_viewer',
+                title='Sensor Viewer',
+                topic='/sensor_viewer',
+                freshness=FreshnessLevel.OK,
+            ),
         ]
     )
 
     tab.update_snapshot(snapshot)
 
-    # route_mapはグリッドから除外され、専用パネルへ表示される
-    assert tab._grid_layout.count() == 1
+    # route_mapはグリッドから除外され、専用パネルへ表示される。残りの既定枠は
+    # 未受信のまま残り、未起動ノードの枠が画面から消えないことを確認する。
+    assert tab._grid_layout.count() == len(DEFAULT_SENSOR_PANELS)
+    titles = [
+        tab._grid_layout.itemAt(index).widget().title()
+        for index in range(tab._grid_layout.count())
+    ]
+    assert 'Sensor Viewer' in titles
+    assert 'Front Camera' in titles
+
+
+def test_unknown_sensor_panel_is_appended_to_defaults(qt_app):
+    """既定枠に無いpanel_idを受信した場合も、既定枠を残したまま追加表示する。"""
+
+    tab = LocalizationSensorTab()
+    snapshot = ConsoleSnapshot(
+        sensor_panels=[ImageReference(panel_id='rear_camera', title='Rear Camera', topic='/rear')]
+    )
+
+    tab.update_snapshot(snapshot)
+
+    assert tab._grid_layout.count() == len(DEFAULT_SENSOR_PANELS) + 1
 
 
 def test_update_snapshot_pushes_localization_and_target_to_map_view(qt_app):
@@ -117,10 +144,53 @@ def test_sensor_freshness_summary_reports_worst_level(qt_app):
     snapshot = ConsoleSnapshot(
         sensor_panels=[
             ImageReference(panel_id='sensor_viewer', freshness=FreshnessLevel.OK),
-            ImageReference(panel_id='lidar_view', freshness=FreshnessLevel.LOST),
+            ImageReference(panel_id='road_blockage', freshness=FreshnessLevel.LOST),
         ]
     )
 
     tab.update_snapshot(snapshot)
 
     assert tab._sensor_freshness_label.text() == 'LOST'
+
+
+def test_sensor_panel_widgets_are_reused_while_panel_set_is_unchanged(qt_app):
+    """構成が同じ間はWidgetを作り直さない（グリッド再構築による再描画の抑制）。
+
+    snapshotは毎秒ポーリングされるため、毎回作り直すとタブ全体のレイアウト再計算が
+    走り、同じ画面のMapView（QWebEngineView）のちらつきにつながる。
+    """
+
+    tab = LocalizationSensorTab()
+    snapshot = ConsoleSnapshot(
+        sensor_panels=[
+            ImageReference(
+                panel_id='sensor_viewer', title='Sensor Viewer', freshness=FreshnessLevel.OK
+            )
+        ]
+    )
+
+    tab.update_snapshot(snapshot)
+    widgets_before = [
+        tab._grid_layout.itemAt(index).widget() for index in range(tab._grid_layout.count())
+    ]
+
+    tab.update_snapshot(snapshot)
+    widgets_after = [
+        tab._grid_layout.itemAt(index).widget() for index in range(tab._grid_layout.count())
+    ]
+
+    assert widgets_before == widgets_after
+
+
+def test_sensor_panel_widgets_are_rebuilt_when_panel_set_changes(qt_app):
+    tab = LocalizationSensorTab()
+    tab.update_snapshot(ConsoleSnapshot())
+    before = tab._grid_layout.count()
+
+    tab.update_snapshot(
+        ConsoleSnapshot(
+            sensor_panels=[ImageReference(panel_id='rear_camera', title='Rear Camera')]
+        )
+    )
+
+    assert tab._grid_layout.count() == before + 1

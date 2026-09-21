@@ -699,7 +699,6 @@ UI側は座標変換規約を持たず、Coreから地図overlay用Viewを受け
 | `road_blockage` | Road Blockage | `/perception/road_blockage/decision_image` |
 | `traffic_signal` | Traffic Signal | `/perception/traffic_signal/decision_image` |
 | `front_camera` | Front Camera | 将来追加topic |
-| `lidar_view` | LiDAR View | 将来追加topic |
 
 各パネルはtitle、topic、freshness、最終更新時刻、画像またはplaceholderを表示する。
 

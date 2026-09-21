@@ -144,3 +144,44 @@ def test_build_update_route_script_uses_current_index_while_running():
     script = build_update_route_script(route)
 
     assert script.endswith('1);')
+
+
+def test_map_view_skips_redundant_script_execution(qt_app):
+    """内容が変わらない間は再描画スクリプトを流さない（地図のちらつき対策）。
+
+    `update_route` はLeaflet側で全waypointの再スタイルとpolyline再構築を伴うため、
+    snapshotポーリングのたびに実行すると1000点規模のrouteで描画が乱れる。
+    """
+
+    executed = []
+
+    class _StubPage:
+        """`page()` はPyQt側で毎回別のラッパを返し得るため、page自体を差し替える。"""
+
+        def runJavaScript(self, script):
+            executed.append(script)
+
+    view = MapView()
+    view._page_loaded = True
+    stub_page = _StubPage()
+    view.page = lambda: stub_page
+
+    route = RouteView(
+        current_index=0,
+        waypoints=[RouteWaypointView(index=0, latitude=36.083, longitude=140.113)],
+    )
+    localization = LocalizationStateView(latitude=36.083, longitude=140.113)
+    target = TargetView(latitude=36.0832, longitude=140.1132)
+
+    view.update_route(route)
+    view.update_map(localization, target)
+    assert len(executed) == 2
+
+    # 同じ内容の再適用では実行しない。
+    view.update_route(route)
+    view.update_map(localization, target)
+    assert len(executed) == 2
+
+    # 進捗が変われば再度実行する。
+    view.update_route(RouteView(current_index=1, waypoints=route.waypoints))
+    assert len(executed) == 3

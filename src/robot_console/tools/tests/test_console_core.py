@@ -290,6 +290,8 @@ def test_update_sensor_image_stores_image_and_metadata():
     assert panel.width == 2
     assert panel.height == 2
     assert panel.freshness == FreshnessLevel.OK
+    # 画面の最終更新時刻表示に使うため、受信時刻が記録されていること。
+    assert panel.updated_at is not None
 
 
 def test_update_sensor_image_with_undecodable_message_keeps_metadata_without_image():

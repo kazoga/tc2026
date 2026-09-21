@@ -26,11 +26,11 @@ def test_pil_to_qpixmap_preserves_size(qt_app):
 
 def test_update_panel_shows_placeholder_without_image(qt_app):
     panel = ImagePanel()
-    reference = ImageReference(panel_id='lidar_view', title='LiDAR View')
+    reference = ImageReference(panel_id='front_camera', title='Front Camera')
 
     panel.update_panel(reference, None)
 
-    assert panel.title() == 'LiDAR View'
+    assert panel.title() == 'Front Camera'
     assert panel._image_label.text() == PLACEHOLDER_TEXT
     assert panel._image_label.pixmap() is None or panel._image_label.pixmap().isNull()
     assert '未受信' in panel._status_label.text()
@@ -50,7 +50,8 @@ def test_update_panel_renders_image_when_available(qt_app):
 
     assert panel._image_label.text() == ''
     assert not panel._image_label.pixmap().isNull()
-    assert panel._status_label.text() == '/sensor_viewer / OK / 09:30:00'
+    # `updated_at` はUTCで保持し、表示のみ日本時間へ変換する（09:30 UTC = 18:30 JST）。
+    assert panel._status_label.text() == '/sensor_viewer / OK / 18:30:00'
 
 
 def test_update_panel_falls_back_to_panel_id_when_title_missing(qt_app):

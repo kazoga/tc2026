@@ -85,10 +85,10 @@ def test_obstacle_hint_subscription_uses_best_effort_reliability():
 
 
 def test_image_subscriptions_use_best_effort_reliability():
-    """road_blockage_detectorのdecision_imageはBEST_EFFORT配信であり、
+    """認識ノードのoverlayはBEST_EFFORT配信であり、
 
-    RELIABLE購読ではQoS非互換で画像が届かない。画像購読は取りこぼしを許容できる
-    ため一律BEST_EFFORTとしていることを確認する。
+    RELIABLE購読ではQoS非互換で受信できない。表示用の購読は取りこぼしを
+    許容できるため一律BEST_EFFORTとしていることを確認する。
     """
     from rclpy.qos import ReliabilityPolicy
 
@@ -98,8 +98,9 @@ def test_image_subscriptions_use_best_effort_reliability():
     try:
         for topic in (
             'sensor_viewer',
-            'perception/road_blockage/decision_image',
-            'perception/traffic_signal/decision_image',
+            'usb_cam/image_raw',
+            'perception/road_blockage/overlay',
+            'perception/traffic_signal/overlay',
         ):
             infos = node.get_subscriptions_info_by_topic(topic)
             assert len(infos) == 1, topic

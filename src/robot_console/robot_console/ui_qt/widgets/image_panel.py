@@ -12,6 +12,7 @@ from PIL import Image
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from robot_console.core.snapshot_model import ImageReference
+from robot_console.utils import format_local_time
 
 from .color_rules import freshness_color
 
@@ -77,8 +78,9 @@ class ImagePanel(QtWidgets.QGroupBox):
             self._image_label.setPixmap(QtGui.QPixmap())
             self._image_label.setText(PLACEHOLDER_TEXT)
 
+        # `updated_at` はUTCで保持されるため、表示時のみ日本時間へ変換する。
         updated_text = (
-            reference.updated_at.strftime('%H:%M:%S') if reference.updated_at else '未受信'
+            format_local_time(reference.updated_at) if reference.updated_at else '未受信'
         )
         self._status_label.setText(
             f'{reference.topic or "-"} / {reference.freshness.value} / {updated_text}'

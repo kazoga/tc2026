@@ -18,7 +18,7 @@ from .data_models import (
     clone_launch_state,
 )
 from .image_tools import convert_image_message, create_placeholder_image, resize_with_letter_box
-from .time_utils import now
+from .time_utils import format_local_time, now
 
 __all__ = [
     'CmdVelView',
@@ -39,5 +39,6 @@ __all__ = [
     'convert_image_message',
     'create_placeholder_image',
     'resize_with_letter_box',
+    'format_local_time',
     'now',
 ]

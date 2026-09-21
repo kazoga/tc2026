@@ -47,7 +47,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
 
         self.dashboard_tab = DashboardTab()
-        self.localization_sensor_tab = LocalizationSensorTab()
+        # 画像パネルはメタ情報を `ConsoleSnapshot` から、画像本体を `ImageStore` から
+        # 取得する2系統構成のため、`ConsoleCore` が保持する `ImageStore` をそのまま
+        # 渡す。渡さない場合はタブ側が空の `ImageStore` を生成し、画像を受信しても
+        # 全パネルが `No Image` のままになる。
+        self.localization_sensor_tab = LocalizationSensorTab(
+            image_store=core.image_store if core is not None else None
+        )
         self.launch_settings_tab = LaunchSettingsTab()
         self.console_log_tab = ConsoleLogTab()
         self.gnss_tab = GnssTab()
