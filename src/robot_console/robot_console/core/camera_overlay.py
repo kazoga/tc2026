@@ -18,8 +18,9 @@
 * `clear_grace_sec`: 検出 0 件の結果を受け取っても、直前の検出をこの時間は残す。
   認識が 1 回検出を取りこぼしただけで枠が消えて再表示される点滅を防ぐ。
 * `sync_tolerance_sec`: 認識結果の元フレームと描画対象フレームの時刻差がこれを
-  超える場合、枠を破線で描き「このフレームに対する結果ではない」ことを示す。
-  古い結果を実線で描くと、現在のフレームに対する認識結果だと誤解させるため。
+  超える場合、枠を破線で描き「認識が追随できていない」ことを示す。古い結果を
+  実線で描くと、現在の状況を表していると誤解させるため。推論周期と推論遅延の
+  ぶんは正常動作でも必ずずれるので、しきい値はその数倍に取る。
 """
 
 from __future__ import annotations
@@ -43,7 +44,15 @@ UNADOPTED_COLOR: Tuple[int, int, int] = (150, 150, 150)
 
 DEFAULT_HOLD_SEC = 1.5
 DEFAULT_CLEAR_GRACE_SEC = 0.6
-DEFAULT_SYNC_TOLERANCE_SEC = 0.3
+# YOLO の推論間隔 (yolo_detector の detection_interval 既定 0.5 秒、信号認識用の
+# launch では 0.2 秒) と推論遅延があるため、正常動作でも認識結果は描画フレームより
+# 数百 ms 古い。しきい値をその範囲に置くと常時破線になり警告として機能しないので、
+# 推論周期の数倍を取り、検出器が実際に停滞したときだけ破線になるようにする。
+DEFAULT_SYNC_TOLERANCE_SEC = 1.0
+
+# 破線時に付ける印。PIL の既定フォントは日本語グリフを持たず、日本語を描くと
+# 豆腐表示になるため、画像へ焼き込む文字は ASCII に限定する。
+STALE_LABEL_SUFFIX = ' [stale]'
 
 ADOPTED_LINE_WIDTH = 3
 UNADOPTED_LINE_WIDTH = 1
@@ -264,7 +273,7 @@ class CameraOverlayRenderer:
         if detection.score > 0.0:
             label = f'{label}:{detection.score:.2f}'
         if not synced:
-            label = f'{label} (過去フレーム)'
+            label = f'{label}{STALE_LABEL_SUFFIX}'
         draw.text((x1, max(y1 - 12, 0)), label, fill=box_color)
 
 

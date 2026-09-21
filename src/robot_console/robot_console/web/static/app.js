@@ -217,6 +217,40 @@ function appendField(dl, label, value) {
   dl.appendChild(dd);
 }
 
+// 判定チップを常設する認識種別。未受信でも枠を残し、認識ノードが未起動なのか
+// 異常なのかを画面から区別できるようにする（PyQt5側のlocalization_sensor_tab.py
+// と同じ扱い）。
+const PERCEPTION_SOURCES = [
+  ['traffic_signal', '信号'],
+  ['road_blockage', '経路封鎖'],
+];
+
+function renderPerception(decisions) {
+  // 検出枠はConsoleCoreがカメラ画像へ重畳済みのため、ここには判定結果だけを出す。
+  const fields = document.getElementById('perception-fields');
+  fields.innerHTML = '';
+  const bySource = new Map((decisions || []).map((view) => [view.source, view]));
+
+  for (const [source, defaultTitle] of PERCEPTION_SOURCES) {
+    const view = bySource.get(source);
+    if (!view) {
+      appendField(fields, defaultTitle, '未受信');
+      fields.lastElementChild.style.color = freshnessColor('UNKNOWN');
+      continue;
+    }
+
+    let text = view.decision_text || '-';
+    if (view.status_note) {
+      text = `${text}（${view.status_note}）`;
+    }
+    if (view.detection_count) {
+      text = `${text} / 検出${view.detection_count}`;
+    }
+    appendField(fields, view.title || defaultTitle, text);
+    fields.lastElementChild.style.color = freshnessColor(view.freshness);
+  }
+}
+
 function renderSummary(snapshot) {
   const fields = document.getElementById('summary-fields');
   fields.innerHTML = '';
@@ -440,6 +474,7 @@ async function pollSnapshot() {
     renderMapCaption(snapshot);
     updateRouteOverlay(snapshot);
     updateMapMarkers(snapshot);
+    renderPerception(snapshot.perception_decisions);
     renderSensorGrid(snapshot.sensor_panels);
     renderHealthTable(snapshot.health);
     lastSnapshotSuccessAt = Date.now();

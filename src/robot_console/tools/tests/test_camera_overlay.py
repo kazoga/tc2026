@@ -96,10 +96,29 @@ def test_empty_result_keeps_previous_detection_during_grace():
     assert _drawn_pixel_count(after_grace) == 0
 
 
-def test_stale_frame_is_drawn_with_dashed_box():
-    """元フレームと描画フレームの時刻差が大きい枠は破線で描く。
+def test_normal_inference_latency_is_drawn_solid():
+    """推論周期ぶんのずれは正常なので実線で描く。
 
-    古い認識結果を実線で描くと、現在のフレームに対する結果だと誤解させるため。
+    しきい値を推論遅延と同程度にすると常時破線になり、警告として機能しない。
+    """
+
+    renderer = CameraOverlayRenderer(sync_tolerance_sec=1.0)
+    base = utc_now()
+    renderer.update_overlay(_overlay([_detection()], base, frame_stamp=100.0))
+
+    # YOLO の推論間隔 (0.2〜0.5秒) 相当のずれ。
+    rendered = renderer.render(_blank(), frame_stamp=100.5, now=base)
+
+    top_edge = sum(
+        1 for x in range(40, 61) if rendered.getpixel((x, 35)) != (0, 0, 0)
+    )
+    assert top_edge == 21, '正常遅延の範囲では実線で描く'
+
+
+def test_stale_frame_is_drawn_with_dashed_box():
+    """認識が追随できていない枠は破線で描く。
+
+    古い認識結果を実線で描くと、現在の状況を表していると誤解させるため。
     """
 
     renderer = CameraOverlayRenderer(sync_tolerance_sec=0.3)

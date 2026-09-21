@@ -5,6 +5,11 @@
 `RobotConsoleNode` / `ConsoleCore`、遠隔閲覧は同じSnapshotを読むHTML版が担当します。
 下記の旧画面説明は互換用tkinter版です。新規の実機共通起動はPyQt5版を使用します。
 
+**旧tkinter版の画像パネルは現在動作しません。** 認識ノードは重畳画像 topic
+（`/perception/*/decision_image`）を廃止し、認識結果のみを配信する構成へ移行しましたが、
+旧tkinter版は移行対象外としたため、廃止済み topic を購読したままです。カメラ表示が
+必要な場合はPyQt5版またはHTML版を使用してください。
+
 ### 現行の5タブ（2026-09-20）
 
 | タブ | 内容 |
@@ -20,7 +25,8 @@
 
 ## 主な機能
 - `/route_state`・`/manager_status`・`/follower_state` などのトピックを購読し、走行状況や再計画履歴をカード形式で可視化。
-- `/sensor_viewer` および外部カメラ映像（走行・信号監視）を 3 つの画像パネルに表示し、障害物ヒントをオーバレイ。
+- `/sensor_viewer` とフロントカメラ映像を画像パネルに表示。カメラ映像には認識ノードから受け取った
+  検出矩形を `ConsoleCore` が重畳する（PyQt5版・HTML版）。
 - `manual_start`・`sig_recog`・`road_blocked`・`obstacle_avoidance_hint` の送信 UI を備え、運用者がラッチ値や回避指示を即時に発行可能。
 - `NodeLaunchManager` により `ros2 launch` コマンドを GUI から起動／停止し、主要ノードの稼働状況とログをサイドバーとタブで確認。
 - 走行距離・速度・目標到達率を自動算出し、閾値を超えた場合に色分けで警告。
@@ -31,7 +37,7 @@
 - **ステータスカード列**：ルート進捗、フォロワ状態、速度・目標距離カードを 5Hz 以内で更新。
 - **イベントバナー**：`road_blocked` → `manual_start` → `sig_recog` の優先順位で最新イベントを表示。60 秒経過で自動クリア。
 - **制御コマンドタブ**：各トピックの送信 UI を Notebook 形式でまとめ、Spinbox やラジオボタンで値を入力。`frame_image_path` タグでは静止画パスを入力して `/frame_image_path` トピックへ単発 publish できます。送信結果は最終送信値と時刻として即座に反映されます。
-- **画像パネル**：ルート地図（`/active_route` の付帯画像）、障害物ビュー（`/sensor_viewer`）、カメラ映像（`/perception/road_blockage/decision_image`・`/perception/traffic_signal/decision_image`）。レターボックス処理でアスペクト比を保持し、障害物ヒント値を左上にオーバレイ表示。
+- **画像パネル**（旧tkinter版。廃止済み topic を購読しており現在は表示されない）：ルート地図（`/active_route` の付帯画像）、障害物ビュー（`/sensor_viewer`）、カメラ映像。レターボックス処理でアスペクト比を保持し、障害物ヒント値を左上にオーバレイ表示。
 - **ノード起動サイドバー**：主要ノードカードに加え `Drive Mode Manager`、
   `Road Blockage Detector`、`Traffic Signal Recognizer` カードを配置。各カードは対応パッケージの統合 launch を起動し、
   下流判定ノードと用途別 `yolo_detector` インスタンスを同時に立ち上げます。
@@ -58,7 +64,7 @@ ros2 launch robot_console robot_console.launch.py \
 | `ui.image_rate_limit_hz.*` | double | route:2 / sensor:5 / camera_drive:5 / camera_signal:5 | 画像パネルごとの最大更新頻度。|
 | `commands.cooldown_ms.*` | int | 500 | manual_start / sig_recog / road_blocked の連打抑止時間。|
 | `commands.override_timer_hz.obstacle_hint` | double | 0.5 | 障害物ヒント固定送出の周期。|
-| `topics.camera.drive` / `topics.camera.signal` | string | `/perception/road_blockage/decision_image` / `/perception/traffic_signal/decision_image` | 外部カメラの購読トピック名。|
+| `topics.camera.drive` / `topics.camera.signal` | string | （廃止済み topic） | 旧tkinter版のカメラ購読トピック名。移行対象外のため現在は受信しない。|
 | `topics.road_blocked.external_priority` | bool | true | 外部 `/road_blocked` を GUI 送信より優先するか。|
 
 ## ROS インタフェース
@@ -77,7 +83,8 @@ ros2 launch robot_console robot_console.launch.py \
 | `/follower_state` | `tc_route_msgs/msg/FollowerState` | フォロワ状態カード、イベントログ。|
 | `/active_route` | `tc_route_msgs/msg/Route` | ルート地図画像とウェイポイント一覧。|
 | `/sensor_viewer` | `sensor_msgs/msg/Image` | 障害物ビュー画像パネル。|
-| `/perception/road_blockage/decision_image` / `/perception/traffic_signal/decision_image` | `sensor_msgs/msg/Image` | 走行カメラ・信号監視パネル。|
+| `/usb_cam/image_raw` | `sensor_msgs/msg/Image` | フロントカメラ生画像。`ConsoleCore` が認識結果を重畳して 1 枚のカメラパネルに表示する。|
+| `/perception/traffic_signal/overlay` / `/perception/road_blockage/overlay` | `tc_perception_msgs/msg/PerceptionOverlay` | 認識結果。検出矩形は画像へ重畳し、判定結果は判定チップとして表示する。|
 | `/active_target` / `/localization/pose_enu` | `geometry_msgs/msg/PoseStamped` / `PoseWithCovarianceStamped` | 目標距離計算。|
 | `/cmd_vel` | `geometry_msgs/msg/Twist` | 速度カード。|
 | `/manual_start` / `/sig_recog` / `/road_blocked` | `std_msgs/msg/Bool` / `Int32` / `Bool` | イベントバナー、タブ表示の現在値。|

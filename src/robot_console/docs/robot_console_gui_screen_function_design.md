@@ -696,11 +696,42 @@ UI側は座標変換規約を持たず、Coreから地図overlay用Viewを受け
 | --- | --- | --- |
 | `route_map` | Route Map | `/active_route` または将来LLH route view |
 | `sensor_viewer` | Sensor Viewer | `/sensor_viewer` |
-| `road_blockage` | Road Blockage | `/perception/road_blockage/decision_image` |
-| `traffic_signal` | Traffic Signal | `/perception/traffic_signal/decision_image` |
-| `front_camera` | Front Camera | 将来追加topic |
+| `front_camera` | Front Camera | `/usb_cam/image_raw` |
 
 各パネルはtitle、topic、freshness、最終更新時刻、画像またはplaceholderを表示する。
+`route_map` は専用の地図Widget（`MapView`）で表示し、グリッドには含めない。
+
+既定パネルは受信有無によらず常設の枠として残し、受信済みパネルで上書きする。受信分だけに
+置き換えると、未起動・停止中のノードに対応する枠が画面から消え、異常なのか元々起動して
+いないのかを区別できなくなるため。
+
+#### カメラパネルを1枚に統合する理由
+
+フロントカメラは1台のみで、信号認識と経路封鎖判定はどちらも同じ画像を入力とする。
+認識ごとにパネルを分けると同一の映像が複数枠を占有し、表示面積を浪費するうえ、
+2つの認識結果を同時に見ることができない。パネルを1枚にまとめ、両方の検出矩形を
+同じ画像へ重ねて描く。
+
+重畳は `ConsoleCore`（`core/camera_overlay.py`）が行い、Qt UI と HTML UI が同一の
+描画結果を共有する。描画実装をUI側に置くと2つのUIで二重化し、食い違う。
+
+- 判定に採用された検出は太線、採用外は細線・灰色で描き分ける。
+- 認識種別ごとに色を変える（信号=黄系、経路封鎖=赤系）。
+- 認識は生画像より低いレートで動作するため、直近の結果を保持して後続フレームにも
+  描き続ける。対応フレームにだけ描くと、ほとんどの時間枠が表示されずちらつく。
+- 検出0件の結果を受けても猶予時間は直前の枠を残し、1回の検出漏れによる点滅を防ぐ。
+- 元フレームと描画フレームの時刻差が大きい場合は破線にして、認識が追随できていない
+  ことを示す。しきい値は推論周期の数倍に取る。推論遅延と同程度にすると正常動作でも
+  常時破線となり、警告として機能しないため。
+
+#### 判定結果の表示
+
+判定結果（GO/STOP、封鎖の有無）は画像へ焼き込まず、`perception_decisions` として
+画像とは別のチップ領域に表示する。走行中に運転者が読むのは判定そのものであり、
+画像内の小さな文字では数m離れた位置から判読できない。
+
+チップは認識種別ごとに常設し、未受信でも枠を残す。判定できなかった場合は
+`status_note`（`no_pose` / `suppressed` など）を併記する。
 
 ## 8. HTML遠隔観測UI
 

@@ -118,11 +118,9 @@ _QOS_BEST_EFFORT = QoSProfile(
     depth=1,
 )
 
-# 画像系トピックも配信側のQoSがノードごとに異なる
-# （road_blockage_detector の decision_image は BEST_EFFORT、obstacle_monitor の
-# sensor_viewer と traffic_signal_recognizer の decision_image は RELIABLE）。
-# BEST_EFFORT購読はどちらとも互換であり、表示用途では取りこぼしも許容できるため
-# 画像購読は一律 BEST_EFFORT とする。
+# 表示系トピックは配信側のQoSがノードごとに異なる（obstacle_monitor の sensor_viewer と
+# usb_cam の画像は RELIABLE、認識ノードの overlay は BEST_EFFORT）。BEST_EFFORT購読は
+# どちらとも互換であり、表示用途では取りこぼしも許容できるため一律 BEST_EFFORT とする。
 _QOS_IMAGE = QoSProfile(
     reliability=ReliabilityPolicy.BEST_EFFORT,
     durability=DurabilityPolicy.VOLATILE,
