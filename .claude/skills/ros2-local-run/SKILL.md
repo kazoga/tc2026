@@ -84,7 +84,7 @@ description: ローカル環境で ros2 run / ros2 launch / ros2 topic / ros2 se
 
 # GUI か headless かの判定
 
-`robot_console` や評価ツール (`gui_route_stack_eval.py` / `headless_route_stack_eval.py`) は
+`robot_console` や評価ツール (`qt_route_stack_eval.py` / `headless_route_stack_eval.py`) は
 GUI の有無で使い分ける。「ローカル環境では基本 headless」と決めつけず、まず環境を確認する。
 
 ```bash

@@ -58,7 +58,7 @@ ROSパッケージは `src/`、センサのメーカー資料は `docs/reference
 
 - `robot_console` の正式UIは PyQt5 版（`robot_console_qt`）である。遠隔観測用の
   HTML UI（`robot_console_web`）も同じ `ConsoleCore` の状態を表示する。
-  旧 tkinter 版（`robot_console`）は当面残すが、正式UIとしては扱わない。
+  旧 tkinter 版は削除済みで、entry point は `robot_console_qt` と `robot_console_web` の 2 つである。
 - `localization_fusion` 実装前の暫定構成では、GNSS入力がある場合に
   `geo_pose_converter` のENU出力を `/localization/pose_enu` として使用する。
 - 走行制御はENU、OSM・GUI表示はLLHを使用し、`geo_pose_converter` が両者を変換する。

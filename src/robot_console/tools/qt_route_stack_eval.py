@@ -2,10 +2,10 @@
 """robot_console 次期PyQt5 UI（ConsoleCore ⇔ Snapshot ⇔ MainWindow）の
 route stack 結合評価ツール。
 
-`gui_route_stack_eval.py` が旧tkinter版 `GuiCore`/`UiMain` を対象とするのに対し、
-本ツールは次期UIのROS統合実装（`ros/console_node.py::RobotConsoleNode` ⇔
+本ツールはPyQt5 UIのROS統合実装（`ros/console_node.py::RobotConsoleNode` ⇔
 `core/console_core.py::ConsoleCore` ⇔ `ui_qt/main_window.py::MainWindow`）を対象と
-する。次期UIにはまだ `ui_main.py` の `automation_*` に相当する公開APIが無いため、
+する。GUI を生成しない評価は `headless_route_stack_eval.py` を使う。
+UIに自動操作専用の公開APIは設けていないため、
 実際の起動操作カード・起動設定タブが呼ぶのと同じ `ConsoleCore` の公開メソッド
 （`update_selected_param()` 等）と、起動・設定タブの入力ハンドラ
 （`LaunchSettingsTab._on_param_path_edited()` 等）を直接呼び出して駆動する。
@@ -115,7 +115,9 @@ class QtRouteStackEvaluator:
                 "route_manager", "goal_label", self._config.goal_label
             )
             launch_settings_tab._on_argument_changed(
-                "drive_mode_manager", "start_gui", "false"
+                "drive_mode_manager",
+                "start_gui",
+                "true" if self._config.show_drive_status_gui else "false",
             )
             launch_settings_tab._on_argument_changed(
                 "drive_mode_manager", "joy_input", "joy_node"
@@ -298,6 +300,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=parse_launch_order,
         default=DEFAULT_LAUNCH_ORDER,
         help="起動する profile ID のカンマ区切り一覧",
+    )
+    parser.add_argument(
+        "--show-drive-status-gui",
+        action="store_true",
+        help="drive_mode_manager の走行状態GUIを表示する",
     )
     parser.add_argument("--no-simulator", action="store_true")
     parser.add_argument("--no-manual-start", action="store_true")

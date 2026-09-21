@@ -47,7 +47,6 @@ setup(
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
-            'robot_console = robot_console.robot_console_node:main',
             'robot_console_qt = robot_console.ui_qt_main:main',
             'robot_console_web = robot_console.web_main:main',
         ],

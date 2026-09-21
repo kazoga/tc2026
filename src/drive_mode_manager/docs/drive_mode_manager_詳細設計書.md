@@ -547,7 +547,7 @@ GUI 実装は、`PyQt5` の `Qt Widgets` と `QGraphicsView` / `QGraphicsScene` 
 縦横どちらかに余白が出る場合は背景色で letterbox 表示にする。文字、線幅、余白は scene 座標に
 紐づけるため、ウィンドウサイズを変えても画面全体が同じ比率で拡縮される。
 
-`tkinter` は既存 `robot_console` と同じ技術で軽量に実装できるが、固定アスペクト比の全体拡縮、
+`tkinter` は標準ライブラリだけで軽量に実装できるが、固定アスペクト比の全体拡縮、
 カスタム描画、警告画面の表現を安定させるには Qt の方が適している。そのため、実装時は
 `package.xml` の GUI 依存を `python3-pyqt5` へ更新する。`pyqtgraph` は時系列グラフを表示する
 場合のみ追加候補とし、初期 UI では必須にしない。

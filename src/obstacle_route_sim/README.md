@@ -165,7 +165,7 @@ pylon ありで確認する場合は、手順 1 の Gazebo 起動時に `enable_
 Gazebo を起動した状態で、別端末から以下を実行する。
 
 ```bash
-python3 src/robot_console/tools/gui_route_stack_eval.py \
+python3 src/robot_console/tools/qt_route_stack_eval.py \
   --route-planner-param obstacle_route_straight_w5.yaml \
   --route-manager-param obstacle_route_straight_w5.yaml \
   --start-label 0 \
@@ -182,7 +182,7 @@ python3 src/robot_console/tools/gui_route_stack_eval.py \
 S字とクランクは params と goal label を置き換える。
 
 ```bash
-python3 src/robot_console/tools/gui_route_stack_eval.py \
+python3 src/robot_console/tools/qt_route_stack_eval.py \
   --route-planner-param obstacle_route_scurve_w5.yaml \
   --route-manager-param obstacle_route_scurve_w5.yaml \
   --start-label 0 \
@@ -191,7 +191,7 @@ python3 src/robot_console/tools/gui_route_stack_eval.py \
   --no-simulator \
   --show-drive-status-gui
 
-python3 src/robot_console/tools/gui_route_stack_eval.py \
+python3 src/robot_console/tools/qt_route_stack_eval.py \
   --route-planner-param obstacle_route_crank_w5.yaml \
   --route-manager-param obstacle_route_crank_w5.yaml \
   --start-label 0 \

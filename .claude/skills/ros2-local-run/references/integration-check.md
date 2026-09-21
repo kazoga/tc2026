@@ -25,7 +25,7 @@ robot_navigator -> robot_simulator` の接続で進行し、指定した goal la
 この構成の確認では、手書きの inline Python ではなく以下の正式ツールを使う。
 
 - GUI あり、ローカルデスクトップまたは X11 転送ありの環境：
-  `src/robot_console/tools/gui_route_stack_eval.py`
+  `src/robot_console/tools/qt_route_stack_eval.py`
 - GUI なし、または `DISPLAY` が利用できない環境：
   `src/robot_console/tools/headless_route_stack_eval.py`
 
@@ -33,7 +33,7 @@ GUI あり評価では `UiMain` を実際に生成し、画面座標クリック
 経由で `Combobox`, `Entry`, `Checkbutton`, `Button` 相当の操作を行う。
 
 実際の実行履歴では、`DISPLAY` (X11 転送) が利用できるケースが大半で、GUI あり評価
-(`gui_route_stack_eval.py`) が headless 評価より圧倒的に多く使われていた。「ローカル環境=
+(`qt_route_stack_eval.py`) が headless 評価より圧倒的に多く使われていた。「ローカル環境=
 基本 headless」と決めつけず、まず SKILL.md の DISPLAY 判定手順に従って GUI ありが使えるか
 確認し、使えるなら GUI あり評価を優先する。
 
@@ -107,7 +107,7 @@ source install/setup.bash
 run_id=$(date +%Y%m%d_%H%M%S)
 mkdir -p "log/codex/${run_id}/ros" "log/codex/${run_id}/robot_console"
 export ROS_LOG_DIR="$PWD/log/codex/${run_id}/ros"
-python3 src/robot_console/tools/gui_route_stack_eval.py \
+python3 src/robot_console/tools/qt_route_stack_eval.py \
   --start-label 10 \
   --goal-label 30 \
   --timeout-sec 180 \
@@ -124,7 +124,7 @@ python3 src/robot_console/tools/gui_route_stack_eval.py \
 source install/setup.bash
 run_id=$(date +%Y%m%d_%H%M%S)
 export ROS_LOG_DIR="$PWD/log/codex/${run_id}/ros"
-python3 src/robot_console/tools/gui_route_stack_eval.py \
+python3 src/robot_console/tools/qt_route_stack_eval.py \
   --route-planner-param obstacle_route_crank_w5.yaml \
   --route-manager-param obstacle_route_crank_w5.yaml \
   --start-label 0 --goal-label 32 \

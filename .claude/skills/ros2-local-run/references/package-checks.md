@@ -112,7 +112,7 @@ timeout 10s ros2 run tf2_ros tf2_echo map base_link
 
 ## `robot_console`
 
-`robot_console` は tkinter GUI を持つため、ローカル環境で `DISPLAY` が利用できる場合に
+`robot_console` は PyQt5 GUI を持つため、ローカル環境で `DISPLAY` が利用できる場合に
 GUI 起動確認を行う。画面座標クリックは使わず、`UiMain` の automation hook を通して
 `Combobox`, `Entry`, `Checkbutton`, `Button` 相当の操作を行う。
 
@@ -124,7 +124,7 @@ timeout 10s ros2 run robot_console robot_console
 ```
 
 GUI 操作を伴う route stack 評価では、手書きの inline Python ではなく
-`src/robot_console/tools/gui_route_stack_eval.py` を使う。`DISPLAY` が利用できない場合は、
+`src/robot_console/tools/qt_route_stack_eval.py` を使う。`DISPLAY` が利用できない場合は、
 GUI あり評価は実施せず、`src/robot_console/tools/headless_route_stack_eval.py` による
 headless 評価へ切り替える。DISPLAY の判定手順は `ros2-local-run` の SKILL.md、具体的な
 実行例は `references/integration-check.md` を参照する。
