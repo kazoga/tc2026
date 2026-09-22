@@ -337,7 +337,7 @@ def evaluate(args: argparse.Namespace) -> int:
                  dict(start_label='0',goal_label=str(len(trial['points'])-1),checkpoint_labels=['']))
             node('route_follower','route_follower',dict(start_immediately=True))
             node('obstacle_monitor','obstacle_monitor',{})
-            node('robot_navigator','robot_navigator',dict(log_csv_path=str(output/'control.csv')),
+            node('robot_navigator','robot_navigator',dict(log_csv_path=str(output/'control.csv'), require_motion_limits=False),
                  dict(odom='/ypspur_ros/odom',cmd_vel='/cmd_vel/autonomous'))
             node('drive_mode_manager','drive_cmd_mux_node',dict(initial_mode='autonomous'),
                  {'cmd_vel/autonomous':'/cmd_vel/fusion_limited'} if args.fusion else None)

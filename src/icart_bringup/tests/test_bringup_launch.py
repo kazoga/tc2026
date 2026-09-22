@@ -61,6 +61,7 @@ def test_real_launch_has_no_simulator_and_sim_has_one_fusion(monkeypatch, tmp_pa
             assert gnss['parameters'][1]['start_fix_radius_m'] == 10.
             assert pedestrians[0]['parameters'][0]['world_json'] == str(tmp_path/'world.json')
         navigator = next(item for item in captured if item['package'] == 'robot_navigator')
+        assert navigator['parameters'][0]['require_motion_limits'] == (mode == 'real')
         params = {key: value for entry in navigator['parameters'] if isinstance(entry, dict)
                   for key, value in entry.items()}
         assert params['pose_timeout_sec'] == 1.

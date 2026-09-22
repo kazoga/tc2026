@@ -1,3 +1,6 @@
+# i-Cart middle: calibration retained from downloaded original.
+# MAX_ACC_V is the coordinator ceiling (also used by freeze), not normal acceleration.
+# ypspur_node selects 0.7 m/s^2 acceleration and 1.5 m/s^2 braking below this ceiling.
 VERSION 4
 COUNT_REV 400
 VOLT 24

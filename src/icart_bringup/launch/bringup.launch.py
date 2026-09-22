@@ -100,6 +100,7 @@ def setup(context) -> list:
                 node('obstacle_monitor', 'obstacle_monitor'),
                 node('robot_navigator', 'robot_navigator', params=[{
                     'pose_timeout_sec': 1., 'odom_timeout_sec': 1.,
+                    'require_motion_limits': not simulation,
                     'obstacle_timeout_sec': 1. if hardware else 0.}], remaps=[
                     ('odom', '/ypspur_ros/odom'), ('cmd_vel', '/cmd_vel/autonomous')]),
                 node('drive_mode_manager', 'drive_cmd_mux_node', [{'initial_mode': LaunchConfiguration('initial_drive_mode').perform(context),
