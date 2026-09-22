@@ -33,7 +33,7 @@ def test_build_snapshot_includes_health_for_all_profiles():
 
     profile_ids = {item.profile_id for item in snapshot.health}
     assert profile_ids == {profile.profile_id for profile in core._profiles}
-    assert len(snapshot.health) == 16
+    assert len(snapshot.health) == 18
     assert all(item.status == 'STOPPED' for item in snapshot.health)
 
 
@@ -678,3 +678,46 @@ def test_gnss_dropout_snapshot_and_web_payload():
     assert build_snapshot_payload(snapshot)['gnss_dropout'] == {'active': True, 'freshness': 'OK'}
     core.update_gnss_dropout(SimpleNamespace(data=False))
     assert not core.build_snapshot().gnss_dropout_state.active
+
+
+def test_survey_commands_require_live_status_and_pose():
+    from types import SimpleNamespace
+    import json
+    core = _make_core()
+    sent = []
+    core.survey_publisher = sent.append
+    core.send_survey_command('start')
+    assert sent == []
+    core.update_survey_status(SimpleNamespace(data=json.dumps(dict(active=False, pose_fresh=False))))
+    core.send_survey_command('start')
+    assert sent == []
+    core.update_survey_status(SimpleNamespace(data=json.dumps(dict(active=False, pose_fresh=True))))
+    core.send_survey_command('start')
+    assert sent == ['start']
+    core.update_survey_status(SimpleNamespace(data=json.dumps(dict(active=True, pose_fresh=False))))
+    core.send_survey_command('finish')
+    assert sent == ['start', 'finish']
+    core._survey_received -= 4
+    assert not core.build_snapshot().survey_state['connected']
+
+
+def test_survey_rejects_overlapping_manual_stack(monkeypatch):
+    core = _make_core()
+    calls = []
+    monkeypatch.setattr(core.launch_manager, 'launch', lambda *a, **k: calls.append(a))
+    core.update_launch_override('icart_real_survey', 'site', '稲城')
+    core._on_launch_status('ypspur_ros2', NodeLaunchStatus.RUNNING, 1, None)
+    core.request_launch('icart_real_survey')
+    assert not calls
+    assert '先に' in core._launch_states['icart_real_survey'].error_message
+
+
+def test_survey_rejects_external_driver(monkeypatch):
+    core = _make_core()
+    core.survey_conflict_check = lambda: ['ypspur_node']
+    calls = []
+    monkeypatch.setattr(core.launch_manager, 'launch', lambda *a, **k: calls.append(a))
+    core.update_launch_override('icart_real_survey', 'site', '稲城')
+    core.request_launch('icart_real_survey')
+    assert not calls
+    assert 'ypspur_node' in core._launch_states['icart_real_survey'].error_message

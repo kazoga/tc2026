@@ -10,3 +10,6 @@ route_survey:
     lidar_forward_m: 0.0
     max_pose_variance: 0.25
     cloud_frame: body
+    surface_window_s: 6.0
+    surface_margin_m: 0.35
+    surface_max_seed_intensity: 30.0

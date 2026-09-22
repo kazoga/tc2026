@@ -16,7 +16,8 @@ from sensor_msgs_py import point_cloud2
 from std_msgs.msg import String
 from geo_pose_converter.geo_core import load_projection_config_from_yaml, LlhPoint, llh_to_enu
 from route_survey.trace_core import Traces, finite
-from gnss_lio_fusion.mount_core import base_from_sensor, rotation
+from gnss_lio_fusion.mount_core import base_from_sensor, rotation, quaternion_rotation
+from route_survey.surface_core import SurfaceWindow, unknown
 
 from route_survey.survey_core import Pose, Survey, traversable_width
 from route_survey.storage_core import save
@@ -34,7 +35,8 @@ class Recorder(Node):
                         lidar_height_m=.6, lidar_forward_m=0., max_pose_variance=.25,
                         lidar_left_m=0., lidar_mount_roll_deg=0., lidar_mount_pitch_deg=0.,
                         lidar_mount_yaw_deg=0., cloud_frame='body', gnss_fix_topic='/rtk_gps/fix',
-                        gnss_status_topic='/rtk_gps/rtk_status')
+                        gnss_status_topic='/rtk_gps/rtk_status', surface_window_s=6.,
+                        surface_margin_m=.35, surface_max_seed_intensity=30.)
         for key, value in defaults.items():
             self.declare_parameter(key, value)
         self.p = {key: self.get_parameter(key).value for key in defaults}
@@ -52,8 +54,10 @@ class Recorder(Node):
         self.width = traversable_width(np.empty((0, 3)))
         self.cloud_stamp = -1e9
         self.voxels = {}
-        self.scan_window = deque(maxlen=60)
+        self.surface_window = SurfaceWindow(self.p['surface_window_s'])
+        self.last_surface_compute = -math.inf
         self.last_report = None
+        self.save_error = ''
         self.last_pose_receive = -1e9
         self.status = self.create_publisher(String, '/route_survey/status', 10)
         self.create_subscription(PoseWithCovarianceStamped, '/localization/pose_enu', self.pose, 10)
@@ -61,6 +65,7 @@ class Recorder(Node):
         self.create_subscription(PointCloud2, '/cloud_registered_body', self.cloud,
                                  qos_profile_sensor_data)
         self.create_subscription(Joy, '/joy', self.joy, qos_profile_sensor_data)
+        self.create_subscription(String, '/route_survey/command', self.command, 10)
         self.create_subscription(NavSatFix, self.p['gnss_fix_topic'], self.gnss_fix,
                                  qos_profile_sensor_data)
         self.create_subscription(RtkStatus, self.p['gnss_status_topic'], self.gnss_status, 10)
@@ -96,6 +101,13 @@ class Recorder(Node):
         try:
             value = json.loads(message.data)
             if isinstance(value, dict):
+                if value.get('mode') == 'WAIT_GRAVITY_ALIGNMENT':
+                    self.poses.clear()
+                    self.attitudes.clear()
+                    self.surface_window.clear()
+                    self.last_surface_compute = -math.inf
+                    self.cloud_stamp = -math.inf
+                    self.last_pose_receive = -math.inf
                 self.fusion_health = value
         except (ValueError, TypeError):
             pass
@@ -120,11 +132,17 @@ class Recorder(Node):
     def attitude(self, message) -> None:
         q = message.pose.pose.orientation
         try:
-            _, (roll, pitch, _) = base_from_sensor(
-                [0., 0., 0.], [q.x, q.y, q.z, q.w], [0., 0., 0.], self.mount_rpy())
+            p = message.pose.pose.position
+            imu_position = np.array([p.x, p.y, p.z])
+            quat = [q.x, q.y, q.z, q.w]
+            base, (roll, pitch, yaw) = base_from_sensor(
+                imu_position, quat,
+                [self.p['lidar_forward_m'], self.p['lidar_left_m'], self.p['lidar_height_m']],
+                self.mount_rpy())
+            imu_rotation = quaternion_rotation(quat)
         except ValueError:
             return
-        self.attitudes.append((stamp(message), roll, pitch))
+        self.attitudes.append((stamp(message), roll, pitch, base, yaw, imu_position, imu_rotation))
 
     def mount_rpy(self) -> list[float]:
         return [math.radians(self.p['lidar_mount_'+axis+'_deg'])
@@ -145,10 +163,27 @@ class Recorder(Node):
         attitude = min(self.attitudes, key=lambda v: abs(v[0]-t))
         if abs(pose.stamp-t) > .15 or abs(attitude[0]-t) > .15:
             return
-        values = point_cloud2.read_points(message, field_names=['x', 'y', 'z'])
-        xyz = np.column_stack([values[k].reshape(-1) for k in ['x', 'y', 'z']])
-        xyz = xyz[np.isfinite(xyz).all(axis=1)]
-        roll, pitch = attitude[1:]
+        if t-self.last_surface_compute < .19:
+            return
+        self.last_surface_compute = t
+        fields = ['x', 'y', 'z']
+        if any(f.name == 'intensity' for f in message.fields):
+            fields.append('intensity')
+        values = point_cloud2.read_points(message, field_names=fields)
+        points = np.column_stack([values[k].reshape(-1) for k in fields])
+        points = points[np.isfinite(points[:, :3]).all(axis=1)]
+        xyz = points[:, :3]
+        roll, pitch = attitude[1:3]
+        # Relative accumulation uses only the shared gravity-aligned LIO world.
+        # GNSS corrections cannot smear grass/curb boundaries in this window.
+        local_world = points.copy()
+        local_world[:, :3] = xyz @ attitude[6].T + attitude[5]
+        accumulated = self.surface_window.update(t, local_world, attitude[3], attitude[4])
+        self.width = traversable_width(accumulated, margin=self.p['surface_margin_m'],
+            max_seed_intensity=self.p['surface_max_seed_intensity'])
+        if not self.width.get('material_checked', False):
+            self.width = unknown('material_unavailable')
+        self.cloud_stamp = t
         tilt = rotation(roll, pitch)
         # body点群はIMU座標。取付回転を除き、車体傾斜・位置を反映する。
         xyz = (xyz @ rotation(*self.mount_rpy()).T +
@@ -157,25 +192,27 @@ class Recorder(Node):
         c, s = math.cos(pose.yaw), math.sin(pose.yaw)
         world = xyz @ np.array([[c, s, 0], [-s, c, 0], [0, 0, 1]])
         world += [pose.x, pose.y, 0]
-        # 下向き視野が狭いため、前方で見た地面を通過時にも使う。
-        if not self.scan_window or t-self.scan_window[-1][0] >= .5:
-            near_ground = (np.linalg.norm(xyz[:, :2], axis=1) < 8.) & (abs(xyz[:, 2]) < 2.)
-            self.scan_window.append((t, world[near_ground]))
-        while self.scan_window and t-self.scan_window[0][0] > 30.:
-            self.scan_window.popleft()
-        accumulated = np.concatenate([v for _, v in self.scan_window])-[pose.x, pose.y, 0]
-        accumulated = accumulated @ np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
-        self.width = traversable_width(accumulated)
-        self.cloud_stamp = t
         world = world[np.linalg.norm(xyz[:, :2], axis=1) < 15.]
         for point in world:
             self.voxels[tuple(np.floor(point/.15).astype(int))] = point
         while len(self.voxels) > 100000:
             self.voxels.pop(next(iter(self.voxels)))
 
+    def command(self, message) -> None:
+        fresh = bool(self.poses) and self.now()-self.last_pose_receive <= .5
+        if message.data not in ('start', 'finish', 'line_stop', 'signal_stop'):
+            return
+        if not fresh and message.data != 'finish':
+            self.get_logger().warning('融合位置が未受信または古いため採取操作を受け付けません')
+            return
+        self.survey.command(message.data, self.poses[-1] if fresh else None, self.current_width())
+        self.flush()
+
     def joy(self, message) -> None:
         pressed = {i for i, value in enumerate(message.buttons) if value}
         if not self.poses or self.now()-self.last_pose_receive > .5:
+            if self.p['finish_button'] in pressed-self.survey.buttons:
+                self.command(String(data='finish'))
             self.survey.buttons = pressed
             return
         changed = pressed != self.survey.buttons
@@ -187,19 +224,26 @@ class Recorder(Node):
 
     def flush(self) -> None:
         import json
-        state = dict(active=self.survey.active, count=len(self.survey.rows),
-                     pose_fresh=self.now()-self.last_pose_receive <= .5,
-                     width=self.current_width(), rejected_poses=self.survey.rejections)
-        if self.context.ok():
-            self.status.publish(String(data=json.dumps(state)))
         report = (self.survey.active, len(self.survey.rows))
         if report != self.last_report:
             self.get_logger().info(f'経路採取: active={report[0]}, waypoint={report[1]}')
             self.last_report = report
+        self.save_error = ''
         if self.survey.rows:
-            save(self.directory, self.survey.rows, self.projection,
-                 np.array(list(self.voxels.values())).reshape(-1, 3), self.survey.active,
-                 traces=self.traces.export())
+            try:
+                save(self.directory, self.survey.rows, self.projection,
+                     np.array(list(self.voxels.values())).reshape(-1, 3), self.survey.active,
+                     traces=self.traces.export())
+            except Exception as exc:
+                self.save_error = str(exc)
+                self.get_logger().error(f'経路保存失敗: {exc}')
+        state = dict(active=self.survey.active, count=len(self.survey.rows),
+                     pose_fresh=self.now()-self.last_pose_receive <= .5,
+                     directory=str(self.directory), error=self.save_error,
+                     saved=bool(self.survey.rows) and not self.survey.active and not self.save_error,
+                     width=self.current_width(), rejected_poses=self.survey.rejections)
+        if self.context.ok():
+            self.status.publish(String(data=json.dumps(state)))
 
 
 def main() -> None:

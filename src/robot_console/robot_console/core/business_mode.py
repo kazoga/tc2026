@@ -28,31 +28,20 @@ class LaunchPresetEntry:
 # docs/robot_console_gui_screen_function_design.md 3.1節「業務分類」に基づく。
 LAUNCH_PRESETS: Dict[Tuple[str, str], List[LaunchPresetEntry]] = {
     ('実機（融合）', '手動走行'): [
-        LaunchPresetEntry('ypspur_ros2'), LaunchPresetEntry('drive_mode_manager'),
+        LaunchPresetEntry('icart_real_survey'),
     ],
     ('デジタルツイン', '手動走行'): [],
     ('実機（融合）', '自律走行'): [
-        LaunchPresetEntry('icart_fused_stack', overrides={'environment': 'real'}),
+        LaunchPresetEntry('icart_recorded_route'),
     ],
     ('デジタルツイン', '自律走行'): [
         LaunchPresetEntry('icart_fused_stack', overrides={'environment': 'simulation'}),
     ],
     ('実機', '手動走行'): [
-        LaunchPresetEntry('ypspur_ros2'),
-        LaunchPresetEntry('drive_mode_manager'),
+        LaunchPresetEntry('icart_real_survey'),
     ],
     ('実機', '自律走行'): [
-        LaunchPresetEntry('rtk_gps_um982'),
-        LaunchPresetEntry('ypspur_ros2'),
-        LaunchPresetEntry('drive_mode_manager'),
-        LaunchPresetEntry('route_planner'),
-        LaunchPresetEntry('route_manager'),
-        LaunchPresetEntry('geo_pose_converter', overrides={'enable_geo_pose_converter': 'true'}),
-        LaunchPresetEntry('route_follower'),
-        LaunchPresetEntry('obstacle_monitor'),
-        LaunchPresetEntry('robot_navigator'),
-        LaunchPresetEntry('road_blockage_detector'),
-        LaunchPresetEntry('traffic_signal_recognizer'),
+        LaunchPresetEntry('icart_recorded_route'),
     ],
     ('シミュレーション', '手動走行'): [
         LaunchPresetEntry('obstacle_route_sim'),

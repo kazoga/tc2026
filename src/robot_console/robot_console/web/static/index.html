@@ -46,6 +46,9 @@
 
   <section id="map" class="panel">
     <h2>地図 / Route Overlay</h2>
+    <button type="button" onclick="fitRouteBounds()">ルート全体</button>
+    <p id="route-map-status">ルート未受信：起動後の配信を待っています</p>
+    <p>緑＝未走行／灰＝走行済み、水色＝現在位置、黄＝目標点</p>
     <div id="leaflet-map" class="leaflet-map"></div>
     <p id="map-caption" class="caption">-</p>
   </section>

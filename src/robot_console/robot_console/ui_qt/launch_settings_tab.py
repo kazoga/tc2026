@@ -282,7 +282,8 @@ class LaunchSettingsTab(QtWidgets.QWidget):
                     item.setData(PROFILE_ID_ROLE, profile_id)
         for column in range(7):
             self._plan_table.resizeColumnToContents(column)
-        self._plan_table.setColumnWidth(7, 140)
+        self._plan_table.setColumnWidth(7, 180)
+        self._plan_table.resizeRowsToContents()
         self._plan_table.blockSignals(False)
         self._update_config_panel()
         self.plan_changed.emit()
@@ -365,7 +366,18 @@ class LaunchSettingsTab(QtWidgets.QWidget):
         param_edit.editingFinished.connect(
             lambda: self._on_param_path_edited(profile_id, param_edit.text())
         )
-        self._config_form.addRow('config:', param_edit)
+        if profile.param_argument:
+            self._config_form.addRow('config:', param_edit)
+        else:
+            param_edit.deleteLater()
+        if profile_id == 'icart_recorded_route':
+            note = QtWidgets.QLabel('記録ルートを選択して一斉起動。\n起動後は始点と車体位置を確認し、\nダッシュボードの「自律走行開始」を押してください。\n切替前に手動採取の起動項目を停止してください。')
+            note.setWordWrap(True)
+            self._config_form.addRow(note)
+        if profile_id == 'icart_real_survey':
+            note = QtWidgets.QLabel('場所・保存先を設定して一斉起動。\nGNSS・LiDAR・融合・車輪・Joy・採取を起動します。\n×で採取開始、□で終了。L1を押して手動操縦。\n切替前に既存の起動項目を停止してください。')
+            note.setWordWrap(True)
+            self._config_form.addRow(note)
 
         if profile.alternate_launch_file:
             alternate_check = QtWidgets.QCheckBox(profile.launch_toggle_label or '代替launchを使用')
@@ -386,13 +398,21 @@ class LaunchSettingsTab(QtWidgets.QWidget):
         for argument_name in profile.user_arguments:
             widget = self._build_argument_widget(profile_id, state, argument_name)
             self._argument_widgets[argument_name] = widget
-            self._config_form.addRow(f'{argument_name}:', widget)
+            label = {'site': '場所', 'station': 'RTK補正局', 'route_directory': '記録ルート', 'antenna_baseline_m': '現在のアンテナ間隔［m］',
+                     'master_forward_m': '主アンテナ前後位置［m］（後方−）',
+                     'output_root': '走行設定の保存先' if profile_id == 'icart_recorded_route' else '軌跡の保存先'}.get(argument_name, argument_name)
+            self._config_form.addRow(f'{label}:', widget)
 
         self._update_preview()
 
     def _build_argument_widget(
         self, profile_id: str, state: LaunchProfileState, argument_name: str
     ) -> QtWidgets.QWidget:
+        if argument_name == 'route_directory':
+            from .widgets.recorded_route_picker import RecordedRoutePicker
+            widget = RecordedRoutePicker(state.override_inputs.get(argument_name, ''))
+            widget.selected.connect(lambda value: self._on_argument_changed(profile_id, argument_name, value))
+            return widget
         kind = widget_kind(argument_name)
         current_value = state.override_inputs.get(argument_name, '')
 
@@ -568,4 +588,6 @@ class LaunchSettingsTab(QtWidgets.QWidget):
             item = self._tree_items.get(profile_id)
             if item is not None:
                 item.setText(1, state.status.name)
-        self._refresh_plan_table()
+        for row, profile_id in enumerate(self._plan.ordered_profile_ids):
+            if profile_id in self._states and self._plan_table.item(row, 5):
+                self._plan_table.item(row, 5).setText(self._states[profile_id].status.name)

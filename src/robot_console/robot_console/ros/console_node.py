@@ -79,6 +79,12 @@ class RobotConsoleNode(Node):
     def __init__(self, core: ConsoleCore, *, node_name: str = DEFAULT_NODE_NAME) -> None:
         super().__init__(node_name)
         self._core = core
+        core.survey_conflict_check = lambda: set(self.get_node_names()) & {
+            'ypspur_node', 'drive_cmd_mux_node', 'manual_teleop_node',
+            'fastlio_mapping', 'gnss_lio_fusion', 'route_survey'}
+        self._survey_pub = self.create_publisher(String, '/route_survey/command', 10)
+        core.survey_publisher = lambda value: self._survey_pub.publish(String(data=value))
+        self.create_subscription(String, '/route_survey/status', core.update_survey_status, 10)
         self.create_subscription(String, '/rtk_gps/rtk_gps_um982_node/ntrip_status',
                                  core.update_ntrip_status, 10)
         from std_msgs.msg import Bool

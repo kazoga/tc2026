@@ -26,7 +26,7 @@ def test_load_repository_profile_file_has_no_validation_errors():
     profiles = store.load()
 
     assert store.validation_errors == []
-    assert len(profiles) == 16
+    assert len(profiles) == 18
     profile_ids = [profile.profile_id for profile in profiles]
     assert len(profile_ids) == len(set(profile_ids))
 

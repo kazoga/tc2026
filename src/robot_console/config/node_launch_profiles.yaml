@@ -30,6 +30,42 @@
 #   default_arguments                   : user_arguments の既定値（未掲載の引数は既定値なし）。
 
 profiles:
+  - profile_id: icart_recorded_route
+    category: real_robot_base
+    display_name: 実機・記録ルート自律走行
+    package: icart_bringup
+    launch_file: recorded_route.launch.py
+    param_argument: null
+    launch_order: 10
+    startup_group: real_robot_base
+    health_topics: [/fusion/status, /localization/pose_enu, /scan, /route_state]
+    user_arguments: [route_directory, antenna_baseline_m, master_forward_m, output_root]
+    default_arguments:
+      route_directory: ''
+      antenna_baseline_m: '0.15'
+      master_forward_m: '-0.30'
+      output_root: ~/route_runs
+
+  - profile_id: icart_real_survey
+    category: real_robot_base
+    display_name: 実機・手動走行／軌跡取得（センサ一式）
+    package: icart_bringup
+    launch_file: real_survey.launch.py
+    param_argument: null
+    launch_order: 10
+    startup_group: real_robot_base
+    health_topics:
+      - /fusion/status
+      - /localization/pose_enu
+      - /lio/odometry
+      - /ypspur_ros/odom
+      - /scan
+    user_arguments: [site, station, output_root]
+    default_arguments:
+      site: 場所を選択
+      station: 地域の既定局
+      output_root: ~/route_surveys
+
   - profile_id: icart_fused_stack
     category: route_stack
     display_name: i-Cart 融合・デジタルツイン

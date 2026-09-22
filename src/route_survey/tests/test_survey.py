@@ -26,7 +26,11 @@ def test_no_crossing_edge_or_unknown(kind):
     r=traversable_width(cloud(kind))
     assert r['left']<=.725+1e-6
     assert r['left_reason']!='range_limit'
-    assert r['right']>2.5
+    if kind == 'slope':
+        # The robot footprint already straddles a steep slope: no safe lateral corridor.
+        assert r['right'] == 0
+    else:
+        assert r['right']>2.5
 
 
 def test_flat_and_empty():
@@ -80,3 +84,17 @@ def test_noisy_ground_confidence(kind):
     if kind=='flat':assert r['left']>1. and r['right']>1.
     else:assert r['left']<=.725+1e-6
     assert r['ground_noise_sigma_m']>0
+
+
+def test_ui_commands_are_idempotent_and_finish_without_fresh_pose():
+    survey = Survey()
+    width = traversable_width(np.empty((0, 3)))
+    pose = Pose(0, 0, 0, 0)
+    survey.command('start', None, width)
+    assert not survey.active
+    survey.command('start', pose, width)
+    survey.command('start', pose, width)
+    assert survey.active and len(survey.rows) == 1
+    survey.command('finish', None, width)
+    survey.command('finish', None, width)
+    assert not survey.active and len(survey.rows) == 1

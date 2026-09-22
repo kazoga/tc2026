@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import math
 import threading
+import time
 from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
@@ -100,6 +101,10 @@ class ConsoleCore:
         self._lock = threading.Lock()
         from .bag_recorder import BagRecorder
         self.bag_recorder = BagRecorder(bag_directory)
+        self._survey_status = {}
+        self._survey_received = float('-inf')
+        self.survey_publisher = None
+        self.survey_conflict_check = None
 
         self._profile_store = profile_store or LaunchProfileStore()
         self._profiles: List[LaunchProfile] = self._profile_store.load()
@@ -286,6 +291,31 @@ class ConsoleCore:
             overrides if overrides is not None
             else (resolve_effective_overrides(profile, state) if state else None)
         )
+        survey_id = 'icart_real_survey'
+        integrated_ids = {survey_id, 'icart_recorded_route'}
+        active = [pid for pid, value in self._launch_states.items()
+                  if value.status in (NodeLaunchStatus.RUNNING, NodeLaunchStatus.STARTING)]
+        if profile_id in integrated_ids and profile_id in active:
+            return
+        conflicts = [pid for pid in active if pid != profile_id and
+                     (profile_id in integrated_ids or pid in integrated_ids)]
+        if profile_id in integrated_ids and self.survey_conflict_check:
+            conflicts += list(self.survey_conflict_check())
+        error = ''
+        if conflicts:
+            error = '構成が重複します。先に起動中の項目を停止してください: ' + ', '.join(conflicts)
+        elif profile_id == survey_id and (resolved_overrides or {}).get('site') not in ('稲城', 'つくば'):
+            error = '起動・設定で場所（稲城／つくば）を選択してください'
+        if not error and profile_id == 'icart_recorded_route':
+            try:
+                from icart_bringup.recorded_route import inspect_recorded_route
+                inspect_recorded_route((resolved_overrides or {}).get('route_directory', ''))
+            except (ValueError, OSError, KeyError) as exc:
+                error = str(exc)
+        if error:
+            self._on_launch_status(profile_id, NodeLaunchStatus.ERROR, None, error)
+            self._on_launch_log(profile_id, error)
+            return
         self.launch_manager.launch(
             profile,
             param_path=param_path,
@@ -293,6 +323,30 @@ class ConsoleCore:
             simulator_enabled=resolved_simulator_enabled,
             overrides=resolved_overrides,
         )
+
+    def update_survey_status(self, message) -> None:
+        try:
+            value = json.loads(message.data)
+            if not isinstance(value, dict):
+                return
+        except (ValueError, TypeError):
+            return
+        with self._lock:
+            self._survey_status = value
+            self._survey_received = time.monotonic()
+
+    def survey_snapshot(self) -> dict:
+        with self._lock:
+            return dict(self._survey_status, connected=time.monotonic()-self._survey_received < 3.)
+
+    def send_survey_command(self, command: str) -> None:
+        state = self.survey_snapshot()
+        if command not in ('start', 'finish') or not state['connected']:
+            return
+        if command == 'start' and (state.get('active') or not state.get('pose_fresh')):
+            return
+        if self.survey_publisher:
+            self.survey_publisher(command)
 
     def request_stop(self, profile_id: str) -> None:
         """指定profileの停止を要求する。"""
@@ -565,7 +619,7 @@ class ConsoleCore:
             baseline = float(data['baseline']['reference_m'])
             if not math.isfinite(baseline):
                 return
-            if data['mode'] == 'WAIT_INITIAL_FIX':
+            if data['mode'] in ('WAIT_INITIAL_FIX', 'WAIT_GRAVITY_ALIGNMENT'):
                 yaw, sigma = None, None
             else:
                 yaw = math.degrees(float(data['yaw']))
@@ -729,6 +783,7 @@ class ConsoleCore:
         return ConsoleSnapshot(
             timestamp=now,
             bag_state=self.bag_recorder.snapshot(),
+            survey_state=self.survey_snapshot(),
             operation_state=operation_state,
             gps_state=gps_state,
             ntrip_state=replace(ntrip_state, freshness=self.freshness.evaluate('ntrip', now=now)),

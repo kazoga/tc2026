@@ -19,7 +19,7 @@ def setup(context):
     actions = [IncludeLaunchDescription(PythonLaunchDescriptionSource(str(
         Path(get_package_share_directory('icart_bringup'))/'launch/bringup.launch.py')),
         launch_arguments={'environment': environment, 'session': session,
-                          'start_ui': 'true', 'initial_drive_mode': 'manual',
+                          'start_ui': context.launch_configurations.get('start_ui', 'true'), 'initial_drive_mode': 'manual',
                           'allow_auto_resume': 'false', 'start_teleop': 'true',
                           'joy_input': joy_input}.items()),
         Node(package='route_survey', executable='recorder', output='screen', parameters=[
@@ -35,6 +35,7 @@ def setup(context):
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('environment', default_value='simulation', choices=['simulation','real']),
+        DeclareLaunchArgument('start_ui', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('session'), DeclareLaunchArgument('output'),
         DeclareLaunchArgument('recorder_params', default_value=str(
             Path(get_package_share_directory('route_survey'))/'params/default.yaml')),

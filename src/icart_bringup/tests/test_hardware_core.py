@@ -18,8 +18,8 @@ SHARE = ROOT/'src/icart_bringup'
 def test_geometry_uses_vertical_antenna_offset_not_tilted_sensor_z():
     config = read_yaml(SHARE/'params/hardware.yaml')
     geo = geometry(config)
-    assert np.array(geo['master'])-geo['lidar'] == pytest.approx([0., 0., .15])
-    assert np.array(geo['slave'])-geo['master'] == pytest.approx([-.5, 0., 0.])
+    assert np.array(geo['master'])-geo['lidar'] == pytest.approx([-.3, 0., .15])
+    assert np.array(geo['slave'])-geo['master'] == pytest.approx([-.15, 0., 0.])
     assert np.array(geo['imu']) + Rotation.from_euler('xyz', [-.6, 26.9, 0.], degrees=True).apply(
         config['mid360']['lidar_in_imu_xyz']) == pytest.approx(geo['lidar'])
 
@@ -148,3 +148,17 @@ def test_mid360_local_map_covers_reference_2026_course_without_sliding():
     slide_margin = 1.5*params['mapping']['det_range']
     assert params['cube_side_length']/2 > diameter+slide_margin
     assert params['preprocess']['blind'] == .7
+
+
+def test_main_antenna_forward_offset_is_absolute_and_legacy_is_preserved():
+    config = read_yaml(SHARE/'params/hardware.yaml')
+    config['mid360']['xyz'][0] = .1
+    geo = geometry(config)
+    assert geo['master'][0] == pytest.approx(-.3)
+    assert geo['slave'][0] == pytest.approx(-.45)
+    assert geo['baseline_m'] == pytest.approx(.15)
+    del config['gnss']['master_forward_m']
+    assert geometry(config)['master'][0] == pytest.approx(.1)
+    config['gnss']['master_forward_m'] = float('nan')
+    with pytest.raises(ValueError, match='主アンテナ'):
+        geometry(config)

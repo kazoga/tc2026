@@ -105,6 +105,12 @@ class LocalizationSensorTab(QtWidgets.QWidget):
         self._route_overlay_group = QtWidgets.QGroupBox('地図 / Route Overlay')
         self._map_view = MapView()
         layout = QtWidgets.QVBoxLayout(self._route_overlay_group)
+        fit_button = QtWidgets.QPushButton('ルート全体')
+        fit_button.clicked.connect(self._map_view.fit_route)
+        layout.addWidget(fit_button)
+        self._route_status_label = QtWidgets.QLabel('ルート未受信')
+        self._route_status_label.setWordWrap(True)
+        layout.addWidget(self._route_status_label)
         layout.addWidget(self._map_view)
         return self._route_overlay_group
 
@@ -156,8 +162,15 @@ class LocalizationSensorTab(QtWidgets.QWidget):
         return 'UNKNOWN'
 
     def _update_route_overlay(self, snapshot: ConsoleSnapshot) -> None:
-        self._map_view.update_map(snapshot.localization_state, snapshot.target_state)
         self._map_view.update_route(snapshot.route_state)
+        self._map_view.update_map(snapshot.localization_state, snapshot.target_state)
+        waypoints = snapshot.route_state.waypoints
+        count = sum(p.latitude is not None and p.longitude is not None for p in waypoints)
+        status = (f'配信ルート：{count}/{len(waypoints)}点（緯度経度あり）'
+                  if waypoints else 'ルート未受信：起動後の配信を待っています')
+        self._route_status_label.setText(
+            status + '\n緑：未走行／灰：走行済み／水色：現在位置／黄：目標点'
+        )
 
     def _update_sensor_panels(self, snapshot: ConsoleSnapshot) -> None:
         panels = list(snapshot.sensor_panels) or list(DEFAULT_SENSOR_PANELS)

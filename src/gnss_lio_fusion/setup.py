@@ -17,6 +17,7 @@ setup(
     maintainer='Kazuki Ogata', maintainer_email='kaz.ogata1988@gmail.com',
     description='適応baseline品質判定とGNSS/LIO平面融合', license='Apache-2.0',
     entry_points={'console_scripts': [
+        'gravity_alignment_node = gnss_lio_fusion.gravity_node:main',
         'fusion_node = gnss_lio_fusion.fusion_node:main',
     ]},
 )

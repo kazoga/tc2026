@@ -53,3 +53,25 @@ R1の既定ターボ機能は解除済み。カスタム設定でturbo_button=5�
 `/fusion/gnss_dropout_active`を10Hzおよびボタン更新時に配信し、ROSBAGにも記録する。
 PCダッシュボード最上部・Webメイン画面に模擬中は赤、通知期限切れは黄の警告を表示する。
 正常解除後は警告を隠す。通常のGNSS受信表示とは別に模擬中であることを示す。
+
+### 重力方向をそろえた共通LIO出力
+
+`icart_bringup` と `fusion.launch.py` は `gravity_alignment_node` を起動する。
+FAST-LIOの `/Odometry` は `/lio/odometry_raw` に接続する。水平化後の
+`/lio/odometry` (`lio_level` → IMU child) を融合とルート記録が共用する。
+単独launchで外部FAST-LIOを使う場合も、このrawトピックへのremapが必要。
+
+初期化済みLIO姿勢と測定時刻の近いIMU、停止中の車輪を照合し、約2秒の
+連続静止・重力方向の安定を確認する。推定した固定回転を3D位置・姿勢・
+pose共分散へ適用した後、既存の取付角/レバーアーム補正を行う。
+走行中やGNSS OFF/ONで鉛直基準を更新しない。IMUに固定されたbody点群と
+child座標のtwistは回さない。ルート記録は水平化後の車体姿勢でbody点群を
+地図へ配置する。`/cloud_registered` はraw worldのままなので、水平化した
+地図と混同しない。
+
+`/lio/alignment_status` に理由と固定回転、`/lio/alignment_ready` に生存状態を
+配信する。初期化待ちはGUIに「水平基準待ち（約2秒静止）」と表示し、自律指令を0に
+する（手動移動は可能だが、基準確定には停止が必要）。LIO publisherの再起動、
+時刻逆行、frame変更、1.5秒超のLIO断で基準を破棄する。融合は準備状態の解除や
+heartbeat途絶で履歴を捨て、新しい基準とFIXを待つ。古いルートの数値は自動修正しない。
+本変更はGNSS/PCの時計同期そのものは変更しない。

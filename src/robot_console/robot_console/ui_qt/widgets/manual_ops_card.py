@@ -15,7 +15,7 @@ from PyQt5 import QtCore, QtWidgets
 
 from robot_console.core.snapshot_model import ManualControlsView
 
-TAB_TITLE_MANUAL_START = 'manual_start'
+TAB_TITLE_MANUAL_START = '自律走行'
 TAB_TITLE_SIGNAL = 'signal'
 TAB_TITLE_ROAD_BLOCKED = 'road_blocked'
 TAB_TITLE_OBSTACLE_HINT = 'obstacle_hint'
@@ -62,9 +62,9 @@ class ManualOpsCard(QtWidgets.QGroupBox):
         self._manual_start_value_label = QtWidgets.QLabel('-')
         self._manual_start_time_label = QtWidgets.QLabel('未送信')
 
-        send_button = QtWidgets.QPushButton('manual_start = True 送信')
+        send_button = QtWidgets.QPushButton('自律走行開始／停止点から再開')
         send_button.clicked.connect(lambda: self.manual_start_requested.emit(True))
-        clear_button = QtWidgets.QPushButton('manual_start = False 送信')
+        clear_button = QtWidgets.QPushButton('開始入力を解除（車体停止ではありません）')
         clear_button.clicked.connect(lambda: self.manual_start_requested.emit(False))
 
         status_row = QtWidgets.QHBoxLayout()

@@ -44,6 +44,9 @@ def geometry(config: dict) -> dict:
     lidar = np.array(mid['xyz'], dtype=float)
     imu = lidar - rotation(*angles) @ np.array(mid['lidar_in_imu_xyz'])
     master = lidar + [0., 0., above]
+    master[0] = float(gps.get('master_forward_m', master[0]))
+    if not math.isfinite(master[0]):
+        raise ValueError('主アンテナ前後位置は有限値が必要')
     slave = master + [-behind, 0., 0.]
     return dict(lidar=lidar.tolist(), imu=imu.tolist(), master=master.tolist(),
                 slave=slave.tolist(), rpy_deg=list(mid['rpy_deg']), baseline_m=behind)
@@ -164,7 +167,9 @@ def prepare_real(share: Path, planner_share: Path, fastlio_share: Path, livox_sh
     sensor['extrinsic_parameter'] = dict(roll=0., pitch=0., yaw=0., x=0, y=0, z=0)
     (output/'livox.json').write_text(json.dumps(livox, indent=2))
     fusion = {'publish_base_tf': True, 'gnss_heading_offset_deg': config['gnss']['heading_offset_deg'],
-              'baseline.initial_m': geo['baseline_m']}
+              'baseline.initial_m': geo['baseline_m'],
+              'baseline.minimum_m': geo['baseline_m'] * .7,
+              'baseline.maximum_m': geo['baseline_m'] * 1.3}
     recorder = {}
     for prefix, position in [('lio', geo['imu']), ('master', geo['master'])]:
         for axis, value in zip(['forward_m', 'left_m', 'height_m'], position):

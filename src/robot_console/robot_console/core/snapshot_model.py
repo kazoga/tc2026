@@ -280,6 +280,7 @@ class ConsoleSnapshot:
 
     timestamp: datetime = field(default_factory=_utc_now)
     bag_state: BagState = field(default_factory=BagState)
+    survey_state: dict = field(default_factory=dict)
     operation_state: OperationStateView = field(default_factory=OperationStateView)
     gps_state: GpsStateView = field(default_factory=GpsStateView)
     ntrip_state: NtripStateView = field(default_factory=NtripStateView)

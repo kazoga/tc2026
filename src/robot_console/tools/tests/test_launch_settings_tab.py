@@ -24,7 +24,7 @@ def _make_tab() -> LaunchSettingsTab:
 def test_tab_loads_all_profiles_grouped_by_category(qt_app):
     tab = _make_tab()
 
-    assert len(tab._profiles) == 16
+    assert len(tab._profiles) == 18
     assert 'icart_fused_stack' in {p.profile_id for p in tab._profiles}
     assert tab._tree.topLevelItemCount() == 8  # profile.category の種類数
     assert set(tab._tree_items.keys()) == {p.profile_id for p in tab._profiles}
@@ -58,21 +58,9 @@ def test_apply_preset_without_existing_plan_needs_no_confirmation(qt_app):
 
     tab._on_apply_preset_clicked()
 
-    assert tab.plan.ordered_profile_ids == [
-        'rtk_gps_um982',
-        'ypspur_ros2',
-        'drive_mode_manager',
-        'route_planner',
-        'route_manager',
-        'geo_pose_converter',
-        'route_follower',
-        'obstacle_monitor',
-        'robot_navigator',
-        'road_blockage_detector',
-        'traffic_signal_recognizer',
-    ]
-    assert tab._plan_table.rowCount() == 11
-    assert tab._tree_items['rtk_gps_um982'].checkState(0) == QtCore.Qt.Checked
+    assert tab.plan.ordered_profile_ids == ['icart_recorded_route']
+    assert tab._plan_table.rowCount() == 1
+    assert tab._tree_items['icart_recorded_route'].checkState(0) == QtCore.Qt.Checked
 
 
 def test_apply_preset_with_existing_plan_requires_confirmation(qt_app, monkeypatch):
@@ -115,9 +103,7 @@ def test_desktop_check_preset_sets_simulator_enabled_and_joy_input(qt_app):
 
 def test_selecting_plan_row_updates_preview_and_config_panel(qt_app):
     tab = _make_tab()
-    tab._environment_combo.setCurrentText('実機')
-    tab._drive_mode_combo.setCurrentText('自律走行')
-    tab._on_apply_preset_clicked()
+    tab._tree_items['rtk_gps_um982'].setCheckState(0, QtCore.Qt.Checked)
 
     tab._select_plan_row_for('rtk_gps_um982')
 
@@ -143,9 +129,7 @@ def test_preview_shows_not_in_plan_when_profile_not_selected_for_launch(qt_app):
 
 def test_editing_enum_argument_updates_state_and_plan_table(qt_app):
     tab = _make_tab()
-    tab._environment_combo.setCurrentText('実機')
-    tab._drive_mode_combo.setCurrentText('自律走行')
-    tab._on_apply_preset_clicked()
+    tab._tree_items['drive_mode_manager'].setCheckState(0, QtCore.Qt.Checked)
     tab._select_plan_row_for('drive_mode_manager')
 
     joy_input_combo = tab._argument_widgets['joy_input']
@@ -153,7 +137,7 @@ def test_editing_enum_argument_updates_state_and_plan_table(qt_app):
     joy_input_combo.setCurrentText('ps3_joy_sim')
 
     assert tab.state_for('drive_mode_manager').override_inputs['joy_input'] == 'ps3_joy_sim'
-    override_cell = tab._plan_table.item(2, 4)  # drive_mode_manager は3番目
+    override_cell = tab._plan_table.item(0, 4)
     assert 'joy_input=ps3_joy_sim' in override_cell.text()
 
 
@@ -271,3 +255,17 @@ def test_business_mode_changed_emitted_on_combo_selection(qt_app):
     tab._drive_mode_combo.setCurrentText('自律走行')
 
     assert received == [('シミュレーション', '手動走行'), ('シミュレーション', '自律走行')]
+
+
+def test_real_manual_plan_has_site_and_output_controls(qt_app):
+    tab = _make_tab()
+    tab.apply_preset('実機', '手動走行')
+    assert tab.plan.ordered_profile_ids == ['icart_real_survey']
+    tab._select_plan_row_for('icart_real_survey')
+    assert isinstance(tab._argument_widgets['site'], QtWidgets.QComboBox)
+    received = []
+    tab.argument_changed.connect(lambda *args: received.append(args))
+    tab._argument_widgets['site'].setCurrentText('つくば')
+    assert received[-1] == ('icart_real_survey', 'site', 'つくば')
+    assert tab._states['icart_real_survey'].override_inputs['site'] == 'つくば'
+    assert 'output_root' in tab._argument_widgets

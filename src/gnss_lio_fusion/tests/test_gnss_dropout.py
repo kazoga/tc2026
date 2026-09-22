@@ -24,6 +24,7 @@ def test_fusion_drops_pending_and_live_gnss_then_accepts_fresh(monkeypatch):
     node = SimpleNamespace(gnss_dropout=GnssDropoutHold(), gnss_dropout_active=False,
         events=[(0., 'gps', None), (0., 'lio', None)], statuses={0.: None},
         get_logger=lambda: SimpleNamespace(warning=lambda _: None))
+    node.alignment_available = lambda: True
     node.refresh_dropout = lambda: FusionNode.refresh_dropout(node)
     msg = SimpleNamespace(header=SimpleNamespace(stamp=SimpleNamespace(sec=1, nanosec=0)))
     node.gnss_dropout.update([0]*5+[1], 1.)
