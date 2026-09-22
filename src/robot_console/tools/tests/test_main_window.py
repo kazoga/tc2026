@@ -403,11 +403,8 @@ def test_sensor_panel_renders_image_from_core_image_store(qt_app):
 
     tab = window.localization_sensor_tab
     assert tab._image_store is core.image_store
-    grid = tab._grid_layout
     panel = next(
-        grid.itemAt(index).widget()
-        for index in range(grid.count())
-        if grid.itemAt(index).widget().title() == 'Sensor Viewer'
+        panel for panel in tab._panels.values() if panel.title() == 'Sensor Viewer'
     )
     assert panel._image_label.pixmap() is not None
     assert not panel._image_label.pixmap().isNull()

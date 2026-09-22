@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 from PIL import Image
-from PyQt5 import QtWidgets
+from PyQt5 import QtCore, QtWidgets
 
 from robot_console.core.freshness import FreshnessLevel
 from robot_console.core.snapshot_model import ImageReference
@@ -52,6 +52,22 @@ def test_update_panel_renders_image_when_available(qt_app):
     assert not panel._image_label.pixmap().isNull()
     # `updated_at` はUTCで保持し、表示のみ日本時間へ変換する（09:30 UTC = 18:30 JST）。
     assert panel._status_label.text() == '/sensor_viewer / OK / 18:30:00'
+
+
+def test_title_and_status_share_one_header_row(qt_app):
+    """パネル名とtopic・鮮度を同じ行へ左右振り分けで置く（縦幅の節約）。
+
+    見出しと状態行を別々に持つと2行分の縦を消費し、その分画像領域が狭くなる。
+    """
+
+    panel = ImagePanel()
+
+    header = panel.layout().itemAt(0).layout()
+    assert header.itemAt(0).widget() is panel._title_label
+    assert header.itemAt(header.count() - 1).widget() is panel._status_label
+    assert panel._status_label.alignment() & QtCore.Qt.AlignRight
+    # 画像は見出し行の次に来る。
+    assert panel.layout().itemAt(1).widget() is panel._image_label
 
 
 def test_update_panel_falls_back_to_panel_id_when_title_missing(qt_app):
