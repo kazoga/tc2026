@@ -11,6 +11,7 @@ from collections import deque
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Imu, NavSatFix, NavSatStatus
+from std_msgs.msg import String
 from tf2_msgs.msg import TFMessage
 from rtk_gps_um982_msgs.msg import RtkStatus
 from geo_pose_converter.geo_core import EnuPoint, ProjectionConfig, enu_to_llh
@@ -67,10 +68,26 @@ class GnssSimulator(Node):
         self.slave_pub = self.create_publisher(NavSatFix, '/rtk_gps/slave_fix', 10)
         self.heading_pub = self.create_publisher(Imu, '/rtk_gps/heading', 10)
         self.status_pub = self.create_publisher(RtkStatus, '/rtk_gps/rtk_status', 10)
+        self.ntrip_pub = self.create_publisher(String, '/rtk_gps/ntrip_status', 10)
         self.create_subscription(TFMessage, '/truth', self.on_truth, 10)
         self.create_timer(1/self.values['rate_hz'], self.sample)
         self.create_timer(.01, self.deliver)
+        self.create_timer(1., self.publish_ntrip_status)
         self.get_logger().info('仮想 GNSS を開始。真値欠落時は配信を停止する')
+
+    def publish_ntrip_status(self) -> None:
+        """基地局診断を DISABLED で配信する。
+
+        シムに NTRIP 接続は存在しない。無配信にすると UI 側が「未受信」となり、
+        実機で診断が途絶した異常と区別できないため、補正を使わない構成を表す
+        DISABLED を明示する。受信中を装う値は作らない。
+        """
+
+        self.ntrip_pub.publish(String(data=json.dumps(dict(
+            state='DISABLED', host='', port=0, mountpoint='', station_id='',
+            station_label='', site='', transport_connected=False,
+            rtcm_bytes_total=0, rtcm_bytes_per_s=0., last_rtcm_age_s=None,
+            reconnect_count=0, last_error=''))))
 
     def on_truth(self, message: TFMessage) -> None:
         for transform in message.transforms:

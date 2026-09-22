@@ -48,7 +48,6 @@ setup(
     entry_points={
         'console_scripts': [
             'record_bag_with_map = robot_console.map_bag_record:main',
-            'robot_console = robot_console.robot_console_node:main',
             'robot_console_qt = robot_console.ui_qt_main:main',
             'robot_console_web = robot_console.web_main:main',
         ],

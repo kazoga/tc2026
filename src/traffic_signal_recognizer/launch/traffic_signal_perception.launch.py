@@ -86,7 +86,6 @@ def generate_launch_description() -> LaunchDescription:
             {
                 'recog_flag_topic': LaunchConfiguration('recog_flag_topic'),
                 'detections_topic': LaunchConfiguration('detections_topic'),
-                'image_topic': LaunchConfiguration('image_topic'),
                 'confidence_threshold': LaunchConfiguration('confidence_threshold'),
             },
         ],

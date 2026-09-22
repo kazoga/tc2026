@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 from PIL import Image
-from PyQt5 import QtWidgets
+from PyQt5 import QtCore, QtWidgets
 
 from robot_console.core.freshness import FreshnessLevel
 from robot_console.core.snapshot_model import ImageReference
@@ -26,11 +26,11 @@ def test_pil_to_qpixmap_preserves_size(qt_app):
 
 def test_update_panel_shows_placeholder_without_image(qt_app):
     panel = ImagePanel()
-    reference = ImageReference(panel_id='lidar_view', title='LiDAR View')
+    reference = ImageReference(panel_id='front_camera', title='Front Camera')
 
     panel.update_panel(reference, None)
 
-    assert panel.title() == 'LiDAR View'
+    assert panel.title() == 'Front Camera'
     assert panel._image_label.text() == PLACEHOLDER_TEXT
     assert panel._image_label.pixmap() is None or panel._image_label.pixmap().isNull()
     assert '未受信' in panel._status_label.text()
@@ -50,7 +50,24 @@ def test_update_panel_renders_image_when_available(qt_app):
 
     assert panel._image_label.text() == ''
     assert not panel._image_label.pixmap().isNull()
-    assert panel._status_label.text() == '/sensor_viewer / OK / 09:30:00'
+    # `updated_at` はUTCで保持し、表示のみ日本時間へ変換する（09:30 UTC = 18:30 JST）。
+    assert panel._status_label.text() == '/sensor_viewer / OK / 18:30:00'
+
+
+def test_title_and_status_share_one_header_row(qt_app):
+    """パネル名とtopic・鮮度を同じ行へ左右振り分けで置く（縦幅の節約）。
+
+    見出しと状態行を別々に持つと2行分の縦を消費し、その分画像領域が狭くなる。
+    """
+
+    panel = ImagePanel()
+
+    header = panel.layout().itemAt(0).layout()
+    assert header.itemAt(0).widget() is panel._title_label
+    assert header.itemAt(header.count() - 1).widget() is panel._status_label
+    assert panel._status_label.alignment() & QtCore.Qt.AlignRight
+    # 画像は見出し行の次に来る。
+    assert panel.layout().itemAt(1).widget() is panel._image_label
 
 
 def test_update_panel_falls_back_to_panel_id_when_title_missing(qt_app):

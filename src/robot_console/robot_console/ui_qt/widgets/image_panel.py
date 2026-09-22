@@ -12,6 +12,7 @@ from PIL import Image
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from robot_console.core.snapshot_model import ImageReference
+from robot_console.utils import format_local_time
 
 from .color_rules import freshness_color
 
@@ -33,12 +34,16 @@ def pil_to_qpixmap(image: Image.Image) -> QtGui.QPixmap:
     return QtGui.QPixmap.fromImage(qimage)
 
 
-class ImagePanel(QtWidgets.QGroupBox):
+class ImagePanel(QtWidgets.QFrame):
     """1件のセンサ・画像パネル（`ImageReference` + 画像本体）を表示する。
 
     カメラ画像やセンサビューアなど、元画像に意味のある固有アスペクト比が
     ある場合は `preserve_aspect_ratio=True`（既定）で歪みなく表示する。
     地図のようにパネル領域いっぱいに表示したい場合は `False` を指定する。
+
+    パネル名とtopic・鮮度・最終更新時刻は同じ見出し行に左右振り分けで置く。
+    `QGroupBox` の見出しと状態行を別々に持つと2行分の縦を消費し、その分だけ
+    画像領域が狭くなるため、1行へまとめる。
     """
 
     def __init__(
@@ -48,7 +53,21 @@ class ImagePanel(QtWidgets.QGroupBox):
         preserve_aspect_ratio: bool = True,
     ) -> None:
         super().__init__(parent)
+        self.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self._preserve_aspect_ratio = preserve_aspect_ratio
+
+        self._title_label = QtWidgets.QLabel('-')
+        title_font = self._title_label.font()
+        title_font.setBold(True)
+        self._title_label.setFont(title_font)
+        self._status_label = QtWidgets.QLabel('-')
+        self._status_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+
+        header = QtWidgets.QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.addWidget(self._title_label)
+        header.addStretch(1)
+        header.addWidget(self._status_label)
 
         self._image_label = QtWidgets.QLabel(PLACEHOLDER_TEXT)
         self._image_label.setAlignment(QtCore.Qt.AlignCenter)
@@ -56,18 +75,35 @@ class ImagePanel(QtWidgets.QGroupBox):
         self._image_label.setStyleSheet(
             f'background-color: {IMAGE_BACKGROUND}; color: {IMAGE_PLACEHOLDER_TEXT_COLOR};'
         )
-        self._status_label = QtWidgets.QLabel('-')
 
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.addWidget(self._image_label, 1)
-        layout.addWidget(self._status_label)
+        self._layout = QtWidgets.QVBoxLayout(self)
+        self._layout.addLayout(header)
+        self._layout.addWidget(self._image_label, 1)
 
         self._pixmap: Optional[QtGui.QPixmap] = None
+
+    def title(self) -> str:
+        """パネル名を返す（`QGroupBox.title()` と同じ用途）。"""
+
+        return self._title_label.text()
+
+    def add_footer_widget(self, widget: QtWidgets.QWidget) -> None:
+        """画像の下へ補助Widgetを追加する。
+
+        カメラパネルの判定チップのように、そのパネルの画像に対してのみ意味を持つ
+        表示を別カードへ分けず、同じ枠内へ収めるために使う。別カードにすると
+        見出しと枠の分だけ縦を消費し、画像領域が狭くなる。
+
+        Args:
+            widget (QtWidgets.QWidget): 画像の下へ並べるWidget.
+        """
+
+        self._layout.addWidget(widget)
 
     def update_panel(self, reference: ImageReference, image: Optional[Image.Image]) -> None:
         """`ImageReference` メタデータと画像本体（あれば）を反映する。"""
 
-        self.setTitle(reference.title or reference.panel_id)
+        self._title_label.setText(reference.title or reference.panel_id)
 
         if image is not None:
             self._pixmap = pil_to_qpixmap(image)
@@ -77,8 +113,9 @@ class ImagePanel(QtWidgets.QGroupBox):
             self._image_label.setPixmap(QtGui.QPixmap())
             self._image_label.setText(PLACEHOLDER_TEXT)
 
+        # `updated_at` はUTCで保持されるため、表示時のみ日本時間へ変換する。
         updated_text = (
-            reference.updated_at.strftime('%H:%M:%S') if reference.updated_at else '未受信'
+            format_local_time(reference.updated_at) if reference.updated_at else '未受信'
         )
         self._status_label.setText(
             f'{reference.topic or "-"} / {reference.freshness.value} / {updated_text}'

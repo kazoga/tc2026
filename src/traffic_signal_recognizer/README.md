@@ -3,20 +3,20 @@
 ## 概要
 `traffic_signal_recognizer` は、`yolo_detector` が publish する信号検出結果
 `vision_msgs/msg/Detection2DArray` を入力として、信号横断可否を `/sig_recog` へ publish する
-ROS 2 パッケージです。YOLO モデルのロードと画像推論は行わず、GO/STOP 判定と判定重畳画像の
-生成を担当します。
+ROS 2 パッケージです。YOLO モデルのロードと画像推論は行わず、GO/STOP 判定と、表示側が
+画像へ重畳するための認識結果の配信を担当します。画像の購読・配信は行いません。
 
 ## 主な機能
 - `/recog_flag==1` の間だけ信号判定を有効化。
 - YOLO の red / green 検出結果から、既定では 3 回連続 green で GO と判定。
 - `/sig_recog` に `1=GO`, `2=STOP` を publish。
-- `/perception/traffic_signal/decision_image` に判定状態を重畳した画像を publish。
+- `/perception/traffic_signal/overlay` に検出矩形と判定結果を `PerceptionOverlay` で publish。
 - `traffic_signal_perception.launch.py` により、信号用 `yolo_detector` と判定ノードをまとめて起動可能。
 
 ## ノード構成
 | ファイル | 役割 |
 | --- | --- |
-| `traffic_signal_recognizer_node.py` | ROS 2 parameter、subscriber、publisher、画像変換、描画を担当。 |
+| `traffic_signal_recognizer_node.py` | ROS 2 parameter、subscriber、publisher を担当。 |
 | `signal_recognition_core.py` | ROS 非依存の GO/STOP 判定ロジックを担当。 |
 
 ## 起動方法
@@ -78,11 +78,12 @@ ros2 topic pub /recog_flag std_msgs/msg/Int32 "{data: 1}" -r 1
 ```bash
 ros2 topic echo /sig_recog
 ros2 topic hz /perception/traffic_signal/detections
-ros2 topic hz /perception/traffic_signal/decision_image
+ros2 topic echo /perception/traffic_signal/overlay
 ```
 
-`/perception/traffic_signal/detection_image` は YOLO 生検出の確認用画像、
-`/perception/traffic_signal/decision_image` は GO/STOP 判定後の確認用画像です。
+`/perception/traffic_signal/detection_image` は YOLO 生検出の確認用画像です。
+GO/STOP 判定後の重畳表示は `robot_console` が `/usb_cam/image_raw` へ
+`/perception/traffic_signal/overlay` を重ねて描画します。
 
 ## ROS インタフェース
 ### Subscribe
@@ -90,13 +91,17 @@ ros2 topic hz /perception/traffic_signal/decision_image
 | --- | --- | --- | --- |
 | `recog_flag_topic` | `/recog_flag` | `std_msgs/msg/Int32` | `1` の間だけ信号認識を有効化。 |
 | `detections_topic` | `/perception/traffic_signal/detections` | `vision_msgs/msg/Detection2DArray` | YOLO 信号検出結果。 |
-| `image_topic` | `/usb_cam/image_raw` | `sensor_msgs/msg/Image` | 判定重畳画像の元画像。 |
 
 ### Publish
 | パラメータ | 既定値 | 型 | 説明 |
 | --- | --- | --- | --- |
 | `sig_recog_topic` | `/sig_recog` | `std_msgs/msg/Int32` | 信号判定結果。既定値は `1=GO`, `2=STOP`。 |
-| `decision_image_topic` | `/perception/traffic_signal/decision_image` | `sensor_msgs/msg/Image` | 判定状態を重畳した画像。 |
+| `overlay_topic` | `/perception/traffic_signal/overlay` | `tc_perception_msgs/msg/PerceptionOverlay` | 検出矩形と判定結果。表示側が画像へ重畳するために使う。BEST_EFFORT で配信。 |
+
+`PerceptionOverlay.header` には判定根拠となった元画像フレームの `stamp` / `frame_id` を
+引き継ぎます。`yolo_detector` が `Detection2DArray.header` へ元画像の header を複製して
+いるため、本ノードはそれを転記するだけで紐付けが成立します。認識は `/recog_flag` が
+無効の間は配信しないため、表示側では鮮度が低下して未受信扱いになります。
 
 ## パラメータ
 | 名称 | 既定値 | 説明 |
@@ -112,7 +117,6 @@ ros2 topic hz /perception/traffic_signal/decision_image
 | `red_class_names` | `['red']` | red とみなす class name。 |
 | `hold_go` | `false` | 一度 GO 判定した後に GO を保持するか。 |
 | `publish_stop_when_disabled` | `false` | 無効化時に STOP を publish するか。 |
-| `publish_image_when_disabled` | `true` | 無効時も入力画像を判定重畳画像 topic へ publish するか。 |
 
 ## 開発・テスト
 ROS 非依存ロジックは `tests/test_signal_recognition_core.py` で確認します。

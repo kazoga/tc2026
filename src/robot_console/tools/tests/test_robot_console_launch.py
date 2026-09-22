@@ -76,6 +76,22 @@ def test_topic_configs_cover_drive_and_odom_subscriptions_added_for_operation_ph
         assert topic in relative_names, f'{topic} の launch remap引数が未定義'
 
 
+def test_topic_configs_cover_gnss_diagnostics():
+    """GNSS診断の購読先を launch から切り替えられることを確認する。
+
+    実機のUM982ドライバは `gnss_namespace`（既定
+    `/rtk_gps/rtk_gps_um982_node`）配下のprivate名で配信し、シムは公開名で
+    配信する。以前は両方の絶対名を二重購読して吸収していたため、
+    `gnss_namespace` を既定から変えた構成でGNSS表示が空になった。
+    """
+
+    module = _load_launch_module()
+    relative_names = {entry[1] for entry in module._TOPIC_CONFIGS}
+
+    for topic in ('rtk_gps/rtk_status', 'rtk_gps/ntrip_status'):
+        assert topic in relative_names, f'{topic} の launch remap引数が未定義'
+
+
 def test_topic_configs_relative_names_match_actual_subscriptions():
     """`_TOPIC_CONFIGS` の相対名が `RobotConsoleNode` の実際の購読名とズレていないか確認する。
 

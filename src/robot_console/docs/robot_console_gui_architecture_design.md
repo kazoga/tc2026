@@ -6,7 +6,7 @@
 
 対象は `robot_console` パッケージの正式GUI実装である。既存の `tkinter` GUIは移行期間中の別UIとして残さず、PyQt5 GUIへ完全移行する。完全移行後は `robot_console` の通常entry point、README、launch、評価ツール、設計書の参照先をPyQt5版に統一する。
 
-**実装状態:** 本書が定義する `ConsoleCore`、PyQt5 UI、HTML UIは実装済みであり、正式entry pointは PyQt5 版（`robot_console_qt`）と HTML遠隔観測UI（`robot_console_web`）である。旧 `tkinter` 版（`robot_console`）は当面コードを残すが正式UIとしては扱わず、`robot_console_詳細設計書.md` は旧UIの記録として参照する。
+**実装状態:** 本書が定義する `ConsoleCore`、PyQt5 UI、HTML UIは実装済みであり、正式entry pointは PyQt5 版（`robot_console_qt`）と HTML遠隔観測UI（`robot_console_web`）である。旧 `tkinter` 版（`robot_console`）は実装・設計書とも削除済みである。
 
 画面配置や業務フロー上の操作仕様は `robot_console_gui_screen_function_design.md` を正とする。本書では、画面を実現するための実装境界、データモデル、将来のLLHベース自己位置・経路への移行前提を定義する。
 
@@ -219,8 +219,9 @@ route、waypoint、active targetも同様に、現行のmap/ENU/PoseStamped前�
 | `/drive_mode_status` | `tc_route_msgs/msg/DriveModeStatus` | 現行 | 自律/手動モード、mux状態、手動介入状態 |
 | `/obstacle_avoidance_hint` | `tc_route_msgs/msg/ObstacleAvoidanceHint` | 現行 | 障害物状態、固定override表示 |
 | `/sensor_viewer` | `sensor_msgs/msg/Image` | 現行 | 障害物/センサビュー表示 |
-| `/perception/road_blockage/decision_image` | `sensor_msgs/msg/Image` | 現行 | 道路封鎖判定画像表示 |
-| `/perception/traffic_signal/decision_image` | `sensor_msgs/msg/Image` | 現行 | 信号認識画像表示 |
+| `/usb_cam/image_raw` | `sensor_msgs/msg/Image` | 現行 | フロントカメラ生画像。認識結果を重畳して表示する |
+| `/perception/road_blockage/overlay` | `tc_perception_msgs/msg/PerceptionOverlay` | 現行 | 道路封鎖の検出矩形・判定 |
+| `/perception/traffic_signal/overlay` | `tc_perception_msgs/msg/PerceptionOverlay` | 現行 | 信号認識の検出矩形・判定 |
 | `/route/active_target_llh` | `tc_route_msgs/msg/ActiveTargetLlh` | 現行 | 地図表示用の目標LLH、目標距離・bearing |
 | `/manual_start` | `std_msgs/msg/Bool` | 現行 | 手動開始状態、送信結果確認 |
 | `/sig_recog` | `std_msgs/msg/Int32` | 現行 | 信号GO/STOP状態、送信結果確認 |
@@ -228,6 +229,10 @@ route、waypoint、active targetも同様に、現行のmap/ENU/PoseStamped前�
 | `/rtk_gps/fix` | `sensor_msgs/msg/NavSatFix` | 現行 | 緯度経度高度、GPS fix鮮度、位置共分散表示 |
 | `/rtk_gps/heading` | `sensor_msgs/msg/Imu` | 現行 | デュアルアンテナheading鮮度、姿勢補助 |
 | `/rtk_gps/rtk_status` | `rtk_gps_um982_msgs/msg/RtkStatus` | 現行 | RTK種別、衛星数、HDOP、補正age、RTCM受信量表示 |
+| `/rtk_gps/ntrip_status` | `std_msgs/msg/String` | 現行 | 基地局接続状態、CRC確認済みRTCM量・速度、再接続回数 |
+
+`/rtk_gps/rtk_status` と `/rtk_gps/ntrip_status` は相対名 `rtk_gps/...` で購読し、
+配信元（実機ドライバのprivate名、シミュレーションの公開名）へは起動側がremapする。
 
 ### 7.2 発行トピック
 
@@ -493,7 +498,7 @@ traffic_signal_recognizer (simulator代替使用)
 - 購読QoSは配信側ノードのQoSに合わせる。QoS非互換の購読は接続自体が成立せず無言で受信ゼロになるため、以下を購読側の既定とする。
   - `/active_route`: route_managerがTransient Local（ラッチ）で配信するため、`RELIABLE` / `TRANSIENT_LOCAL` / `depth=1` で購読する（VOLATILE購読では起動順によって初回Routeを取り逃す）。
   - `/obstacle_avoidance_hint`: obstacle_monitorがBEST_EFFORTで配信するため、`BEST_EFFORT` で購読する。
-  - 画像topic（`/sensor_viewer`、各 `decision_image`）: 配信側のreliabilityがノードごとに異なるため、双方と互換な `BEST_EFFORT` で一律購読する（表示用途であり取りこぼしを許容する）。
+  - 画像topic（`/sensor_viewer`、`/usb_cam/image_raw`）と認識結果topic（各 `overlay`）: 配信側のreliabilityがノードごとに異なるため、双方と互換な `BEST_EFFORT` で一律購読する（表示用途であり取りこぼしを許容する）。
   - 上記以外のストリーム系topicは `RELIABLE` / `VOLATILE` / `depth=10` を既定とする。
 - ROS callbackはCoreのスレッド安全APIへ状態を投入し、GUI部品を直接更新しない。
 - PyQt5 GUIはQt main thread上でのみwidgetを更新する。

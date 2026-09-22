@@ -210,6 +210,9 @@ class MapView(QWebEngineView):
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
         self._page_loaded = False
+        # 直前に流したスクリプト。内容が変わらない間は再実行しない（`update_route`）。
+        self._last_markers_script: Optional[str] = None
+        self._last_route_script: Optional[str] = None
         self.loadFinished.connect(self._on_load_finished)
         self.setHtml(build_map_html())
 
@@ -229,15 +232,29 @@ class MapView(QWebEngineView):
 
         if not self._page_loaded:
             return
-        self.page().runJavaScript(build_update_markers_script(localization, target))
+        script = build_update_markers_script(localization, target)
+        if script == self._last_markers_script:
+            return
+        self._last_markers_script = script
+        self.page().runJavaScript(script)
 
     def update_route(self, route: RouteView) -> None:
-        """`ConsoleSnapshot` のroute waypoint列をLeaflet地図へ反映する。"""
+        """`ConsoleSnapshot` のroute waypoint列をLeaflet地図へ反映する。
+
+        `updateRoute` はLeaflet側で全waypointのマーカー再スタイルと2本のpolyline
+        再構築を行う。つくば2026コースのように1000点規模のrouteでは、内容が同じでも
+        snapshotポーリングのたびに全再描画が走り、地図のちらつきとJSON転送の
+        負荷になる。スクリプトが前回と同一の間は実行自体を行わない。
+        """
 
         if not self._page_loaded:
             return
 
-        self.page().runJavaScript(build_update_route_script(route))
+        script = build_update_route_script(route)
+        if script == self._last_route_script:
+            return
+        self._last_route_script = script
+        self.page().runJavaScript(script)
 
     def fit_route(self) -> None:
         """ユーザー操作で受信ルート全体を再表示する。"""

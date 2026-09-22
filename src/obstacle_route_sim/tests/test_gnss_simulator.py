@@ -2,6 +2,7 @@
 
 from collections import deque
 import importlib.util
+import json
 import math
 from pathlib import Path
 import random
@@ -42,6 +43,23 @@ def test_master_axle_height_slave_baseline_and_heading(monkeypatch):
     assert status.heading_deg == pytest.approx(0,abs=1e-6)
     assert status.baseline_length_m == .5
     assert imu.angular_velocity_covariance[0] == -1
+
+
+def test_ntrip_status_reports_disabled_without_fabricating_corrections():
+    """シムにNTRIP接続は無いため DISABLED を明示し、補正受信中を装わない.
+
+    無配信にすると UI 側が「未受信」となり、実機で診断が途絶した異常と
+    区別できなくなるため、構成として補正を使わないことを伝える.
+    """
+
+    published = []
+    node = SimpleNamespace(ntrip_pub=SimpleNamespace(publish=published.append))
+    MODULE.GnssSimulator.publish_ntrip_status(node)
+    data = json.loads(published[0].data)
+    assert data['state'] == 'DISABLED'
+    assert data['transport_connected'] is False
+    assert data['rtcm_bytes_total'] == 0 and data['rtcm_bytes_per_s'] == 0.
+    assert not any(data[key] for key in ['host', 'mountpoint', 'last_error'])
 
 
 def test_dropout_clears_pending_delivery_and_recovers(monkeypatch):

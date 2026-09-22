@@ -286,7 +286,7 @@ profiles:
     launch_order: 100
     startup_group: desktop_check
     health_topics:
-      - /perception/road_blockage/decision_image
+      - /perception/road_blockage/overlay
     simulator_package: yolo_detector
     simulator_launch_file: camera_simulator_node.launch.py
 
@@ -301,7 +301,7 @@ profiles:
     launch_order: 110
     startup_group: desktop_check
     health_topics:
-      - /perception/traffic_signal/decision_image
+      - /perception/traffic_signal/overlay
     simulator_package: yolo_detector
     simulator_launch_file: camera_simulator_node.launch.py
 

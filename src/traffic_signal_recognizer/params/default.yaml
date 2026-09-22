@@ -2,9 +2,8 @@ traffic_signal_recognizer:
   ros__parameters:
     recog_flag_topic: /recog_flag
     detections_topic: /perception/traffic_signal/detections
-    image_topic: /usb_cam/image_raw
     sig_recog_topic: /sig_recog
-    decision_image_topic: /perception/traffic_signal/decision_image
+    overlay_topic: /perception/traffic_signal/overlay
     confidence_threshold: 0.8
     judge_count: 3
     go_status: 1
@@ -16,4 +15,3 @@ traffic_signal_recognizer:
     red_class_names: ['red']
     hold_go: false
     publish_stop_when_disabled: false
-    publish_image_when_disabled: true

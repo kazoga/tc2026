@@ -76,6 +76,11 @@ def test_real_launch_has_no_simulator_and_sim_has_one_fusion(monkeypatch, tmp_pa
         ui = next(item for item in captured if item['package'] == 'robot_console')
         assert ui['arguments'] == ['--business-environment',
                                    'デジタルツイン' if mode == 'simulation' else '実機（融合）']
+        # UIのGNSS診断購読も、融合・座標変換と同じgps_baseへ向ける。
+        base = '/rtk_gps' if mode == 'simulation' else '/rtk_gps/rtk_gps_um982_node'
+        remaps = dict(ui['remappings'])
+        assert remaps['rtk_gps/rtk_status'] == base+'/rtk_status'
+        assert remaps['rtk_gps/ntrip_status'] == base+'/ntrip_status'
 
 
 @pytest.mark.parametrize('site,expected', [('稲城', 'inagi'), ('つくば', 'tsukuba')])

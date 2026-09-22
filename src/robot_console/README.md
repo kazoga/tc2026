@@ -3,7 +3,10 @@
 ## 概要
 現行の正式UIは **PyQt5版 `robot_console_qt`** です。ROS通信・状態集約は
 `RobotConsoleNode` / `ConsoleCore`、遠隔閲覧は同じSnapshotを読むHTML版が担当します。
-下記の旧画面説明は互換用tkinter版です。新規の実機共通起動はPyQt5版を使用します。
+旧tkinter版（`robot_console`）は削除済みで、entry point は `robot_console_qt` と
+`robot_console_web` の 2 つである。下記の「画面構成」節は旧tkinter版の画面説明を
+残しており、現行画面の正は
+[画面・機能詳細設計書](docs/robot_console_gui_screen_function_design.md) とする。
 
 ### 現行の5タブ（2026-09-20）
 
@@ -16,22 +19,24 @@
 | GNSS・基地局 | 接続先・マウントポイント・RTCM受信状態、GNSS品質・アンテナ情報 |
 
 追加画面の仕様・検証・起動環境は [GNSS・基地局表示](docs/gnss_station_ui.md) を参照。
+HTML版をどこから閲覧可能にするかは [HTML遠隔観測UIの公開範囲](docs/html_ui_access.md) を参照。
 
 
 ## 主な機能
 - `/route_state`・`/manager_status`・`/follower_state` などのトピックを購読し、走行状況や再計画履歴をカード形式で可視化。
-- `/sensor_viewer` および外部カメラ映像（走行・信号監視）を 3 つの画像パネルに表示し、障害物ヒントをオーバレイ。
+- `/sensor_viewer` とフロントカメラ映像を画像パネルに表示。カメラ映像には認識ノードから受け取った
+  検出矩形を `ConsoleCore` が重畳する（PyQt5版・HTML版）。
 - `manual_start`・`sig_recog`・`road_blocked`・`obstacle_avoidance_hint` の送信 UI を備え、運用者がラッチ値や回避指示を即時に発行可能。
 - `NodeLaunchManager` により `ros2 launch` コマンドを GUI から起動／停止し、主要ノードの稼働状況とログをサイドバーとタブで確認。
 - 走行距離・速度・目標到達率を自動算出し、閾値を超えた場合に色分けで警告。
-- `tools/mock_ui.py` を用いたダミーデータ表示と `tools/tests/` によるロジック単体テストで回帰検出に対応。
+- `tools/tests/` によるロジック単体テストで回帰検出に対応。
 
 ## 画面構成
 ### Dashboard タブ
 - **ステータスカード列**：ルート進捗、フォロワ状態、速度・目標距離カードを 5Hz 以内で更新。
 - **イベントバナー**：`road_blocked` → `manual_start` → `sig_recog` の優先順位で最新イベントを表示。60 秒経過で自動クリア。
 - **制御コマンドタブ**：各トピックの送信 UI を Notebook 形式でまとめ、Spinbox やラジオボタンで値を入力。`frame_image_path` タグでは静止画パスを入力して `/frame_image_path` トピックへ単発 publish できます。送信結果は最終送信値と時刻として即座に反映されます。
-- **画像パネル**：ルート地図（`/active_route` の付帯画像）、障害物ビュー（`/sensor_viewer`）、カメラ映像（`/perception/road_blockage/decision_image`・`/perception/traffic_signal/decision_image`）。レターボックス処理でアスペクト比を保持し、障害物ヒント値を左上にオーバレイ表示。
+- **画像パネル**：障害物ビュー（`/sensor_viewer`）とフロントカメラ（`/usb_cam/image_raw`）。カメラ画像には `ConsoleCore` が認識結果の検出矩形を重畳する。
 - **ノード起動サイドバー**：主要ノードカードに加え `Drive Mode Manager`、
   `Road Blockage Detector`、`Traffic Signal Recognizer` カードを配置。各カードは対応パッケージの統合 launch を起動し、
   下流判定ノードと用途別 `yolo_detector` インスタンスを同時に立ち上げます。
@@ -54,11 +59,10 @@ ros2 launch robot_console robot_console.launch.py \
 ### 主要パラメータ
 | パラメータ | 型 | 既定値 | 説明 |
 |------------|----|--------|------|
-| `ui.refresh_period_ms` | int | 200 | GUI が `GuiCore.snapshot()` を呼ぶ周期。|
-| `ui.image_rate_limit_hz.*` | double | route:2 / sensor:5 / camera_drive:5 / camera_signal:5 | 画像パネルごとの最大更新頻度。|
+| `ui.refresh_period_ms` | int | 200 | GUI が `ConsoleCore.build_snapshot()` を呼ぶ周期。|
+| `ui.image_rate_limit_hz.*` | double | route:2 / sensor:5 / camera:5 | 画像パネルごとの最大更新頻度。|
 | `commands.cooldown_ms.*` | int | 500 | manual_start / sig_recog / road_blocked の連打抑止時間。|
 | `commands.override_timer_hz.obstacle_hint` | double | 0.5 | 障害物ヒント固定送出の周期。|
-| `topics.camera.drive` / `topics.camera.signal` | string | `/perception/road_blockage/decision_image` / `/perception/traffic_signal/decision_image` | 外部カメラの購読トピック名。|
 | `topics.road_blocked.external_priority` | bool | true | 外部 `/road_blocked` を GUI 送信より優先するか。|
 
 ## ROS インタフェース
@@ -77,7 +81,8 @@ ros2 launch robot_console robot_console.launch.py \
 | `/follower_state` | `tc_route_msgs/msg/FollowerState` | フォロワ状態カード、イベントログ。|
 | `/active_route` | `tc_route_msgs/msg/Route` | ルート地図画像とウェイポイント一覧。|
 | `/sensor_viewer` | `sensor_msgs/msg/Image` | 障害物ビュー画像パネル。|
-| `/perception/road_blockage/decision_image` / `/perception/traffic_signal/decision_image` | `sensor_msgs/msg/Image` | 走行カメラ・信号監視パネル。|
+| `/usb_cam/image_raw` | `sensor_msgs/msg/Image` | フロントカメラ生画像。`ConsoleCore` が認識結果を重畳して 1 枚のカメラパネルに表示する。|
+| `/perception/traffic_signal/overlay` / `/perception/road_blockage/overlay` | `tc_perception_msgs/msg/PerceptionOverlay` | 認識結果。検出矩形は画像へ重畳し、判定結果は判定チップとして表示する。|
 | `/active_target` / `/localization/pose_enu` | `geometry_msgs/msg/PoseStamped` / `PoseWithCovarianceStamped` | 目標距離計算。|
 | `/cmd_vel` | `geometry_msgs/msg/Twist` | 速度カード。|
 | `/manual_start` / `/sig_recog` / `/road_blocked` | `std_msgs/msg/Bool` / `Int32` / `Bool` | イベントバナー、タブ表示の現在値。|
@@ -98,8 +103,6 @@ ros2 launch robot_console robot_console.launch.py \
 - 「全起動」は `launch_priority` の昇順で処理し、途中で失敗した場合は残りのノードを停止状態で維持します。ログタブでエラーメッセージを確認のうえ再試行してください。
 
 ## 開発・テスト
-- GUI なしでロジックを確認したい場合は `python3 -m robot_console.gui_core` でユニットテスト用メインを実行できます（PyYAML / Pillow / OpenCV が未導入でもフォールバック動作）。
-- モック画面は `python3 tools/mock_ui.py` で起動し、ROS 環境なしに画面レイアウトと操作フローを確認できます。
 - `tools/tests/` 配下に pytest ベースのテストを収録しています。`pytest tools/tests` を実行してロジックの回帰を検出してください。
 - ワークスペースの `requirements.txt` で `pytest-forked` も導入してください。
   QtWebEngine の状態をテスト間で共有しないよう各テストを別プロセスで実行します。
@@ -107,7 +110,7 @@ ros2 launch robot_console robot_console.launch.py \
 - テストは既定で `QT_QPA_PLATFORM=offscreen` と
   `QT_QUICK_BACKEND=software` を設定するため、ディスプレイのないCIでも地図タブの
   切り替えを検証できます。これらの設定はテストにのみ適用します。
-- `tools/headless_route_stack_eval.py` は tkinter 画面を生成せず、`GuiCore` に
+- `tools/headless_route_stack_eval.py` は GUI を生成せず、`ConsoleCore` に
   GUI 操作相当の入力を与えて route stack の簡易回帰評価を行う補助ツールです。
   `route_planner`、`route_manager`、`route_follower`、`drive_mode_manager`、
   `robot_navigator`、`robot_simulator` を起動し、`/route_state`、`/active_route`、
@@ -128,12 +131,13 @@ ros2 launch robot_console robot_console.launch.py \
   既定では `route_planner` / `route_manager` に `tsukuba.yaml`、`route_follower` /
   `drive_mode_manager` は `start_gui=false` で `joy_node`、manual teleop、mux を同時起動し、`robot_navigator` は
   `cmd_vel_topic=/cmd_vel/autonomous` で起動し、`robot_navigator` の simulator を有効にします。
-  評価終了時は `GuiCore.request_stop_all()` 相当の停止処理を行い、各 profile の
-  停止状態を出力します。GUI あり評価で専用状態 GUI も起動する場合は
-  `tools/gui_route_stack_eval.py --show-drive-status-gui` を指定します。異なる範囲を評価する場合は `--start-label`、`--goal-label`、
-  `--timeout-sec`、`--post-goal-wait-sec`、`--no-simulator` などを指定してください。
-- `tools/gui_route_stack_eval.py` は `UiMain` を実際に生成し、座標クリックではなく
-  automation hook 経由で Combobox、Entry、Checkbutton、Button 相当の操作を行います。
+  評価終了時は起動順の逆順で各 profile を停止し、停止状態を出力します。
+  異なる範囲を評価する場合は `--start-label`、`--goal-label`、`--timeout-sec`、
+  `--post-goal-wait-sec`、`--no-simulator` などを指定してください。
+  `drive_mode_manager` の走行状態 GUI も起動する場合は `--show-drive-status-gui`
+  を指定します。
+- `tools/qt_route_stack_eval.py` は `MainWindow` を実際に表示し、起動操作カード・
+  起動設定タブが呼ぶのと同じ `ConsoleCore` の公開メソッドで操作します。
   ローカルデスクトップまたは X11 転送ありの環境で実行してください。
 
   ```bash
@@ -141,11 +145,10 @@ ros2 launch robot_console robot_console.launch.py \
   run_id=$(date +%Y%m%d_%H%M%S)
   mkdir -p "log/codex/${run_id}/ros" "log/codex/${run_id}/robot_console"
   export ROS_LOG_DIR="$PWD/log/codex/${run_id}/ros"
-  python3 src/robot_console/tools/gui_route_stack_eval.py \
+  python3 src/robot_console/tools/qt_route_stack_eval.py \
     --start-label 10 \
     --goal-label 30 \
-    --console-log-directory "log/codex/${run_id}/robot_console" \
-    --verify-log-open-buttons
+    --console-log-directory "log/codex/${run_id}/robot_console"
   ```
 
 ### 評価ツール実行時のログ
@@ -169,8 +172,8 @@ export ROS_LOG_DIR="$PWD/log/codex/${run_id}/ros"
 保存済み ROS ログは `ROS_LOG_DIR` 配下を参照してください。
 
 ## 依存パッケージ
-- GUI 機能：`tkinter`（標準ライブラリ）、`Pillow`（画像描画）、`opencv-python`（画像デコード）。Pillow / OpenCV は未導入でも縮退動作します。
-- ROS2 メッセージ：`tc_route_msgs`、`geometry_msgs`、`sensor_msgs`、`std_msgs`。
+- GUI 機能：`PyQt5`・`PyQt5.QtWebEngine`（画面描画・地図表示）、`Pillow`（画像描画）、`opencv-python`（画像デコード）。
+- ROS2 メッセージ：`tc_route_msgs`、`tc_geo_msgs`、`tc_perception_msgs`、`rtk_gps_um982_msgs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`、`std_msgs`。
 
 以上の内容を参考に、運用開始前に `config/node_launch_profiles.yaml` や `config/robot_console.yaml`（必要に応じて作成）を実際の環境に合わせて整備してください。
 

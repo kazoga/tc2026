@@ -230,6 +230,44 @@ function appendField(dl, label, value) {
   dl.appendChild(dd);
 }
 
+// 判定チップを常設する認識種別。未受信でも枠を残し、認識ノードが未起動なのか
+// 異常なのかを画面から区別できるようにする（PyQt5側のlocalization_sensor_tab.py
+// と同じ扱い）。
+const PERCEPTION_SOURCES = [
+  ['traffic_signal', '信号'],
+  ['road_blockage', '経路封鎖'],
+];
+
+// 判定チップを内包するカメラパネル（ConsoleCoreのCAMERA_PANEL_IDと同じ値）。
+const CAMERA_PANEL_ID = 'front_camera';
+
+function renderPerception(decisions) {
+  // 検出枠はConsoleCoreがカメラ画像へ重畳済みのため、ここには判定結果だけを出す。
+  // 表示位置はカメラカード内（`renderSensorGrid` が移動する）。
+  const fields = document.getElementById('perception-fields');
+  fields.innerHTML = '';
+  const bySource = new Map((decisions || []).map((view) => [view.source, view]));
+
+  for (const [source, defaultTitle] of PERCEPTION_SOURCES) {
+    const view = bySource.get(source);
+    if (!view) {
+      appendField(fields, defaultTitle, '未受信');
+      fields.lastElementChild.style.color = freshnessColor('UNKNOWN');
+      continue;
+    }
+
+    let text = view.decision_text || '-';
+    if (view.status_note) {
+      text = `${text}（${view.status_note}）`;
+    }
+    if (view.detection_count) {
+      text = `${text} / 検出${view.detection_count}`;
+    }
+    appendField(fields, view.title || defaultTitle, text);
+    fields.lastElementChild.style.color = freshnessColor(view.freshness);
+  }
+}
+
 function renderGnssDropout(state, connectionLost = false) {
   const alert = document.getElementById('gnss-dropout-alert');
   if (!alert) return;
@@ -336,7 +374,12 @@ function renderGpsSummary(snapshot) {
 function renderSensorGrid(allPanels) {
   // route_mapは専用のLeaflet地図で表示するため、センサ・画像パネルの
   // グリッドには含めない（PyQt5側のlocalization_sensor_tab.pyと同様の扱い）。
-  const panels = allPanels.filter((panel) => panel.panel_id !== 'route_map');
+  const panels = allPanels
+    .filter((panel) => panel.panel_id !== 'route_map')
+    // 判定チップを伴うカメラを先頭（最上段）に固定する。配信順に任せると、
+    // どちらのtopicが先に届いたかで上下が入れ替わる。
+    .sort((a, b) => (a.panel_id === CAMERA_PANEL_ID ? -1 : 0)
+      - (b.panel_id === CAMERA_PANEL_ID ? -1 : 0));
   const grid = document.getElementById('sensor-grid');
   const panelIds = panels.map((panel) => panel.panel_id);
   const sameOrder =
@@ -344,32 +387,50 @@ function renderSensorGrid(allPanels) {
     panelIds.every((id, index) => id === knownPanelIds[index]);
 
   if (!sameOrder) {
+    // 判定チップはカメラカードの子要素にしているため、グリッドを作り直す前に
+    // セクション直下へ退避する。退避しないとカードと一緒に破棄される。
+    const perceptionFields = document.getElementById('perception-fields');
+    document.getElementById('sensors').appendChild(perceptionFields);
+
     grid.innerHTML = '';
     for (const panel of panels) {
       const card = document.createElement('figure');
       card.className = 'sensor-card';
 
+      // パネル名とtopic・鮮度は同じ見出し行へ左右振り分けで置く（PyQt5側の
+      // ImagePanelと同じ扱い）。2行に分けるとその分だけ画像領域が狭くなる。
+      const header = document.createElement('figcaption');
+      header.className = 'sensor-card-header';
+      const title = document.createElement('span');
+      title.className = 'sensor-card-title';
+      title.textContent = panel.title;
+      const status = document.createElement('span');
+      status.id = `panel-caption-${panel.panel_id}`;
+      status.className = 'sensor-card-status';
+      header.appendChild(title);
+      header.appendChild(status);
+
       const img = document.createElement('img');
       img.id = `panel-image-${panel.panel_id}`;
       img.alt = panel.title;
 
-      const caption = document.createElement('figcaption');
-      caption.id = `panel-caption-${panel.panel_id}`;
-
+      card.appendChild(header);
       card.appendChild(img);
-      card.appendChild(caption);
+      if (panel.panel_id === CAMERA_PANEL_ID) {
+        card.appendChild(perceptionFields);
+      }
       grid.appendChild(card);
     }
     knownPanelIds = panelIds;
   }
 
   for (const panel of panels) {
-    const caption = document.getElementById(`panel-caption-${panel.panel_id}`);
-    if (caption === null) {
+    const status = document.getElementById(`panel-caption-${panel.panel_id}`);
+    if (status === null) {
       continue;
     }
-    caption.textContent = `${panel.title} / ${panel.topic || '-'} / ${panel.freshness}`;
-    caption.style.color = freshnessColor(panel.freshness);
+    status.textContent = `${panel.topic || '-'} / ${panel.freshness}`;
+    status.style.color = freshnessColor(panel.freshness);
   }
 }
 
@@ -465,6 +526,7 @@ async function pollSnapshot() {
     renderMapCaption(snapshot);
     updateRouteOverlay(snapshot);
     updateMapMarkers(snapshot);
+    renderPerception(snapshot.perception_decisions);
     renderSensorGrid(snapshot.sensor_panels);
     renderHealthTable(snapshot.health);
     lastSnapshotSuccessAt = Date.now();

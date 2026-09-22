@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
+from typing import Any, Optional
 
 import rclpy
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
@@ -21,6 +22,7 @@ from rtk_gps_um982_msgs.msg import RtkStatus
 from sensor_msgs.msg import Image as ImageMsg
 from std_msgs.msg import Bool, Int32, String
 from tc_geo_msgs.msg import GeoPoseWithQuality
+from tc_perception_msgs.msg import PerceptionOverlay
 from tc_route_msgs.msg import (
     ActiveTargetLlh,
     DriveModeStatus,
@@ -31,11 +33,65 @@ from tc_route_msgs.msg import (
     RouteState,
 )
 
+from ..core.camera_overlay import OverlayDetectionView, PerceptionOverlayView
 from ..core.console_core import ConsoleCore
 
 DEFAULT_NODE_NAME = 'robot_console_gui'
-# 実機launchと模擬UM982が共有する公開トピック。
-RTK_STATUS_TOPIC = '/rtk_gps/rtk_status'
+# フロントカメラの生画像。重畳済み画像ではなくこれを唯一の画像入力とする。
+# 先頭にスラッシュを付けないことで launch からの remap を可能にする。
+CAMERA_IMAGE_TOPIC = 'usb_cam/image_raw'
+
+
+def _stamp_to_seconds(stamp: Any) -> Optional[float]:
+    """`builtin_interfaces/Time` を秒へ変換する。
+
+    認識結果 (`PerceptionOverlay.header.stamp`) と生画像フレームの対応付けに使う。
+
+    Args:
+        stamp (Any): `sec` / `nanosec` を持つ時刻.
+
+    Returns:
+        Optional[float]: 秒単位の時刻. 変換できない場合は None.
+    """
+
+    try:
+        return float(stamp.sec) + float(stamp.nanosec) * 1e-9
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def _overlay_view_from_msg(msg: PerceptionOverlay) -> PerceptionOverlayView:
+    """`PerceptionOverlay` をROS非依存のViewへ変換する。
+
+    `ConsoleCore` はROSメッセージ型に依存しないため、変換は本モジュールで行う
+    （architecture_design.md 3.1節）。
+
+    Args:
+        msg (PerceptionOverlay): 受信したメッセージ.
+
+    Returns:
+        PerceptionOverlayView: `ConsoleCore` へ渡すView.
+    """
+
+    return PerceptionOverlayView(
+        source=msg.source,
+        detections=[
+            OverlayDetectionView(
+                center_x=detection.center_x,
+                center_y=detection.center_y,
+                size_x=detection.size_x,
+                size_y=detection.size_y,
+                label=detection.label,
+                score=detection.score,
+                adopted=detection.adopted,
+            )
+            for detection in msg.detections
+        ],
+        decision=msg.decision,
+        decision_text=msg.decision_text,
+        status_note=msg.status_note,
+        frame_stamp=_stamp_to_seconds(msg.header.stamp),
+    )
 
 # route_manager の /active_route はTransient Local（ラッチ配信）で配信される
 # （route_manager_node.py の qos_tl()）。購読側が既定のVOLATILEのままだと、
@@ -60,11 +116,9 @@ _QOS_BEST_EFFORT = QoSProfile(
     depth=1,
 )
 
-# 画像系トピックも配信側のQoSがノードごとに異なる
-# （road_blockage_detector の decision_image は BEST_EFFORT、obstacle_monitor の
-# sensor_viewer と traffic_signal_recognizer の decision_image は RELIABLE）。
-# BEST_EFFORT購読はどちらとも互換であり、表示用途では取りこぼしも許容できるため
-# 画像購読は一律 BEST_EFFORT とする。
+# 表示系トピックは配信側のQoSがノードごとに異なる（obstacle_monitor の sensor_viewer と
+# usb_cam の画像は RELIABLE、認識ノードの overlay は BEST_EFFORT）。BEST_EFFORT購読は
+# どちらとも互換であり、表示用途では取りこぼしも許容できるため一律 BEST_EFFORT とする。
 _QOS_IMAGE = QoSProfile(
     reliability=ReliabilityPolicy.BEST_EFFORT,
     durability=DurabilityPolicy.VOLATILE,
@@ -85,14 +139,11 @@ class RobotConsoleNode(Node):
         self._survey_pub = self.create_publisher(String, '/route_survey/command', 10)
         core.survey_publisher = lambda value: self._survey_pub.publish(String(data=value))
         self.create_subscription(String, '/route_survey/status', core.update_survey_status, 10)
-        self.create_subscription(String, '/rtk_gps/rtk_gps_um982_node/ntrip_status',
-                                 core.update_ntrip_status, 10)
-        from std_msgs.msg import Bool
+        # GNSS診断は実機のUM982ドライバがnode private名で配信する。起動側が
+        # `gnss_namespace` に応じてremapするため、ここでは相対名で購読する。
+        self.create_subscription(String, 'rtk_gps/ntrip_status', core.update_ntrip_status, 10)
         self.create_subscription(Bool, '/fusion/gnss_dropout_active', self._core.update_gnss_dropout, 10)
         self.create_subscription(String, '/fusion/status', self._core.update_fusion_status, 10)
-        # 既存実機ドライバのprivate topicとの互換性も維持する。
-        self.create_subscription(RtkStatus, '/rtk_gps/rtk_gps_um982_node/rtk_status',
-                                 self._core.update_gps_status, 10)
 
         self.create_subscription(RouteState, 'route_state', self._core.update_route_state, 10)
         self.create_subscription(
@@ -151,7 +202,7 @@ class RobotConsoleNode(Node):
             10,
         )
         self.create_subscription(
-            RtkStatus, RTK_STATUS_TOPIC, self._core.update_gps_status, 10
+            RtkStatus, 'rtk_gps/rtk_status', self._core.update_gps_status, 10
         )
         self.create_subscription(
             ImageMsg,
@@ -161,26 +212,27 @@ class RobotConsoleNode(Node):
             ),
             _QOS_IMAGE,
         )
+        # 認識ノードは重畳画像を配信しない。生画像 1 本と認識結果を受け取り、
+        # 重畳は ConsoleCore が行う（core/camera_overlay.py）。
+        camera_topic = self.resolve_topic_name(CAMERA_IMAGE_TOPIC)
         self.create_subscription(
             ImageMsg,
-            'perception/road_blockage/decision_image',
-            lambda msg: core.update_sensor_image(
-                'road_blockage',
-                'Road Blockage',
-                '/perception/road_blockage/decision_image',
-                msg,
+            'usb_cam/image_raw',
+            lambda msg: core.update_camera_image(
+                camera_topic, msg, _stamp_to_seconds(msg.header.stamp)
             ),
             _QOS_IMAGE,
         )
         self.create_subscription(
-            ImageMsg,
-            'perception/traffic_signal/decision_image',
-            lambda msg: core.update_sensor_image(
-                'traffic_signal',
-                'Traffic Signal',
-                '/perception/traffic_signal/decision_image',
-                msg,
-            ),
+            PerceptionOverlay,
+            'perception/traffic_signal/overlay',
+            lambda msg: core.update_perception_overlay(_overlay_view_from_msg(msg)),
+            _QOS_IMAGE,
+        )
+        self.create_subscription(
+            PerceptionOverlay,
+            'perception/road_blockage/overlay',
+            lambda msg: core.update_perception_overlay(_overlay_view_from_msg(msg)),
             _QOS_IMAGE,
         )
 
@@ -225,15 +277,21 @@ class RosHandle:
         self.thread.join(timeout=5.0)
 
 
-def start_ros_thread(core: ConsoleCore, *, node_name: str = DEFAULT_NODE_NAME) -> RosHandle:
+def start_ros_thread(
+    core: ConsoleCore,
+    *,
+    node_name: str = DEFAULT_NODE_NAME,
+    ros_args: Optional[list[str]] = None,
+) -> RosHandle:
     """`RobotConsoleNode` を生成し、別スレッドでexecutorを回す。
 
     Qtイベントループ（`ui_qt_main.py`）やHTTPサーバスレッド（`web_main.py`）と
     rclpy executorを分離するために用いる（architecture_design.md 14.1節）。
+    `ros_args` はROS初期化時に渡す引数列。省略時は従来どおりsys.argvを使う。
     """
 
     if not rclpy.ok():
-        rclpy.init()
+        rclpy.init(args=ros_args)
     node = RobotConsoleNode(core, node_name=node_name)
 
     def _spin() -> None:

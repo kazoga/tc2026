@@ -77,7 +77,6 @@ def generate_launch_description() -> LaunchDescription:
             LaunchConfiguration('detector_param_file'),
             {
                 'detections_topic': LaunchConfiguration('detections_topic'),
-                'image_topic': LaunchConfiguration('image_topic'),
             },
         ],
     )

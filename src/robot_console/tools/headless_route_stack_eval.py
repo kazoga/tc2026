@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""robot_console の GuiCore で route stack を headless 評価する.
+"""robot_console の ConsoleCore で route stack を headless 評価する.
 
-tkinter の画面を生成せず、GuiCore の公開 API へ GUI 操作相当の入力を
-与える。
+GUI を生成せず、起動操作カード・起動設定タブが呼ぶのと同じ `ConsoleCore` の
+公開メソッドへ GUI 操作相当の入力を与える。
 既存 route stack 回帰用の簡易構成を対象に、route_planner、route_manager、
 route_follower、robot_navigator、robot_simulator を起動し、topic の流れを監視する。
+
+GUI あり評価は `qt_route_stack_eval.py` を使う。
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable, Optional, Sequence
 
 import rclpy
@@ -23,7 +26,8 @@ from rclpy.node import Node
 from tc_route_msgs.msg import DriveModeStatus, FollowerState, Route, RouteState
 from std_msgs.msg import Bool
 
-from robot_console.robot_console_node import RobotConsoleNode
+from robot_console.core.console_core import ConsoleCore
+from robot_console.ros.console_node import start_ros_thread
 from robot_console.utils import NodeLaunchStatus
 
 
@@ -55,6 +59,8 @@ class EvalConfig:
     cmd_vel_period_sec: float
     simulator: bool
     manual_start: bool
+    # drive_mode_manager の走行状態GUIを表示するか。GUIあり評価でのみ意味を持つ。
+    show_drive_status_gui: bool
     launch_order: Sequence[str]
     console_log_directory: Optional[str]
 
@@ -187,16 +193,16 @@ class TopicMonitor(Node):
 
 
 class HeadlessRouteStackEvaluator:
-    """GuiCore 操作と ROS topic 監視をまとめる実行器."""
+    """ConsoleCore 操作と ROS topic 監視をまとめる実行器."""
 
     def __init__(self, config: EvalConfig) -> None:
         self._config = config
-        self._console = RobotConsoleNode(
-            console_log_directory=config.console_log_directory
+        self._core = ConsoleCore(log_directory=config.console_log_directory)
+        self._ros_handle = start_ros_thread(
+            self._core, node_name='robot_console_headless_eval'
         )
         self._monitor = TopicMonitor(config.goal_label, config)
         self._executor = MultiThreadedExecutor()
-        self._executor.add_node(self._console)
         self._executor.add_node(self._monitor)
         self._thread = threading.Thread(target=self._executor.spin, daemon=True)
         self._seen_logs: dict[str, int] = {}
@@ -210,7 +216,7 @@ class HeadlessRouteStackEvaluator:
             self._launch_profiles()
             if self._config.manual_start:
                 print("[test] manual_start=True request", flush=True)
-                self._console.core.request_manual_start(True)
+                self._core.send_manual_start(True)
             goal_reached = self._wait_for_goal()
             stop_ok = self._stop_profiles()
             self._drain_console_logs()
@@ -228,19 +234,23 @@ class HeadlessRouteStackEvaluator:
             return 0
         finally:
             self._executor.shutdown()
-            self._console.destroy_node()
             self._monitor.destroy_node()
             self._thread.join(timeout=2.0)
+            self._ros_handle.stop()
 
     def _configure_launch_profiles(self) -> None:
-        core = self._console.core
+        core = self._core
         self._select_param("route_planner", self._config.route_planner_param)
         self._select_param("route_manager", self._config.route_manager_param)
         self._select_param("route_follower", self._config.route_follower_param)
         self._select_param("robot_navigator", self._config.robot_navigator_param)
         core.update_launch_override("route_manager", "start_label", self._config.start_label)
         core.update_launch_override("route_manager", "goal_label", self._config.goal_label)
-        core.update_launch_override("drive_mode_manager", "start_gui", "false")
+        core.update_launch_override(
+            "drive_mode_manager",
+            "start_gui",
+            "true" if self._config.show_drive_status_gui else "false",
+        )
         core.update_launch_override("drive_mode_manager", "joy_input", "joy_node")
         core.update_launch_override("robot_navigator", "cmd_vel_topic", "/cmd_vel/autonomous")
         core.update_launch_override("robot_navigator", "odom_topic", "/ypspur_ros/odom")
@@ -250,41 +260,35 @@ class HeadlessRouteStackEvaluator:
         self._print_launch_selection()
 
     def _select_param(self, profile_id: str, requested: str) -> None:
-        display = self._resolve_param_display(profile_id, requested)
-        self._console.core.update_selected_param(profile_id, display)
+        self._core.update_selected_param(
+            profile_id, self._resolve_param_path(profile_id, requested)
+        )
 
-    def _resolve_param_display(self, profile_id: str, requested: str) -> str:
-        state = self._console.core.snapshot().launch_states.get(profile_id)
-        if state is None:
-            raise RuntimeError(f"profile が見つかりません: {profile_id}")
-        if requested in state.param_display_map:
+    def _resolve_param_path(self, profile_id: str, requested: str) -> str:
+        """`tsukuba.yaml` のようなファイル名指定を、profile の既定パラメータと同じ
+        ディレクトリ配下のパスへ解決する。既にパス区切りを含む場合はそのまま使う
+        （`qt_route_stack_eval.py` と同じ扱い）。"""
+
+        if "/" in requested:
             return requested
-        matches = [
-            display
-            for display, path in state.param_display_map.items()
-            if path == requested or path.endswith("/" + requested) or display == requested
-        ]
-        if not matches:
-            available = ", ".join(state.available_params) or "(none)"
-            raise RuntimeError(
-                f"{profile_id} のパラメータ {requested!r} が見つかりません: "
-                f"{available}"
-            )
-        if len(matches) > 1:
-            raise RuntimeError(
-                f"{profile_id} のパラメータ {requested!r} が複数候補に一致します: "
-                f"{matches}"
-            )
-        return matches[0]
+        profile = self._core._profile_store.get(profile_id)
+        if profile is None:
+            raise RuntimeError(f"profile が見つかりません: {profile_id}")
+        if not profile.default_param:
+            return requested
+        default_dir = str(Path(profile.default_param).parent)
+        if default_dir in ("", "."):
+            return requested
+        return f"{default_dir}/{requested}"
 
     def _print_launch_selection(self) -> None:
-        snapshot = self._console.core.snapshot()
+        snapshot = self._core.build_snapshot()
         for profile_id in self._config.launch_order:
-            state = snapshot.launch_states.get(profile_id)
+            state = snapshot.launch_profiles.get(profile_id)
             if state is None:
                 continue
             print(
-                f"[test] profile={profile_id} param={state.selected_param_display!r} "
+                f"[test] profile={profile_id} param={state.selected_param!r} "
                 f"simulator={state.simulator_enabled} overrides={state.override_inputs}",
                 flush=True,
             )
@@ -292,7 +296,7 @@ class HeadlessRouteStackEvaluator:
     def _launch_profiles(self) -> None:
         for profile_id in self._config.launch_order:
             print(f"[test] launch request: {profile_id}", flush=True)
-            self._console.core.request_launch(profile_id)
+            self._core.request_launch(profile_id)
             self._pump_for(self._config.startup_wait_sec)
 
     def _wait_for_goal(self) -> bool:
@@ -306,7 +310,9 @@ class HeadlessRouteStackEvaluator:
 
     def _stop_profiles(self) -> bool:
         print("[test] stopping launched profiles", flush=True)
-        self._console.core.request_stop_all()
+        # ConsoleCore は profile 単位の停止のみを公開するため、起動順の逆順で停止する。
+        for profile_id in reversed(tuple(self._config.launch_order)):
+            self._core.request_stop(profile_id)
         deadline = time.monotonic() + self._config.stop_timeout_sec
         while time.monotonic() < deadline:
             self._pump_for(0.5)
@@ -317,9 +323,9 @@ class HeadlessRouteStackEvaluator:
         return False
 
     def _all_launch_profiles_stopped(self) -> bool:
-        snapshot = self._console.core.snapshot()
+        snapshot = self._core.build_snapshot()
         for profile_id in self._config.launch_order:
-            state = snapshot.launch_states.get(profile_id)
+            state = snapshot.launch_profiles.get(profile_id)
             if state is None:
                 continue
             if state.status not in STOPPED_STATUSES:
@@ -329,9 +335,9 @@ class HeadlessRouteStackEvaluator:
         return True
 
     def _print_remaining_launch_states(self) -> None:
-        snapshot = self._console.core.snapshot()
+        snapshot = self._core.build_snapshot()
         for profile_id in self._config.launch_order:
-            state = snapshot.launch_states.get(profile_id)
+            state = snapshot.launch_profiles.get(profile_id)
             if state is None:
                 continue
             print(
@@ -348,7 +354,7 @@ class HeadlessRouteStackEvaluator:
             time.sleep(0.2)
 
     def _drain_console_logs(self) -> None:
-        snapshot = self._console.core.snapshot()
+        snapshot = self._core.build_snapshot()
         keywords = (
             "ERROR",
             "Error",
@@ -361,7 +367,7 @@ class HeadlessRouteStackEvaluator:
             "Using",
             "generated temporary yaml",
         )
-        for profile_id, lines in snapshot.console_logs.items():
+        for profile_id, lines in snapshot.logs.items():
             start = self._seen_logs.get(profile_id, 0)
             for line in lines[start:]:
                 if any(key in line for key in keywords):
@@ -391,7 +397,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     """CLI 引数パーサを構築する."""
 
     parser = argparse.ArgumentParser(
-        description="robot_console GuiCore を使う headless route stack 評価ツール"
+        description="robot_console ConsoleCore を使う headless route stack 評価ツール"
     )
     parser.add_argument("--start-label", default="10", help="route_manager の開始ラベル")
     parser.add_argument("--goal-label", default="30", help="route_manager の終了ラベル")
@@ -466,6 +472,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="起動する profile ID のカンマ区切り一覧",
     )
     parser.add_argument(
+        "--show-drive-status-gui",
+        action="store_true",
+        help="drive_mode_manager の走行状態GUIを表示する",
+    )
+    parser.add_argument(
         "--no-simulator",
         action="store_true",
         help="robot_navigator の simulator 同時起動を無効にする",
@@ -496,6 +507,7 @@ def config_from_args(args: argparse.Namespace) -> EvalConfig:
         cmd_vel_period_sec=args.cmd_vel_period_sec,
         simulator=not args.no_simulator,
         manual_start=not args.no_manual_start,
+        show_drive_status_gui=getattr(args, "show_drive_status_gui", False),
         launch_order=args.launch_order,
         console_log_directory=args.console_log_directory,
     )

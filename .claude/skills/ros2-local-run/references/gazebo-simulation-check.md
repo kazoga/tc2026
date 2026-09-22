@@ -16,7 +16,7 @@ start・goal label）、`robot_console` からの結合確認手順、GUI 自動
   `pylon_seed`、`route_blocker` の要否を確認するかは、README の表にある値を候補として
   提示しつつ、対象の変更内容に照らして妥当か、あるいはユーザーが別の条件を意図していないかを
   確認してから実行する。既定値をそのまま採用してよいとは限らない。
-- `robot_console` からの結合確認（実 GUI）にするか、`gui_route_stack_eval.py` /
+- `robot_console` からの結合確認（実 GUI）にするか、`qt_route_stack_eval.py` /
   `headless_route_stack_eval.py` を使うかは、`ros2-local-run` の SKILL.md にある
   GUI/headless 判定に従う。
 

@@ -17,7 +17,7 @@
 
 ## GUI 評価が使えるかどうかの判定
 
-`robot_console` や `gui_route_stack_eval.py` のような tkinter/PyQt5 GUI を伴う確認は、
+`robot_console` や `qt_route_stack_eval.py` のような PyQt5 GUI を伴う確認は、
 `DISPLAY` が使える環境かどうかで手順が変わる。判定してから GUI あり/なしを選ぶ。
 
 ```bash
@@ -26,7 +26,7 @@ printf 'DISPLAY=%s WAYLAND_DISPLAY=%s XDG_SESSION_TYPE=%s QT_QPA_PLATFORM=%s\n' 
 ```
 
 - `DISPLAY` （または `WAYLAND_DISPLAY`）が空でなければ、ローカルデスクトップまたは X11
-  転送が有効な可能性が高い。この場合は GUI あり評価（`gui_route_stack_eval.py` 等）を
+  転送が有効な可能性が高い。この場合は GUI あり評価（`qt_route_stack_eval.py` 等）を
   優先する。実際の運用でも GUI あり評価の方が圧倒的に多く使われていた。
 - 空の場合、または SSH 接続で X11 転送を有効にしていない場合は headless 評価
   (`headless_route_stack_eval.py`) に切り替える。

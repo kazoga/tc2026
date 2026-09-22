@@ -41,6 +41,23 @@ class ImageReference:
 
 
 @dataclass
+class PerceptionDecisionView:
+    """カメラ画像認識の判定結果（判定チップ表示用）。
+
+    検出枠は `ConsoleCore` が画像へ重畳するため本Viewには含めない。運転中に
+    読むのは判定そのものであり、画像内の小さな文字では判読できないため、
+    判定は画像と分けてチップとして表示する。
+    """
+
+    source: str = ''
+    title: str = ''
+    decision_text: str = ''
+    status_note: str = ''
+    detection_count: int = 0
+    freshness: FreshnessLevel = FreshnessLevel.UNKNOWN
+
+
+@dataclass
 class OperationStateView:
     """運行フェーズ領域（ダッシュボード上段）の表示用データ。"""
 
@@ -293,6 +310,7 @@ class ConsoleSnapshot:
     obstacle_state: ObstacleStateView = field(default_factory=ObstacleStateView)
     drive_mode_state: DriveModeStateView = field(default_factory=DriveModeStateView)
     sensor_panels: List[ImageReference] = field(default_factory=list)
+    perception_decisions: List['PerceptionDecisionView'] = field(default_factory=list)
     event_banners: List[EventBanner] = field(default_factory=list)
     manual_controls: ManualControlsView = field(default_factory=ManualControlsView)
     launch_profiles: Dict[str, LaunchProfileState] = field(default_factory=dict)

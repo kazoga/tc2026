@@ -124,7 +124,9 @@ def setup(context) -> list:
                             output='screen', parameters=[{'use_sim_time': simulation}],
                             arguments=['--business-environment',
                                        'デジタルツイン' if simulation else '実機（融合）'],
-                            remappings=[('odom', '/ypspur_ros/odom')]))
+                            remappings=[('odom', '/ypspur_ros/odom'),
+                                        ('rtk_gps/rtk_status', gps_base+'/rtk_status'),
+                                        ('rtk_gps/ntrip_status', gps_base+'/ntrip_status')]))
     # センサや制御プロセスが終了した際に、残りの起動群だけ走り続ける状態を避ける。
     actions += [RegisterEventHandler(OnProcessExit(target_action=action,
                 on_exit=[EmitEvent(event=Shutdown(reason='共通走行プロセス終了'))]))

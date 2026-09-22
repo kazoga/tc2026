@@ -46,16 +46,34 @@ _TOPIC_CONFIGS = [
     ('follower_state_topic', 'follower_state', '/follower_state', '追従状態トピック'),
     ('sensor_viewer_topic', 'sensor_viewer', '/sensor_viewer', 'センサビューアトピック'),
     (
-        'drive_camera_topic',
-        'perception/road_blockage/decision_image',
-        '/perception/road_blockage/decision_image',
-        '道路封鎖判定画像トピック',
+        'camera_image_topic',
+        'usb_cam/image_raw',
+        '/usb_cam/image_raw',
+        'フロントカメラ生画像トピック',
     ),
     (
-        'signal_camera_topic',
-        'perception/traffic_signal/decision_image',
-        '/perception/traffic_signal/decision_image',
-        '信号判定画像トピック',
+        'road_blockage_overlay_topic',
+        'perception/road_blockage/overlay',
+        '/perception/road_blockage/overlay',
+        '経路封鎖の認識結果トピック',
+    ),
+    (
+        'traffic_signal_overlay_topic',
+        'perception/traffic_signal/overlay',
+        '/perception/traffic_signal/overlay',
+        '信号認識の結果トピック',
+    ),
+    (
+        'rtk_status_topic',
+        'rtk_gps/rtk_status',
+        '/rtk_gps/rtk_status',
+        'RTK測位品質トピック（実機はUM982ドライバのprivate名を指定する）',
+    ),
+    (
+        'ntrip_status_topic',
+        'rtk_gps/ntrip_status',
+        '/rtk_gps/ntrip_status',
+        'NTRIP基地局診断トピック（実機はUM982ドライバのprivate名を指定する）',
     ),
     ('active_target_topic', 'active_target', '/active_target', 'ターゲット姿勢トピック'),
     ('pose_enu_topic', 'localization/pose_enu', '/localization/pose_enu', 'ENU自己位置トピック'),
@@ -89,10 +107,8 @@ def _launch_setup(context: LaunchContext, *args, **kwargs) -> List[Node]:
     remappings = [
         (from_name, LaunchConfiguration(arg_name)) for arg_name, from_name, *_ in _TOPIC_CONFIGS
     ]
-    # 正式UIはPyQt5版（robot_console_qt）である。旧tkinter版（robot_console）は
-    # entry pointとしては残すが、本launchからは起動しない。
-    # 新UIはログ保存先をROSパラメータではなくCLI引数で受け取る（ConsoleCoreを
-    # Node生成前に構築するため）。
+    # 正式UIはPyQt5版（robot_console_qt）である。ログ保存先はROSパラメータではなく
+    # CLI引数で受け取る（ConsoleCoreをNode生成前に構築するため）。
     node = Node(
         package='robot_console',
         executable='robot_console_qt',

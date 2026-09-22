@@ -14,6 +14,8 @@ import sys
 import time
 from typing import List, Optional
 
+from rclpy.utilities import remove_ros_args
+
 from robot_console.core.console_core import ConsoleCore
 from robot_console.ros.console_node import start_ros_thread
 from robot_console.web.server import DEFAULT_HOST, DEFAULT_PORT, WebObservationServer
@@ -35,16 +37,20 @@ def _parse_args(argv: List[str]) -> argparse.Namespace:
             '未指定時は ROBOT_CONSOLE_LOG_DIR を参照します'
         ),
     )
-    return parser.parse_args(argv)
+    # ROSのremap/parameter引数をHTTPサーバの引数として解釈しない。
+    return parser.parse_args(remove_ros_args(args=['robot_console_web', *argv])[1:])
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     """HTML遠隔観測UIサーバを起動し、Ctrl+Cまでブロックする。"""
 
-    args = _parse_args(argv if argv is not None else sys.argv[1:])
+    raw_argv = argv if argv is not None else sys.argv[1:]
+    args = _parse_args(raw_argv)
 
     core = ConsoleCore(log_directory=args.console_log_directory)
-    ros_handle = start_ros_thread(core, node_name='robot_console_web')
+    ros_handle = start_ros_thread(
+        core, node_name='robot_console_web', ros_args=['robot_console_web', *raw_argv]
+    )
 
     server = WebObservationServer(
         core.build_snapshot, core.image_store, host=args.host, port=args.port
