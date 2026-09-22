@@ -26,7 +26,7 @@ def test_load_repository_profile_file_has_no_validation_errors():
     profiles = store.load()
 
     assert store.validation_errors == []
-    assert len(profiles) == 16
+    assert len(profiles) == 18
     profile_ids = [profile.profile_id for profile in profiles]
     assert len(profile_ids) == len(set(profile_ids))
 
@@ -378,3 +378,14 @@ def test_ypspur_health_topic_matches_its_publish_topic():
     profile = {p.profile_id: p for p in store.load()}['ypspur_ros2']
 
     assert profile.default_arguments['odom_topic'] in profile.health_topics
+
+
+def test_real_wheel_ui_launch_starts_coordinator_and_uses_mux_output():
+    profiles = LaunchProfileStore(REPO_PROFILE_PATH).load()
+    profile = next(p for p in profiles if p.profile_id == 'ypspur_ros2')
+    state = build_initial_states([profile])[profile.profile_id]
+    overrides = resolve_effective_overrides(profile, state)
+    args = build_launch_args(profile, overrides=overrides)
+    assert 'start_coordinator:=true' in args
+    assert 'cmd_vel_topic:=/cmd_vel' in args
+    assert 'odom_topic:=/ypspur_ros/odom' in args

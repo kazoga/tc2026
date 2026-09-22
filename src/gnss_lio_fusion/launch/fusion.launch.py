@@ -10,9 +10,12 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription([
         DeclareLaunchArgument('projection_params', description='ENU原点を含むROSパラメータYAML'),
         DeclareLaunchArgument('use_sim_time', default_value='false'),
+        Node(package='gnss_lio_fusion', executable='gravity_alignment_node',
+             parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}], output='screen'),
         Node(package='gnss_lio_fusion', executable='fusion_node', name='gnss_lio_fusion',
              parameters=[PathJoinSubstitution([FindPackageShare('gnss_lio_fusion'),
                                                'params', 'default.yaml']),
                          LaunchConfiguration('projection_params'),
-                         {'use_sim_time': LaunchConfiguration('use_sim_time')}], output='screen'),
+                         {'use_sim_time': LaunchConfiguration('use_sim_time'),
+                          'require_gravity_alignment': True}], output='screen'),
     ])

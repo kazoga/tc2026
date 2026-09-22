@@ -24,8 +24,8 @@ def test_fused_presets_only_select_one_stack() -> None:
     for mode, environment in [('実機（融合）', 'real'), ('デジタルツイン', 'simulation')]:
         preset = get_preset(mode, '自律走行')
         assert len(preset) == 1
-        assert preset[0].profile_id == 'icart_fused_stack'
-        assert preset[0].overrides == {'environment': environment}
+        assert preset[0].profile_id == ('icart_recorded_route' if environment == 'real' else 'icart_fused_stack')
+        assert preset[0].overrides == ({} if environment == 'real' else {'environment': environment})
 
 
 def test_initial_fix_wait_has_no_invented_heading() -> None:
@@ -34,5 +34,15 @@ def test_initial_fix_wait_has_no_invented_heading() -> None:
         mode='WAIT_INITIAL_FIX', yaw=None, heading_sigma_deg=None, baseline={'reference_m': .5}))))
     state = core.build_snapshot().fusion_state
     assert state.mode == 'WAIT_INITIAL_FIX'
+    assert state.yaw_deg is None and state.heading_sigma_deg is None
+    assert state.freshness == FreshnessLevel.OK
+
+
+def test_gravity_wait_is_visible_without_a_heading() -> None:
+    core = ConsoleCore()
+    core.update_fusion_status(SimpleNamespace(data=json.dumps(dict(
+        mode='WAIT_GRAVITY_ALIGNMENT', baseline={'reference_m': .15}))))
+    state = core.build_snapshot().fusion_state
+    assert state.mode == 'WAIT_GRAVITY_ALIGNMENT'
     assert state.yaw_deg is None and state.heading_sigma_deg is None
     assert state.freshness == FreshnessLevel.OK

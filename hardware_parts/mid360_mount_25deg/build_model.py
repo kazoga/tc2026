@@ -7,6 +7,7 @@ import argparse
 import cadquery as cq
 
 PLATE_PART_NUMBER = 'JTABS-AM-A60-B150-T2-X30-G100-N5-L6-V48-W36-NA3-CC10'
+FORWARD_OFFSET_MM = 50.
 
 
 def existing_plate():
@@ -30,14 +31,17 @@ def build(output: Path) -> dict:
     height = 30.
     c = math.cos(math.radians(angle))
     slope = math.tan(math.radians(angle))
-    # 上側の支持面: z = height - y * tan(angle)
+    # 板中心を横梁中心より50mm前へ。後端から支持面へ左右のリブを延長。
+    offset = FORWARD_OFFSET_MM
+    # 上側の支持面: z = height - (y-offset) * tan(angle)
     end = 27*c
-    outer = [(-end, 0), (end, 0), (end, height-end*slope),
-             (-end, height+end*slope)]
+    outer = [(-12, 0), (offset+end, 0), (offset+end, height-end*slope),
+             (offset-end, height+end*slope), (-12, 8)]
     inner_end = 20*c
     inner = [(-inner_end, 6), (inner_end, 6),
              (inner_end, height-inner_end*slope-8/c),
              (-inner_end, height+inner_end*slope-8/c)]
+    inner = [(y+offset, z) for y, z in inner]
     base = cq.Workplane('XY').box(190, 24, 8, centered=(True, True, False))
     for x in (-50, 50):
         side = cq.Workplane('YZ', origin=(x-8, 0, 0)).polyline(outer).close().extrude(16)
@@ -47,7 +51,7 @@ def build(output: Path) -> dict:
         base = base.cut(cq.Workplane('XY').center(x, 0).circle(2.75).extrude(10))
 
     def tilt(shape):
-        return shape.rotate((0, 0, 0), (1, 0, 0), -angle).translate((0, 0, height))
+        return shape.rotate((0, 0, 0), (1, 0, 0), -angle).translate((0, offset, height))
 
     plate = existing_plate()
     for x in (-50, 50):
@@ -82,9 +86,11 @@ def build(output: Path) -> dict:
     cq.exporters.export(cq.Compound.makeCompound(list(parts.values())),
                         str(output/'assembly_reference.stl'), tolerance=.1)
     from preview_model import render
-    render(parts, output, angle)
+    render(parts, output, angle, offset)
     bounds = base.val().BoundingBox()
     results = dict(angle_down_deg=angle, units='mm', printer_part_count=1,
+                   design_revision=3, forward_offset_mm=offset,
+                   plate_support_center_mm=[0, offset, height],
                    bracket_bounds_mm=[bounds.xlen,bounds.ylen,bounds.zlen],
                    bracket_volume_cm3=base.val().Volume()/1000,
                    base_hole_pitch_mm=170, base_hole_diameter_mm=5.5,

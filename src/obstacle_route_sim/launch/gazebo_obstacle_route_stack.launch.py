@@ -240,7 +240,7 @@ def _setup_stack(context: LaunchContext, *args: Any, **kwargs: Any) -> list:
             name="robot_navigator",
             output="screen",
             emulate_tty=True,
-            parameters=[robot_navigator_params, {"use_sim_time": stack_use_sim_time}],
+            parameters=[robot_navigator_params, {"use_sim_time": stack_use_sim_time, "require_motion_limits": False}],
             remappings=[
                 ("scan", "/scan"),
                 ("odom", "/ypspur_ros/odom"),

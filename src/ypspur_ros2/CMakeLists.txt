@@ -12,9 +12,10 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(tc_route_msgs REQUIRED)
 
 # -----------------------------------------------------------------------------
-# yp-spur (third_party submodule) + Issue #245 ワークアラウンドパッチ適用
+# yp-spur (third_party submodule) + Issue #245 / 公式PR #248パッチ適用
 # -----------------------------------------------------------------------------
 
 set(YPSPUR_DIR         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/yp-spur)
@@ -91,6 +92,7 @@ ament_target_dependencies(ypspur_node
   rclcpp
   geometry_msgs
   nav_msgs
+  tc_route_msgs
 )
 
 install(TARGETS ypspur_node
@@ -102,6 +104,11 @@ install(DIRECTORY launch config
 )
 
 if(BUILD_TESTING)
+  enable_testing()
+  add_executable(test_motion_profile tests/test_motion_profile.cpp)
+  target_include_directories(test_motion_profile PRIVATE src)
+  target_compile_options(test_motion_profile PRIVATE -UNDEBUG)
+  add_test(NAME motion_profile COMMAND test_motion_profile)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()

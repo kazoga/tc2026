@@ -18,9 +18,9 @@ SHARE = ROOT/'src/icart_bringup'
 def test_geometry_uses_vertical_antenna_offset_not_tilted_sensor_z():
     config = read_yaml(SHARE/'params/hardware.yaml')
     geo = geometry(config)
-    assert np.array(geo['master'])-geo['lidar'] == pytest.approx([0., 0., .1])
-    assert np.array(geo['slave'])-geo['master'] == pytest.approx([-.5, 0., 0.])
-    assert np.array(geo['imu']) + Rotation.from_euler('y', 25, degrees=True).apply(
+    assert np.array(geo['master'])-geo['lidar'] == pytest.approx([-.3, 0., .15])
+    assert np.array(geo['slave'])-geo['master'] == pytest.approx([-.15, 0., 0.])
+    assert np.array(geo['imu']) + Rotation.from_euler('xyz', [-.6, 26.9, 0.], degrees=True).apply(
         config['mid360']['lidar_in_imu_xyz']) == pytest.approx(geo['lidar'])
 
 
@@ -36,7 +36,9 @@ def test_generated_session_loads_route_and_matching_mount(tmp_path, site):
     assert session['route_review_required']
     fusion = read_yaml(out/'fusion.yaml')['gnss_lio_fusion']['ros__parameters']
     survey = read_yaml(out/'recorder.yaml')['route_survey']['ros__parameters']
-    assert fusion['lio_mount_pitch_deg'] == survey['lidar_mount_pitch_deg'] == 25.
+    assert fusion['lio_mount_pitch_deg'] == survey['lidar_mount_pitch_deg'] == 26.9
+    assert fusion['lio_mount_roll_deg'] == survey['lidar_mount_roll_deg'] == -.6
+    assert fusion['master_height_m'] == pytest.approx(.564)
     assert fusion['lio_height_m'] == survey['lidar_height_m']
     assert fusion['gnss_heading_offset_deg'] == 180.
     assert (out/'um982.yaml').stat().st_mode & 0o777 == 0o600
@@ -69,12 +71,20 @@ def test_survey_delegates_single_joy_and_manual_lock(monkeypatch, tmp_path):
     assert args['start_teleop'] == 'true' and args['joy_input'] == 'external'
 
 
-def test_real_hardware_graph_has_expected_drivers_and_no_mux(monkeypatch, tmp_path):
+@pytest.mark.parametrize('use_symlink', [False, True])
+def test_real_hardware_graph_has_expected_drivers_and_no_mux(monkeypatch, tmp_path, use_symlink):
     from launch import LaunchContext
     from launch_ros.actions import Node
     spec = importlib.util.spec_from_file_location('hardware_launch', SHARE/'launch/hardware.launch.py')
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     config = read_yaml(SHARE/'params/hardware.yaml')
+    device = tmp_path/'dev/video4'
+    device.parent.mkdir()
+    device.touch()
+    stable = tmp_path/'dev/v4l/by-id/camera'
+    stable.parent.mkdir(parents=True)
+    stable.symlink_to('../../video4')
+    config['camera']['device'] = str(stable if use_symlink else device)
     monkeypatch.setattr(module, 'read_yaml', lambda _: config)
     monkeypatch.setattr(module, 'validate_runtime', lambda _: None)
     captured = []
@@ -93,6 +103,7 @@ def test_real_hardware_graph_has_expected_drivers_and_no_mux(monkeypatch, tmp_pa
     assert livox['namespace'] == 'mid360'
     camera = next(k for k in drivers if k['package'] == 'usb_cam')
     assert camera['remappings'] == [('image_raw', '/usb_cam/image_raw')]
+    assert camera['parameters'][0]['video_device'] == str(device)
     sensor_tfs = [k for k in captured if k['package'] == 'tf2_ros']
     assert len(sensor_tfs) == 5
     assert all('body' not in k['arguments'] for k in sensor_tfs)
@@ -112,3 +123,42 @@ def test_custom_survey_projection_is_preserved(tmp_path):
     restored = load_projection_config_from_yaml(str(out/'projection.yaml'))
     assert restored.origin_altitude == 50.
     assert restored.map_yaw_offset_rad == .2
+
+
+def test_coordinator_parameter_resolves_package_and_legacy_paths(monkeypatch, tmp_path):
+    from ament_index_python import packages
+    from icart_bringup.hardware_core import coordinator_parameter
+    monkeypatch.setattr(packages, 'get_package_share_directory', lambda name: str(tmp_path/name))
+    config = read_yaml(SHARE/'params/hardware.yaml')
+    assert coordinator_parameter(config) == tmp_path/'ypspur_ros2/config/icart-middle.param'
+    config['wheel']['coordinator_param'] = str(tmp_path/'custom.param')
+    assert coordinator_parameter(config) == tmp_path/'custom.param'
+
+
+def test_mid360_local_map_covers_reference_2026_course_without_sliding():
+    import csv
+    from scipy.spatial.distance import pdist
+    params = read_yaml(ROOT/'src/FAST_LIO/config/mid360.yaml')['/**']['ros__parameters']
+    with (ROOT/'src/route_planner/routes/tsukuba2026_digital_twin/fixed/waypoints.csv').open() as stream:
+        rows = list(csv.DictReader(stream))
+    ll = np.array([[float(row['longitude']), float(row['latitude'])] for row in rows])
+    xy = np.deg2rad(ll-ll[0])*6378137.*[np.cos(np.deg2rad(ll[:, 1].mean())), 1.]
+    # Diameter bounds displacement from any course starting point, at any yaw.
+    diameter = pdist(xy).max()
+    slide_margin = 1.5*params['mapping']['det_range']
+    assert params['cube_side_length']/2 > diameter+slide_margin
+    assert params['preprocess']['blind'] == .7
+
+
+def test_main_antenna_forward_offset_is_absolute_and_legacy_is_preserved():
+    config = read_yaml(SHARE/'params/hardware.yaml')
+    config['mid360']['xyz'][0] = .1
+    geo = geometry(config)
+    assert geo['master'][0] == pytest.approx(-.3)
+    assert geo['slave'][0] == pytest.approx(-.45)
+    assert geo['baseline_m'] == pytest.approx(.15)
+    del config['gnss']['master_forward_m']
+    assert geometry(config)['master'][0] == pytest.approx(.1)
+    config['gnss']['master_forward_m'] = float('nan')
+    with pytest.raises(ValueError, match='主アンテナ'):
+        geometry(config)

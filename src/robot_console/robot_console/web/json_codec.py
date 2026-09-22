@@ -117,6 +117,8 @@ def build_snapshot_payload(snapshot: ConsoleSnapshot) -> Dict[str, Any]:
             'odom_topic': drive.odom_topic,
             'odom_freshness': drive.odom_freshness.value,
         },
+        'gnss_dropout': {'active': snapshot.gnss_dropout_state.active,
+                         'freshness': snapshot.gnss_dropout_state.freshness.value},
         'gnss_details': dict(zip(('base', 'receiver'), gnss_rows(snapshot))),
         'gps': {
             'rtk_state': gps.rtk_state,

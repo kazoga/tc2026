@@ -31,6 +31,7 @@ setup(
     entry_points={
         'console_scripts': [
             'rtk_gps_um982_node = rtk_gps_um982.driver_node:main',
+            'prepare_clock_host = rtk_gps_um982.clock_setup:main',
             'ptp_trial = rtk_gps_um982.ptp_trial:main',
         ],
     },

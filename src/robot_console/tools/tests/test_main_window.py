@@ -33,7 +33,7 @@ def test_main_window_has_five_tabs_in_expected_order(qt_app):
     window = MainWindow()
     tab_widget = window.tab_widget
 
-    assert tab_widget.count() == 5
+    assert tab_widget.count() == 6
     assert tab_widget.tabText(0) == TAB_TITLE_DASHBOARD
     assert tab_widget.tabText(1) == TAB_TITLE_LOCALIZATION_SENSOR
     assert tab_widget.tabText(2) == TAB_TITLE_LAUNCH_SETTINGS
@@ -196,6 +196,9 @@ class _FakeConsoleCore:
 
     def request_stop(self, profile_id: str) -> None:
         self.stopped.append(profile_id)
+
+    def send_survey_command(self, value: str) -> None:
+        pass
 
     def send_manual_start(self, value: bool) -> None:
         self.manual_start_calls.append(value)

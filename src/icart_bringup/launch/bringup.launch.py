@@ -77,12 +77,14 @@ def setup(context) -> list:
         fastlio = data.get('fastlio_config') or str(
             Path(get_package_share_directory('fast_lio'))/'config/mid360.yaml')
     actions += [node('fast_lio', 'fastlio_mapping', [fastlio,
-                {'pcd_save.pcd_save_en': False}], [('/Odometry', '/lio/odometry')]),
+                {'pcd_save.pcd_save_en': False}], [('/Odometry', '/lio/odometry_raw')]),
+                node('gnss_lio_fusion', 'gravity_alignment_node', remaps=[
+                    ('/mid360/livox/imu', '/sim/lio/imu')] if simulation else []),
                 node('gnss_lio_fusion', 'fusion_node', [
                     str(Path(get_package_share_directory('gnss_lio_fusion'))/'params/default.yaml'),
                     projection, {'gnss_heading_offset_deg': 180.},
                     *([data['fusion_params']] if data.get('fusion_params') else []),
-                    {'output_log': LaunchConfiguration('fusion_log').perform(context)}],
+                    {'output_log': LaunchConfiguration('fusion_log').perform(context), 'require_gravity_alignment': True}],
                      [('/rtk_gps/fix', gps_base+'/fix'),
                                   ('/rtk_gps/rtk_status', gps_base+'/rtk_status')]),
                 node('geo_pose_converter', 'geo_pose_converter_node', [projection],
@@ -100,6 +102,7 @@ def setup(context) -> list:
                 node('obstacle_monitor', 'obstacle_monitor'),
                 node('robot_navigator', 'robot_navigator', params=[{
                     'pose_timeout_sec': 1., 'odom_timeout_sec': 1.,
+                    'require_motion_limits': not simulation,
                     'obstacle_timeout_sec': 1. if hardware else 0.}], remaps=[
                     ('odom', '/ypspur_ros/odom'), ('cmd_vel', '/cmd_vel/autonomous')]),
                 node('drive_mode_manager', 'drive_cmd_mux_node', [{'initial_mode': LaunchConfiguration('initial_drive_mode').perform(context),

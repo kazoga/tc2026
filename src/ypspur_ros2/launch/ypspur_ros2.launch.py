@@ -41,12 +41,12 @@ def generate_launch_description() -> LaunchDescription:
     )
     coordinator_device_arg = DeclareLaunchArgument(
         'coordinator_device',
-        default_value='/dev/ttyACM0',
+        default_value='/dev/serial/by-id/usb-T-frog_project_T-frog_Driver-if00',
         description='ypspur-coordinator に渡す device path',
     )
     coordinator_param_arg = DeclareLaunchArgument(
         'coordinator_param',
-        default_value='',
+        default_value=os.path.join(pkg_share, 'config', 'icart-middle.param'),
         description='ypspur-coordinator に渡す robot parameter file path',
     )
 

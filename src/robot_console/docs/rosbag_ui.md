@@ -11,8 +11,14 @@ UIの保存先欄または「変更…」でも変更できる。記録中は保
 同じ保存先を使用する別UIとの同時記録もロックで防ぐ。
 日時とランダムIDのフォルダを毎回作り、既存bagを上書きしない。
 
-`ros2 bag record --all-topics --storage sqlite3 --max-bag-size 1073741824` を起動する。
-通常の全トピックが対象で、開始後に出現するトピックも探索する。
+`ros2 run robot_console record_bag_with_map` を起動する。内部のrosbagは
+`--all-topics --storage sqlite3 --max-bag-size 1073741824 --exclude-regex ^/Laser_map$`を使用する。
+通常トピックは開始後に出現するものも探索する。累積地図だけ元の`/Laser_map`を除外し、
+最新スナップショットを10秒ごとに`/Laser_map_record`へ配信して記録する。
+元地図の1秒ごとの表示更新や蓄積密度は変えず、時刻・frame_id・点群データも保持する。
+新しい地図が届かない周期は再配信しない。最初の記録用地図は開始約10秒後のため、
+10秒未満の記録には地図が含まれない場合がある。relayは記録開始時に起動し、停止時に終了する。
+再生側で元トピック名が必要なら`ros2 bag play <bag> --remap /Laser_map_record:=/Laser_map`を使用する。
 隠しトピックとサービスは対象外。ROS_DOMAIN_ID等はUIの実行環境を引き継ぐ。
 センサ・点群・画像を含むため、実機で必要な受信レートと保存媒体の速度を確認すること。
 bagは約1 GiBごとのdb3ファイルとmetadata.yamlで構成される。親フォルダに同名.logも残す。

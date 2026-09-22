@@ -177,6 +177,9 @@ def monitor(interface: str, lidar_ip: str, duration: float, output: Path) -> dic
     ranges = {kind: deque(maxlen=10000) for kind in counts}
     bad_epoch = Counter()
     last = {}
+    first_receive = {}
+    last_receive = {}
+    max_gap = {}
     backwards = Counter()
     with output.open('x') as log, socket.socket(
             socket.AF_PACKET, socket.SOCK_RAW, socket.htons(3)) as sock:
@@ -193,6 +196,10 @@ def monitor(interface: str, lidar_ip: str, duration: float, output: Path) -> dic
             if parsed is None:
                 continue
             kind, sync, stamp = parsed
+            first_receive.setdefault(kind, received)
+            if kind in last_receive:
+                max_gap[kind] = max(max_gap.get(kind, 0.), received-last_receive[kind])
+            last_receive[kind] = received
             counts[kind][sync] += 1
             age = received-stamp/1e9
             if not -.05 <= age <= .5:
@@ -213,8 +220,22 @@ def monitor(interface: str, lidar_ip: str, duration: float, output: Path) -> dic
             result['receive_minus_stamp_s'][kind] = dict(
                 min=ages[0], max=ages[-1], p50=ages[len(ages)//2],
                 p99=ages[min(len(ages)-1, int(len(ages)*.99))])
+    result['stream_duration_s'] = {k: last_receive[k]-v for k, v in first_receive.items()}
+    result['max_receive_gap_s'] = max_gap
+    result['capture_usable'] = capture_usable(result, duration)
     result['precision_verified'] = False
+    output.with_suffix(output.suffix+'.summary.json').write_text(
+        json.dumps(result, ensure_ascii=False, indent=2))
     return result
+
+
+def capture_usable(result: dict, duration: float) -> bool:
+    """PTPモードだけで成功にせず、両ストリームの連続性・時系も確認する。"""
+    return bool(result['ptp_seen_on_both'] and not result['backwards']
+        and not result['implausible_epoch_or_delay']
+        and all(result['stream_duration_s'].get(k, 0.) >= max(1., .8*duration)
+                and result['max_receive_gap_s'].get(k, float('inf')) <= .5
+                for k in ('lidar', 'imu')))
 
 
 def main() -> None:
@@ -247,8 +268,7 @@ def main() -> None:
         else:
             result = monitor(args.interface, args.lidar_ip, args.duration, args.output)
             print(json.dumps(result, ensure_ascii=False, indent=2))
-            if (not result['ptp_seen_on_both'] or result['backwards']
-                    or result['implausible_epoch_or_delay']):
+            if not result['capture_usable']:
                 raise SystemExit(2)
     except (OSError, ValueError, RuntimeError) as exc:
         parser.exit(1, str(exc)+'\n')

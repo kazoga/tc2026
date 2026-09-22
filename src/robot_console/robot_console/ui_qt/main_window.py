@@ -64,6 +64,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tab_widget.addTab(self.launch_settings_tab, TAB_TITLE_LAUNCH_SETTINGS)
         self.tab_widget.addTab(self.console_log_tab, TAB_TITLE_CONSOLE_LOG)
         self.tab_widget.addTab(self.gnss_tab, 'GNSS・基地局')
+        self.recording_tab = QtWidgets.QWidget()
+        recording_layout = QtWidgets.QVBoxLayout(self.recording_tab)
+        recording_layout.setContentsMargins(36, 36, 36, 36)
+        guide = QtWidgets.QLabel('① 起動・設定で「実機／手動走行」を適用し、場所を選択\n② ダッシュボードで一斉起動\n③ 融合位置の受信後に「ルート記録開始」→ 手動走行 →「終了・保存」')
+        guide.setWordWrap(True)
+        recording_layout.addWidget(guide)
+        recording_layout.addWidget(self.dashboard_tab.survey_card)
+        recording_layout.addStretch(1)
+        self.tab_widget.addTab(self.recording_tab, 'ルート記録')
         self.tab_widget.setCurrentWidget(self.dashboard_tab)
 
         self.setCentralWidget(ScaledCanvas(self.tab_widget))
@@ -79,6 +88,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._on_launch_plan_changed()
 
         if self._core is not None:
+            self.dashboard_tab.survey_card.command_requested.connect(self._core.send_survey_command)
             self.dashboard_tab.bag_card.start_requested.connect(self._start_bag)
             self.dashboard_tab.bag_card.stop_requested.connect(self._stop_bag)
             self.dashboard_tab.launch_control_card.launch_requested.connect(

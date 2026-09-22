@@ -46,6 +46,8 @@ let routeWaypointMarkers = [];
 let routeTraveledPolyline = null;
 let routeUntraveledPolyline = null;
 let knownRouteWaypointCount = -1;
+let knownRouteGeometry = null;
+let routeBounds = [];
 
 const ROUTE_TRAVELED_COLOR = '#757575';
 const ROUTE_UNTRAVELED_COLOR = '#66bb6a';
@@ -78,7 +80,8 @@ function formatNumber(value, digits, unit) {
 function initMap() {
   leafletMap = L.map('leaflet-map').setView([DEFAULT_LATITUDE, DEFAULT_LONGITUDE], DEFAULT_ZOOM);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
+    maxNativeZoom: 19,
+    maxZoom: 22,
     attribution: '&copy; OpenStreetMap contributors',
   }).addTo(leafletMap);
 
@@ -109,7 +112,7 @@ function updateMapMarkers(snapshot) {
     } else {
       currentPositionMarker.setLatLng(latlng);
     }
-    if (!hasCenteredMap) {
+    if (!hasCenteredMap && !hasFitRouteBounds) {
       leafletMap.setView(latlng, DEFAULT_ZOOM);
       hasCenteredMap = true;
     }
@@ -133,6 +136,13 @@ function updateMapMarkers(snapshot) {
   }
 }
 
+function fitRouteBounds() {
+  if (leafletMap !== null && routeBounds.length > 0) {
+    leafletMap.fitBounds(routeBounds, { padding: [24, 24], maxZoom: DEFAULT_ZOOM });
+    hasFitRouteBounds = true;
+  }
+}
+
 function updateRouteOverlay(snapshot) {
   if (leafletMap === null) {
     return;
@@ -149,6 +159,14 @@ function updateRouteOverlay(snapshot) {
     (waypoint) => waypoint.latitude !== null && waypoint.longitude !== null,
   );
 
+  const routeStatus = document.getElementById('route-map-status');
+  if (routeStatus) {
+    const total = (route.waypoints || []).length;
+    routeStatus.textContent = total
+      ? `配信ルート：${validWaypoints.length}/${total}点（緯度経度あり）`
+      : 'ルート未受信：起動後の配信を待っています';
+  }
+
   // waypoint数が変わった場合のみマーカーを作り直す。緯度経度・走行状態の
   // 更新は既存マーカーのsetLatLng/setStyleで行い、DOM再生成を避ける。
   if (validWaypoints.length !== knownRouteWaypointCount) {
@@ -163,18 +181,13 @@ function updateRouteOverlay(snapshot) {
       }).addTo(leafletMap),
     );
     knownRouteWaypointCount = validWaypoints.length;
+  }
 
-    // 自己位置（pose_enu）を未受信の間は地図がDEFAULT_LATITUDE/LONGITUDEの
-    // 初期表示のまま動かず、waypointが描画されていても実際のroute位置が
-    // 画面外になり続ける（manual_start前はrobot_simulatorが自己位置を出力
-    // しないため、この状態が長時間続き得る）。初めてwaypointを受け取った
-    // 時点で一度だけroute全体が収まるよう地図をfitさせ、以後は自己位置側の
-    // 自動センタリング（updateMapMarkers）やユーザー操作を優先して上書きしない。
-    if (validWaypoints.length > 0 && !hasFitRouteBounds && !hasCenteredMap) {
-      const routeBounds = validWaypoints.map((waypoint) => [waypoint.latitude, waypoint.longitude]);
-      leafletMap.fitBounds(routeBounds, { padding: [24, 24] });
-      hasFitRouteBounds = true;
-    }
+  routeBounds = validWaypoints.map((waypoint) => [waypoint.latitude, waypoint.longitude]);
+  const geometry = JSON.stringify(routeBounds);
+  if (geometry !== knownRouteGeometry) {
+    knownRouteGeometry = geometry;
+    fitRouteBounds();
   }
 
   for (let i = 0; i < validWaypoints.length; i += 1) {
@@ -253,6 +266,17 @@ function renderPerception(decisions) {
     appendField(fields, view.title || defaultTitle, text);
     fields.lastElementChild.style.color = freshnessColor(view.freshness);
   }
+}
+
+function renderGnssDropout(state, connectionLost = false) {
+  const alert = document.getElementById('gnss-dropout-alert');
+  if (!alert) return;
+  const stale = connectionLost || ['STALE', 'LOST'].includes(state?.freshness);
+  alert.hidden = !stale && !state?.active;
+  alert.textContent = stale ? 'GNSS途絶模擬：状態未確認（通知が途絶えています）' :
+    'GNSS途絶模擬中 — R1を離すと解除 / 融合へのGNSS入力を遮断';
+  alert.style.cssText = 'padding:12px;font-size:18px;font-weight:bold;border-radius:6px;' +
+    (stale ? 'background:#fff3cd;color:#664d03;' : 'background:#b91c1c;color:white;');
 }
 
 function renderSummary(snapshot) {
@@ -495,6 +519,7 @@ async function pollSnapshot() {
     const snapshot = await fetchSnapshot();
     // 描画までを1つの成功単位として扱う。描画途中の例外を握り潰すと、
     // 通信は成功しているのに画面だけが古いまま固まる状態を検知できない。
+    renderGnssDropout(snapshot.gnss_dropout);
     renderSummary(snapshot);
     renderEvents(snapshot.events);
     renderGpsSummary(snapshot);
@@ -508,6 +533,7 @@ async function pollSnapshot() {
     snapshotFailureCount = 0;
     lastSnapshotErrorText = '';
   } catch (error) {
+    renderGnssDropout(null, true);
     snapshotFailureCount += 1;
     lastSnapshotErrorText = `${error.name}: ${error.message}`;
     console.error('snapshotの取得または描画に失敗しました', error);

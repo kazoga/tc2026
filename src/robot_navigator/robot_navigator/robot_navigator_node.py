@@ -35,10 +35,11 @@ from geometry_msgs.msg import Pose, Point
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool
-from tc_route_msgs.msg import ObstacleAvoidanceHint, Route
+from tc_route_msgs.msg import ObstacleAvoidanceHint, Route, MotionLimits
 from visualization_msgs.msg import Marker
 
 from robot_navigator.input_watchdog_core import InputWatchdog
+from robot_navigator.braking import limit_for_stop, validate_limits, driver_compatible
 
 
 @dataclass
@@ -68,11 +69,15 @@ class RobotNavigator(Node):
         """ノードの初期化と通信・タイマー準備を行う。"""
         super().__init__('robot_navigator')
 
-        # --- パラメータ宣言（既定値は従来実装を踏襲） ---
-        self.declare_parameter('max_vel', 1.1)
-        self.declare_parameter('max_w', 1.8)
-        self.declare_parameter('max_acc_v', 1.0)
-        self.declare_parameter('max_acc_w', 1.5)
+        # --- パラメータ宣言（i-Cartの通常加速と制動を分離） ---
+        immutable = ParameterDescriptor(read_only=True)
+        self.declare_parameter('max_vel', 1.0, immutable)
+        self.declare_parameter('max_w', 1.0, immutable)
+        self.declare_parameter('max_acc_v', 0.7, immutable)
+        self.declare_parameter('max_acc_w', 0.6, immutable)
+        self.declare_parameter('max_decel_v', 1.5, immutable)
+        self.declare_parameter('braking_delay_sec', 0.2, immutable)
+        self.declare_parameter('require_motion_limits', True, immutable)
         self.declare_parameter('pos_tol', 0.5)
         self.declare_parameter('pos_tol_exit_margin', 0.2)
         self.declare_parameter('ang_tol', 0.25)
@@ -112,6 +117,10 @@ class RobotNavigator(Node):
             self.pos_tol_exit_margin = 0.0
         self.ang_tol: float = float(self.get_parameter('ang_tol').value)
         self.control_rate_hz: float = float(self.get_parameter('control_rate_hz').value)
+        self.max_decel_v = float(self.get_parameter('max_decel_v').value)
+        self.braking_delay_sec = float(self.get_parameter('braking_delay_sec').value)
+        validate_limits(self.max_v, self.max_w, self.max_a_v, self.max_a_w,
+                        self.max_decel_v, self.braking_delay_sec, self.control_rate_hz)
         self.dt: float = 1.0 / self.control_rate_hz
         self.road_block_hold_sec: float = float(self.get_parameter('road_block_hold_sec').value)
         if self.road_block_hold_sec < 0.0:
@@ -163,7 +172,13 @@ class RobotNavigator(Node):
             raise ValueError('obstacle_timeout_secは有限の非負秒数が必要')
         if obstacle_timeout > 0.:
             timeouts['obstacle'] = obstacle_timeout
+        self.require_motion_limits = bool(self.get_parameter('require_motion_limits').value)
+        if self.require_motion_limits:
+            timeouts['motion_limits'] = 0.5
         self.input_watchdog = InputWatchdog(timeouts)
+        if self.require_motion_limits:
+            self.limits_sub = self.create_subscription(
+                MotionLimits, '/motion_limits', self.on_motion_limits, 1)
         self._stale_inputs: tuple[str, ...] = ()
         self.current_pose: Optional[Pose] = None
         self.current_velocity: Optional[Twist] = None
@@ -426,6 +441,19 @@ class RobotNavigator(Node):
             return
 
         self.obstacle_distance = float(distance)
+
+    def on_motion_limits(self, msg: MotionLimits) -> None:
+        """Reject mismatched or stale driver contracts before authorizing motion."""
+        age = (self.get_clock().now().nanoseconds * 1e-9 -
+               (msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9))
+        compatible = driver_compatible(msg, self.max_v, self.max_w, self.max_a_v,
+                                       self.max_a_w, self.max_decel_v)
+        if compatible and 0.0 <= age < 0.5:
+            self.input_watchdog.receive('motion_limits', self._input_time_seconds())
+        else:
+            self.input_watchdog.last_received.pop('motion_limits', None)
+            self.get_logger().error('ドライバの実効制限が不整合または古いため走行を許可しません',
+                                    throttle_duration_sec=2.0)
 
     # -------------------- 制御ループ --------------------
     def on_timer(self) -> None:
@@ -723,25 +751,21 @@ class RobotNavigator(Node):
         angle_scaling = max(0.0, 1.0 - (angle_diff / math.pi))
         v_scaled = v_ref * angle_scaling
 
-        # --- 障害物に応じた減速/停止 ---
-        if self.obstacle_distance is not None:
-            max_decel = self.max_a_v
-            # 停止距離を計算する際は、次のステップでの速度（v_scaled）を使用
-            # これにより、停止状態からの加速を許可する
-            stopping_distance = (v_scaled ** 2) / (2.0 * max_decel) + self.min_obstacle_distance
+        # Stop at the target centre, allowing the existing position tolerance
+        # to issue zero earlier. Include a control cycle plus pipeline budget.
+        # Use measured/previous speed, never the heading-scaled command alone.
+        delay = self.braking_delay_sec + self.dt
+        previous_speed = float(self.prev_cmd_vel.linear.x)
+        v_scaled = limit_for_stop(v_scaled, v_current, previous_speed,
+                                  distance_error, self.max_decel_v, delay)
 
-            if self.obstacle_distance <= stopping_distance:
-                # 完全停止（緊急停止領域）
-                v_scaled = 0.0
-                if abs(yaw_error) <= self.ang_tol:
-                    # 目標向きに十分近い場合のみ角速度も停止
-                    w_desired = 0.0
-            elif self.obstacle_distance < self.safety_distance:
-                # 安全距離内では線形に減速（min_obst_dist で 0、safety で v_scaled）
-                denom = max(1e-6, (self.safety_distance - self.min_obstacle_distance))
-                scale = (self.obstacle_distance - self.min_obstacle_distance) / denom
-                scale = max(0.0, min(1.0, scale))
-                v_scaled *= scale
+        if self.obstacle_distance is not None:
+            v_scaled = limit_for_stop(
+                v_scaled, v_current, previous_speed,
+                self.obstacle_distance - self.min_obstacle_distance,
+                self.max_decel_v, delay)
+            if v_scaled == 0.0 and abs(yaw_error) <= self.ang_tol:
+                w_desired = 0.0
 
         if self._within_goal_ang_tolerance:
             # 位置許容内で角度許容に入った後のみ角速度を停止する。

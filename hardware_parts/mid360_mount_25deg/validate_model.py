@@ -11,7 +11,8 @@ def validate():
     mesh = trimesh.load(output / 'bracket_25deg.stl', force='mesh')
     assert mesh.is_watertight and mesh.is_winding_consistent
     assert len(mesh.split()) == 1
-    np.testing.assert_allclose(mesh.extents, [190, 48.940621, 41.411548], atol=.01)
+    np.testing.assert_allclose(mesh.extents, [190, 86.470311, 41.411548], atol=.01)
+    np.testing.assert_allclose(mesh.bounds[:, 1], [-12, 74.470311], atol=.01)
     assert abs(mesh.bounds[0, 2]) < .001
     solid = cq.importers.importStep(str(output / 'bracket_25deg.step'))
     assert solid.val().isValid() and len(solid.solids().vals()) == 1
@@ -36,7 +37,15 @@ def validate():
         for y in (-29, 29):
             assert not plate.isInside(cq.Vector(x, y, 1))
     def tilt(shape):
-        return shape.rotate((0, 0, 0), (1, 0, 0), -25).translate((0, 0, 30))
+        return shape.rotate((0, 0, 0), (1, 0, 0), -25).translate((0, 50, 30))
+    # 書き出した組立内でも板が横梁中心から50mm前方にある。
+    assembly_plate = min(assembly.Solids(), key=lambda s: abs(s.Volume()-plate.Volume()))
+    assert assembly_plate.intersect(tilt(plate)).Volume() > plate.Volume()-1e-5
+    assembly_solids = assembly.Solids()
+    assert len(assembly_solids) == 4
+    for i, first in enumerate(assembly_solids):
+        for second in assembly_solids[i+1:]:
+            assert first.intersect(second).Volume() < 1e-5
     assert solid.val().intersect(tilt(plate)).Volume() < 1e-5
     for x in (-50, 50):
         # 取付ねじが傾斜板と上桟を同軸で貫通する。
@@ -55,7 +64,7 @@ def validate():
                 for x in xs for y in ys]
     actual = [(c.dxf.center.x, c.dxf.center.y, c.dxf.radius) for c in circles]
     np.testing.assert_allclose(sorted(actual), sorted(expected), atol=1e-6)
-    print('PASS: 単一閉メッシュ、STEP有効性、外形、体積、M5貫通穴、板の6穴・C10、傾斜板との非干渉、ナット空間、フレーム締付工具経路')
+    print('PASS: 単一閉メッシュ、STEP有効性、外形、体積、前方50mm配置、M5貫通穴、板の6穴・C10、全部品の非干渉、ナット空間、フレーム締付工具経路')
 
 
 if __name__ == '__main__':

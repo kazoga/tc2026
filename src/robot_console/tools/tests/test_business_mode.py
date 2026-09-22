@@ -18,19 +18,7 @@ def test_all_environment_drive_mode_combinations_have_presets():
 
 def test_real_robot_autonomous_preset_matches_architecture_doc_group_order():
     preset = get_preset('実機', '自律走行')
-    assert [entry.profile_id for entry in preset] == [
-        'rtk_gps_um982',
-        'ypspur_ros2',
-        'drive_mode_manager',
-        'route_planner',
-        'route_manager',
-        'geo_pose_converter',
-        'route_follower',
-        'obstacle_monitor',
-        'robot_navigator',
-        'road_blockage_detector',
-        'traffic_signal_recognizer',
-    ]
+    assert [entry.profile_id for entry in preset] == ['icart_recorded_route']
 
 
 def test_desktop_check_autonomous_preset_uses_simulator_alternates():

@@ -25,6 +25,7 @@ from .widgets.manual_ops_card import ManualOpsCard
 from .widgets.node_health_card import NodeHealthCard
 from .widgets.status_card import StatusCard, set_label_color
 from .widgets.bag_card import BagCard
+from .widgets.survey_card import SurveyCard
 from .widgets.typography import PHASE_DETAIL_FONT_POINT_SIZE, PHASE_STATUS_FONT_POINT_SIZE
 
 
@@ -42,6 +43,7 @@ class DashboardTab(QtWidgets.QWidget):
         self.event_banner_card = EventBannerCard()
         self.manual_ops_card = ManualOpsCard()
         self.node_health_card = NodeHealthCard()
+        self.survey_card = SurveyCard()
         self.bag_card = BagCard()
         self.drive_cmd_vel_card.form_layout.addRow(self.bag_card)
 
@@ -66,15 +68,19 @@ class DashboardTab(QtWidgets.QWidget):
         launch_and_health_layout.addWidget(self.node_health_card, 1)
 
         grid = QtWidgets.QGridLayout(self)
-        grid.addWidget(self._phase_header_group, 0, 0, 1, 3)
-        grid.addWidget(self.route_follower_card, 1, 0)
-        grid.addWidget(self.drive_cmd_vel_card, 1, 1)
-        grid.addWidget(self.gps_pose_card, 1, 2)
-        grid.addWidget(event_and_manual_ops_column, 2, 0)
-        grid.addWidget(launch_and_health_column, 2, 1, 1, 2)
+        self.gnss_dropout_alert = QtWidgets.QLabel()
+        self.gnss_dropout_alert.setWordWrap(True)
+        self.gnss_dropout_alert.setMinimumHeight(40)
+        grid.addWidget(self.gnss_dropout_alert, 0, 0, 1, 3)
+        grid.addWidget(self._phase_header_group, 1, 0, 1, 3)
+        grid.addWidget(self.route_follower_card, 2, 0)
+        grid.addWidget(self.drive_cmd_vel_card, 2, 1)
+        grid.addWidget(self.gps_pose_card, 2, 2)
+        grid.addWidget(event_and_manual_ops_column, 3, 0)
+        grid.addWidget(launch_and_health_column, 3, 1, 1, 2)
         for column in range(3):
             grid.setColumnStretch(column, 1)
-        grid.setRowStretch(1, 1)
+        grid.setRowStretch(3, 1)
         grid.setRowStretch(2, 1)
 
         self.update_snapshot(ConsoleSnapshot())
@@ -174,6 +180,7 @@ class DashboardTab(QtWidgets.QWidget):
         """`ConsoleSnapshot` の内容を各カードへ反映する。"""
 
         self.bag_card.update_state(snapshot.bag_state)
+        self.survey_card.update_state(snapshot.survey_state)
         self._update_phase_header(snapshot)
         self._update_route_follower_card(snapshot)
         self._update_drive_cmd_vel_card(snapshot)
@@ -259,8 +266,18 @@ class DashboardTab(QtWidgets.QWidget):
             for label in (self._gps_satellites_label, self._gps_hdop_label,
                           self._gps_correction_label, self._gps_rtcm_label, self._gps_heading_label):
                 label.setText('—')
+        dropout = snapshot.gnss_dropout_state
+        stale = dropout.freshness.value in ('STALE', 'LOST')
+        self.gnss_dropout_alert.setVisible(dropout.active or stale)
+        self.gnss_dropout_alert.setText(
+            'GNSS途絶模擬：状態未確認（通知が途絶えています）' if stale else
+            'GNSS途絶模擬中 — R1を離すと解除 / 融合へのGNSS位置・方位入力を遮断')
+        self.gnss_dropout_alert.setStyleSheet(
+            'background:#fff3cd;color:#664d03;padding:8px;font-size:16px;font-weight:bold;' if stale else
+            'background:#b91c1c;color:white;padding:8px;font-size:16px;font-weight:bold;')
         fusion = snapshot.fusion_state
-        fusion_mode = '初期FIX待ち' if fusion.mode == 'WAIT_INITIAL_FIX' else fusion.mode
+        fusion_mode = {'WAIT_INITIAL_FIX': '初期FIX待ち',
+                       'WAIT_GRAVITY_ALIGNMENT': '水平基準待ち（約2秒静止）'}.get(fusion.mode, fusion.mode)
         self._fusion_heading_label.setText(
             '-' if fusion.yaw_deg is None else
             f'{fusion.yaw_deg:.1f}° / 推定σ {fusion.heading_sigma_deg:.2f}°')

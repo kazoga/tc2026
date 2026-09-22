@@ -2,12 +2,19 @@
   "angle_down_deg": 25.0,
   "units": "mm",
   "printer_part_count": 1,
+  "design_revision": 3,
+  "forward_offset_mm": 50.0,
+  "plate_support_center_mm": [
+    0,
+    50.0,
+    30.0
+  ],
   "bracket_bounds_mm": [
     190.00000020000007,
-    48.940620699979185,
-    41.41154801649666
+    86.47031044998963,
+    41.41154801649667
   ],
-  "bracket_volume_cm3": 60.492955040045324,
+  "bracket_volume_cm3": 88.62684273824466,
   "base_hole_pitch_mm": 170,
   "base_hole_diameter_mm": 5.5,
   "plate_part_number": "JTABS-AM-A60-B150-T2-X30-G100-N5-L6-V48-W36-NA3-CC10",

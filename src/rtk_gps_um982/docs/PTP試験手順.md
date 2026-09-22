@@ -149,3 +149,44 @@ PC時計を過去へ戻す操作は行わない。rootで生成したログは�
 - [LinuxPTP ptp4l: TIME SCALE USAGE](https://www.linuxptp.org/documentation/ptp4l/)
 - [chrony SOCK定義](https://github.com/mlichvar/chrony/blob/master/refclock_sock.c)
 - [Livox同期手順](https://livox-wiki-en.readthedocs.io/en/latest/tutorials/new_product/common/time_sync.html)
+
+## 既存配線での初回セットアップ（2026-09追加）
+
+USB接続UM982を時刻源、PCをchronyで補正し、専用EthernetからMID360へPTPを配信する。
+PPSは追加しない。NTPサーバをMID360へ直接指定する構成ではない。
+
+```bash
+ros2 run rtk_gps_um982 prepare_clock_host --user nkb --output log/clock_setup
+sudo bash log/clock_setup/apply-host.sh
+```
+
+生成した適用スクリプトは、走行/自己位置推定プロセスが存在すれば拒否する。
+chrony・linuxptp・aclをインストールし、既存chrony設定とACL drop-inを退避する。
+Ubuntu既定設定とconf.d内のmakestepを無効化して、以後はslewで時計を収束させる。
+GNSSはprefer指定で他の時刻源も残し、無条件のtrustやNTP外部公開は設定しない。
+chrony再起動後も一般ユーザーのRMCリレーがSOCKへ書けるよう、systemdでACLを再適用する。
+PTPはこのスクリプトから起動しない。インストール時のchrony初回起動もあるため、
+必ず走行とFAST-LIOを停止して適用する。既存の独自include設定がある場合はそちらの
+makestepも確認する。退避先は実行時に表示する。
+
+既存の実機session設定をそのまま使い、モータを起動せずGNSSとMID360を立ち上げる:
+
+```bash
+ros2 launch icart_bringup clock_sensors.launch.py \
+  session_directory:=/home/nkb/route_runs/20260922_123358_991938
+```
+
+既存GNSS/Livoxドライバが動いている場合は先に終了する。LANの接続先とIPは
+session内のlivox.json（このPCではenp0s31f6、192.168.1.5）に合わせる。
+`chronyc sources -v`でUM98が`#*`、`ptp_trial check`がreadyになるまで待ち、
+前掲のrun/monitorでまず60秒以上測定する。monitorはJSONLと隣接する
+`.summary.json`を保存し、両ストリームで観測時間の80%以上をカバーし、
+最大受信間隔0.5秒以下、PTPのみ、逆行/不合理なepoch無しを満たす場合だけ成功する。
+この受信間隔やepochの条件は動作確認であり、要求精度の保証ではない。
+
+精度評価は、PTP収束後のGNSS・点群・IMU・LIO・車輪の測定時刻と受信時刻を
+同時記録し、同じ直線/左右旋回で以前のログと比較する。NMEA/USB遅延はchronyの
+残補正量に現れない系統誤差となるため、`precision_verified`は常にfalseとして
+別途評価する。固定の-0.29秒を時刻や融合へ埋め込まない。
+通常走行への切替はこの確認後に行い、GNSSリレーとPTPが途切れない起動構成を使う。
+精度不足ならPPS+RMCの直接配線またはPPSによるPCの同期へ段階的に移行する。

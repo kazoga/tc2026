@@ -13,6 +13,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/FollowerState.msg"
   "msg/ManagerStatus.msg"
   "msg/MissionInfo.msg"
+  "msg/MotionLimits.msg"
   "msg/Route.msg"
   "msg/RouteState.msg"
   "msg/Waypoint.msg"

@@ -4,6 +4,7 @@ import copy
 from dataclasses import fields
 import json
 import math
+import time
 from pathlib import Path
 
 import numpy as np
@@ -13,8 +14,11 @@ from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from nav_msgs.msg import Odometry
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from sensor_msgs.msg import NavSatFix
-from std_msgs.msg import String
+from sensor_msgs.msg import NavSatFix, Joy
+from std_msgs.msg import String, Bool
+from rclpy.clock import Clock, ClockType
+from rclpy.qos import qos_profile_sensor_data
+from .gnss_dropout import GnssDropoutHold
 from rtk_gps_um982_msgs.msg import RtkStatus
 
 from geo_pose_converter.geo_core import LlhPoint, ProjectionConfig, llh_to_enu
@@ -40,7 +44,8 @@ class FusionNode(Node):
                         lio_yaw_offset_deg=0., wheel_fallback_enabled=True,
                         lio_forward_m=0., lio_left_m=0., lio_mount_roll_deg=0.,
                         lio_mount_pitch_deg=0., lio_mount_yaw_deg=0.,
-                        master_forward_m=0., master_left_m=0., publish_base_tf=False)
+                        master_forward_m=0., master_left_m=0., publish_base_tf=False,
+                        require_gravity_alignment=False)
         self.values = {k: self.declare_parameter(k, v).value for k, v in defaults.items()}
         if not all(math.isfinite(self.values[k]) for k in [
                 'master_height_m', 'lio_height_m', 'gnss_heading_offset_deg', 'lio_yaw_offset_deg',
@@ -62,6 +67,9 @@ class FusionNode(Node):
             except (ValueError, KeyError, OSError):
                 self.get_logger().warn('baseline保存値を読めないため既定の参考値を使用する')
         self.filter = FusionFilter(config(FusionConfig, ''), baseline)
+        self.alignment_ready = False
+        self.alignment_received = -math.inf
+        self.create_subscription(Bool, '/lio/alignment_ready', self.on_alignment, 10)
         if not 0 < self.values['buffer_s'] <= 2.:
             raise ValueError('buffer_sは0より大きく2秒以下とする')
         self.lios = deque()
@@ -86,18 +94,72 @@ class FusionNode(Node):
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel/fusion_limited', 10)
         self.create_subscription(Odometry, '/lio/odometry', self.on_lio, 30)
         self.create_subscription(Odometry, '/ypspur_ros/odom', self.on_wheel, 30)
+        self.gnss_dropout = GnssDropoutHold(
+            self.declare_parameter('gnss_dropout.button_index', 5).value,
+            self.declare_parameter('gnss_dropout.joy_timeout_s', .5).value)
+        self.gnss_dropout_active = False
+        self.dropout_pub = self.create_publisher(Bool, '/fusion/gnss_dropout_active', 1)
+        self.create_subscription(Joy, '/joy', self.on_dropout_joy, qos_profile_sensor_data)
+        self.dropout_clock = Clock(clock_type=ClockType.STEADY_TIME)
+        self.create_timer(.1, self.dropout_tick, clock=self.dropout_clock)
         self.create_subscription(NavSatFix, '/rtk_gps/fix', self.on_fix, 30)
         self.create_subscription(RtkStatus, '/rtk_gps/rtk_status', self.on_status, 30)
         self.create_subscription(Twist, '/cmd_vel/autonomous', self.on_command, 10)
         self.create_timer(.02, self.tick)
         self.get_logger().info('適応baseline・GNSS/LIO融合を開始する')
 
+    def on_alignment(self, msg):
+        self.alignment_received = time.monotonic()
+        if self.values['require_gravity_alignment'] and not msg.data and self.alignment_ready:
+            self.reset_alignment_state()
+        self.alignment_ready = msg.data
+
+    def reset_alignment_state(self):
+        self.filter = FusionFilter(self.filter.config, self.filter.baseline.config)
+        self.motion = MotionGuard()
+        self.lios.clear()
+        self.wheels.clear()
+        self.events.clear()
+        self.statuses.clear()
+        self.watermark = self.last_output = -math.inf
+        self.last_mode = None
+
+    def alignment_available(self):
+        if not self.values.get('require_gravity_alignment', False):
+            return True
+        if time.monotonic()-self.alignment_received > .7:
+            if self.alignment_ready:
+                self.reset_alignment_state()
+                self.alignment_ready = False
+            return False
+        return self.alignment_ready
+
+    def refresh_dropout(self):
+        active = self.gnss_dropout.active(time.monotonic())
+        if active != self.gnss_dropout_active:
+            self.gnss_dropout_active = active
+            self.events = [event for event in self.events if event[1] != 'gps']
+            self.statuses.clear()
+            self.get_logger().warning('GNSS途絶模擬: ' + ('開始（R1押下中）' if active else '解除'))
+        return active
+
+    def on_dropout_joy(self, msg):
+        self.gnss_dropout.update(msg.buttons, time.monotonic())
+        self.dropout_tick()
+
+    def dropout_tick(self):
+        self.dropout_pub.publish(Bool(data=self.refresh_dropout()))
+
     def on_status(self, msg: RtkStatus) -> None:
+        if not self.alignment_available() or self.refresh_dropout():
+            return
         self.statuses[seconds(msg.header.stamp)] = msg
         while len(self.statuses) > 100:
             del self.statuses[min(self.statuses)]
 
     def on_fix(self, msg: NavSatFix) -> None:
+        if not self.alignment_available() or self.refresh_dropout():
+            return
         self.events.append((seconds(msg.header.stamp), 'gps', msg))
 
     def on_wheel(self, msg: Odometry) -> None:
@@ -146,6 +208,8 @@ class FusionNode(Node):
                                    source=self.motion.source))
 
     def on_lio(self, msg: Odometry) -> None:
+        if self.values.get('require_gravity_alignment', False) and (not self.alignment_available() or msg.header.frame_id != 'lio_level'):
+            return
         t = seconds(msg.header.stamp)
         q = msg.pose.pose.orientation
         p = msg.pose.pose.position
@@ -180,6 +244,15 @@ class FusionNode(Node):
 
     def tick(self) -> None:
         now = self.get_clock().now().nanoseconds*1e-9
+        if not self.alignment_available():
+            self.events.clear()
+            if now-getattr(self, 'last_alignment_health', -math.inf) >= .5:
+                self.last_alignment_health = now
+                health = self.filter.diagnostics(now)
+                health.update(mode='WAIT_GRAVITY_ALIGNMENT', speed_limit_mps=0., sim_s=now,
+                              reason='静止して水平基準の確定を待ってください')
+                self.health_pub.publish(String(data=json.dumps(health, allow_nan=False)))
+            return
         cutoff = now-self.values['buffer_s']
         self.events.sort(key=lambda event: (event[0], event[1]))
         remaining = []
@@ -314,7 +387,7 @@ class FusionNode(Node):
         """不確かさによる減速だけを加える。URGの停止指令は解除しない."""
         output = copy.deepcopy(msg)
         now = self.get_clock().now().nanoseconds*1e-9
-        if self.filter.x is None or now-self.last_output > self.filter.config.max_lio_gap_s:
+        if not self.alignment_available() or self.filter.x is None or now-self.last_output > self.filter.config.max_lio_gap_s:
             output = Twist()
         else:
             limit = self.filter.diagnostics(now)['speed_limit_mps']

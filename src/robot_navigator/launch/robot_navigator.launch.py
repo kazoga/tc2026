@@ -2,6 +2,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -64,7 +65,8 @@ def generate_launch_description() -> LaunchDescription:
         name=node_name,
         output='screen',
         emulate_tty=True,
-        parameters=[param_file],
+        parameters=[param_file, {'require_motion_limits': ParameterValue(
+            LaunchConfiguration('require_motion_limits'), value_type=bool)}],
         remappings=[
             ('scan', scan_topic),
             ('odom', odom_topic),
@@ -78,6 +80,8 @@ def generate_launch_description() -> LaunchDescription:
 
     return LaunchDescription(
         [
+            DeclareLaunchArgument('require_motion_limits', default_value='true',
+                                  description='実機ではtrue。シミュレータのみfalse'),
             param_file_arg,
             node_name_arg,
             scan_topic_arg,

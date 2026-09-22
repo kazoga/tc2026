@@ -10,7 +10,7 @@ from launch.events import Shutdown
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
-from icart_bringup.hardware_core import read_yaml, geometry, validate_runtime
+from icart_bringup.hardware_core import read_yaml, geometry, validate_runtime, coordinator_parameter
 
 
 def setup(context):
@@ -22,7 +22,7 @@ def setup(context):
     share = Path(get_package_share_directory('ypspur_ros2'))
     wheel = config['wheel']
     coordinator = ExecuteProcess(cmd=['ypspur-coordinator', '-d', wheel['serial_port'],
-                                     '-p', str(Path(wheel['coordinator_param']).expanduser())], output='screen')
+                                     '-p', str(coordinator_parameter(config))], output='screen')
     wheel_node = Node(package='ypspur_ros2', executable='ypspur_node', name='ypspur_node',
              parameters=[str(share/'config/default.yaml')],
              remappings=[('cmd_vel', '/cmd_vel'), ('odom', '/ypspur_ros/odom')], output='screen')
@@ -40,8 +40,11 @@ def setup(context):
                           'user_config_path': str(directory/'livox.json')}], output='screen')]
     if config['camera']['enabled']:
         camera = config['camera']
+        # usb_cam misresolves relative targets in /dev/v4l/by-id symlinks.
+        # Keep the stable name in YAML and resolve the current device at launch.
+        camera_device = str(Path(camera['device']).expanduser().resolve(strict=True))
         actions.append(Node(package='usb_cam', executable='usb_cam_node_exe', name='usb_cam', namespace='usb_cam',
-            parameters=[{'video_device': camera['device'], 'image_width': camera['width'],
+            parameters=[{'video_device': camera_device, 'image_width': camera['width'],
                          'image_height': camera['height'], 'framerate': camera['framerate'],
                          'pixel_format': camera['pixel_format'], 'camera_frame_id': 'camera_optical_frame'}],
             remappings=[('image_raw', '/usb_cam/image_raw')], output='screen'))

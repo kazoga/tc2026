@@ -20,11 +20,15 @@ BOOL_ARGUMENTS = {
 }
 
 ENUM_ARGUMENTS: Dict[str, List[str]] = {
+    'site': ['場所を選択', '稲城', 'つくば'],
+    'station': ['地域の既定局', 'NTRIPなし'],
     'joy_input': ['joy_node', 'ps3_joy_sim'],
     'road_type': ['straight'],
 }
 
 NUMBER_ARGUMENTS = {
+    'antenna_baseline_m': float,
+    'master_forward_m': float,
     'road_width': float,
     'pylon_seed': int,
 }

@@ -14,12 +14,17 @@
 
 ## Issue #245 への対処
 
-`yp-spur` 本体は Linux kernel 6.x 環境で
-[issue #245](https://github.com/openspur/yp-spur/issues/245) (tcflush が入力バッファも flush する問題)
-の影響を受けます。**Ubuntu 22.04 / 24.04 では必ずパッチが必要** で、
-本パッケージはこれを CMake からビルド用コピーへ **自動適用** します
-([`third_party/patches/0001-fix-tcflush-kernel-6.x.patch`](third_party/patches/0001-fix-tcflush-kernel-6.x.patch))。
-`third_party/yp-spur` の submodule 本体は変更しません。
+[Issue #245](https://github.com/openspur/yp-spur/issues/245) の公式修正
+[PR #248](https://github.com/openspur/yp-spur/pull/248)（commit `d653dee`）を、
+CMakeからビルド用コピーへ **自動適用** します。
+[`third_party/patches/0001-fix-tcflush-kernel-6.x.patch`](third_party/patches/0001-fix-tcflush-kernel-6.x.patch)
+は公式コミットのパッチそのものです。
+
+送信直後の `tcflush(..., TCOFLUSH)` は未送信データを破棄してしまいます。
+Kernel 6.6以降のCDC-ACMドライバがこの処理に対応したことで問題が表面化しました。
+公式修正に合わせ、`encode_write()` と `encode_int_write()` の両方から呼び出しを削除し、
+不要になった `serial_flush_out()` の定義・宣言も削除します。
+`third_party/yp-spur` のsubmodule本体・固定リビジョンは変更しません。
 
 `colcon build` 時に
 ```
@@ -27,7 +32,7 @@
 ```
 もしくは
 ```
--- yp-spur patch already applied (or not needed)
+-- yp-spur patch already applied
 ```
 が表示されます。
 
@@ -141,3 +146,31 @@ ypspur-coordinator が起動していないか、別ユーザで起動してい�
 ## ライセンス
 
 MIT (yp-spur 本体も MIT)
+
+## このPCのi-Cart middle（2026-09-22）
+
+提供された `ダウンロード/icart-middle.param` を内容変更せず
+`config/icart-middle.param` に格納。colcon buildでshare配下にも配置される。
+車輪単体の起動は次のコマンドで行う（車輪制御が有効になる）。
+
+```bash
+source ~/colcon_ws/install/setup.bash
+ros2 launch ypspur_ros2 ypspur_ros2.launch.py start_coordinator:=true
+```
+
+既定のデバイスはT-frogのUSB固定名、パラメータは同梱ファイル。
+`icart_bringup/params/hardware.yaml` も同じファイルをpackage URIで参照する。
+以前に生成済みのsessionは `wheel.coordinator_param` を
+`package://ypspur_ros2/config/icart-middle.param` に更新するか再生成する。
+走行時は既存のdrive_mode_managerを通し、停止監視を有効にする。
+
+### 速度・加速度の初期化
+
+車輪ノードは接続後にゼロ速度を送り、`velocity_max` と `acceleration_max` を
+YP-Spurへ設定する。coordinatorのユーザー上限は初期値ゼロのため、この設定なしでは
+`cmd_vel` を受信しても走行しない。加速度の既定値は直進0.3 m/s²、旋回0.6 rad/s²。
+これらの上限は正の有限値が必要。
+
+2026-09-22: 旋回の角加速度を0.6から1.5 rad/s²へ調整。
+角速度上限1.0 rad/sは維持し、静止から上限に達する指令上の時間は約1.67秒から0.67秒へ短縮する。
+実車パラメータのMAX_ACC_W=3.28 rad/s²以下。角加速度は起動時設定のため反映には再起動が必要。

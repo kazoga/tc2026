@@ -6,7 +6,7 @@ import cadquery as cq
 from PIL import Image, ImageDraw, ImageFont
 
 
-def render(parts, output: Path, angle: float) -> None:
+def render(parts, output: Path, angle: float, offset: float) -> None:
     parts = dict(parts)
     # 締結説明用の簡略ねじ頭と、真上から挿入する工具の包絡。
     parts['frame_bolts'] = cq.Compound.makeCompound([
@@ -75,7 +75,7 @@ def render(parts, output: Path, angle: float) -> None:
                 pixels[y0:y1+1,x0:x1+1][mask]=color
         im=Image.fromarray(pixels);d=ImageDraw.Draw(im)
         title={'assembly':'MID-360 / 25°前下がりブラケット',
-               'side':'側面：前方へ25°下げる',
+               'side':'側面：50 mm前方へ移動 / 前下がり25°',
                'printed_part':'3Dプリント部品：一体ブラケット',
                'fastening':'フレーム固定ねじ：外側2か所を真上から締付'}[view]
         d.text((75,45),title,font=font(48),fill=(23,40,62))
@@ -84,6 +84,12 @@ def render(parts, output: Path, angle: float) -> None:
             d.text((75,1010),'緑：直径16 mmの工具包絡　橙：M5ねじ頭・ワッシャー',font=font(28),fill=(23,40,62))
             d.text((75,1060),'板幅150 mm ／ 穴ピッチ170 mm ／ 板端と工具外周の隙間2 mm',font=font(28),fill=(23,40,62))
         elif view=='side':
+            # 横梁中心と傾斜支持面中心の水平距離を実座標で寸法表示。
+            p0=project(np.array([0,0,-27.]));p1=project(np.array([0,offset,-27.]))
+            d.line((*p0,*p1),fill=(219,104,48),width=5)
+            for p in (p0,p1):
+                d.line((p[0],p[1]-12,p[0],p[1]+12),fill=(219,104,48),width=4)
+            d.text(((p0[0]+p1[0])/2-65,p0[1]+15),f'{offset:g} mm',font=font(32),fill=(148,60,20))
             d.line((1060,990,1450,990),fill=(219,104,48),width=8)
             d.polygon([(1450,990),(1418,973),(1418,1007)],fill=(219,104,48))
             d.text((1140,1020),'ロボット前方',font=font(30),fill=(148,60,20))
@@ -96,5 +102,5 @@ def render(parts, output: Path, angle: float) -> None:
                 d.text((x+40,1035),label,font=font(26),fill=(23,40,62))
         else:
             d.text((75,1040),'底面を下に印刷。上桟の下面はサポート要。単位：mm',font=font(28),fill=(23,40,62))
-        d.text((75,1140),'設計試作 v2 ｜ 実機適合・強度未確認。既存板はメーカー放熱推奨条件未達',font=font(23),fill=(88,102,117))
+        d.text((75,1140),'設計試作 v3・前方50 mm ｜ 実機適合・強度未確認。既存板は放熱推奨条件未達',font=font(23),fill=(88,102,117))
         im.save(output/(view+'.png'))

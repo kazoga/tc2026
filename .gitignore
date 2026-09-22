@@ -26,3 +26,6 @@ node_modules/
 !.claude/settings.json
 !.claude/skills/
 !.claude/skills/**
+
+# Local sensor captures, ROS bags, and diagnostic outputs
+/artifacts/

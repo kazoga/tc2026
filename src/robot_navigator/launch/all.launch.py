@@ -86,6 +86,7 @@ def generate_launch_description() -> LaunchDescription:
         PythonLaunchDescriptionSource(navigator_launch),
         launch_arguments={
             'param_file': param_file,
+            'require_motion_limits': 'false',
             'node_name': node_name,
             'scan_topic': scan_topic,
             'odom_topic': odom_topic,

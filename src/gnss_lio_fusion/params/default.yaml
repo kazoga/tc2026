@@ -3,6 +3,8 @@ gnss_lio_fusion:
     gnss_heading_offset_deg: 0.0
     lio_yaw_offset_deg: 0.0
     wheel_fallback_enabled: true
+    gnss_dropout.button_index: 5  # SDL PS3 R1: hold only
+    gnss_dropout.joy_timeout_s: 0.5
     buffer_s: 0.35
     position_sigma_fix: 0.15
     position_sigma_float: 3.0

@@ -38,7 +38,8 @@ html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background:
 var DEFAULT_ZOOM = __DEFAULT_ZOOM__;
 var map = L.map('map').setView([__DEFAULT_LAT__, __DEFAULT_LON__], DEFAULT_ZOOM);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
+  maxNativeZoom: 19,
+  maxZoom: 22,
   attribution: '&copy; OpenStreetMap contributors',
 }).addTo(map);
 
@@ -51,8 +52,17 @@ var routeWaypointMarkers = [];
 var routeTraveledPolyline = null;
 var routeUntraveledPolyline = null;
 var knownRouteWaypointCount = -1;
+var knownRouteGeometry = null;
+var routeBounds = [];
 var ROUTE_TRAVELED_COLOR = '#757575';
 var ROUTE_UNTRAVELED_COLOR = '#66bb6a';
+
+function fitRouteBounds() {
+  if (routeBounds.length > 0) {
+    map.fitBounds(routeBounds, { padding: [24, 24], maxZoom: DEFAULT_ZOOM });
+    hasFitRouteBounds = true;
+  }
+}
 
 function updateRoute(waypoints, traveledCount) {
   var validWaypoints = waypoints.filter(function (waypoint) {
@@ -69,19 +79,16 @@ function updateRoute(waypoints, traveledCount) {
       }).addTo(map);
     });
     knownRouteWaypointCount = validWaypoints.length;
+  }
 
-    // 自己位置（pose_enu）を未受信の間は地図が初期表示座標のまま動かず、
-    // waypointが描画されていても実際のroute位置が画面外になり続ける
-    // （manual_start前はrobot_simulatorが自己位置を出力しないため、この状態が
-    // 長時間続き得る）。初めてwaypointを受け取った時点で一度だけroute全体が
-    // 収まるよう地図をfitさせ、以後は自己位置側の自動センタリング
-    // （updateMarkers）やユーザー操作を優先して上書きしない。
-    if (validWaypoints.length > 0 && !hasFitRouteBounds && !hasCentered) {
-      map.fitBounds(validWaypoints.map(function (waypoint) {
-        return [waypoint.latitude, waypoint.longitude];
-      }), { padding: [24, 24] });
-      hasFitRouteBounds = true;
-    }
+  routeBounds = validWaypoints.map(function (waypoint) {
+    return [waypoint.latitude, waypoint.longitude];
+  });
+  var geometry = JSON.stringify(routeBounds);
+  // 点数が同じ別ルートへの切替も検出。進捗更新ではユーザーのズームを維持する。
+  if (geometry !== knownRouteGeometry) {
+    knownRouteGeometry = geometry;
+    fitRouteBounds();
   }
 
   for (var j = 0; j < validWaypoints.length; j += 1) {
@@ -123,7 +130,7 @@ function updateMarkers(current, target) {
     } else {
       currentMarker.setLatLng(latlng);
     }
-    if (!hasCentered) {
+    if (!hasCentered && !hasFitRouteBounds) {
       map.setView(latlng, DEFAULT_ZOOM);
       hasCentered = true;
     }
@@ -248,3 +255,8 @@ class MapView(QWebEngineView):
             return
         self._last_route_script = script
         self.page().runJavaScript(script)
+
+    def fit_route(self) -> None:
+        """ユーザー操作で受信ルート全体を再表示する。"""
+        if self._page_loaded:
+            self.page().runJavaScript('fitRouteBounds();')
