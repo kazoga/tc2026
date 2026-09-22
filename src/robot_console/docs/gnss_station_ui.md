@@ -9,11 +9,18 @@ GNSS欄はRTK状態、衛星数、HDOP、補正データ年齢、方位・標準
 主アンテナの緯度・経度・高度。方位はアンテナ間の北基準時計回りであり、融合車体yawとは区別する。
 標準偏差は推定品質であって実測誤差ではない。
 
-UM982ドライバの `/rtk_gps/rtk_gps_um982_node/ntrip_status` (`std_msgs/String` JSON)を1 Hzで購読。
+診断 (`std_msgs/String` JSON) を1 Hzで購読する。購読名は相対名 `rtk_gps/ntrip_status` と
+`rtk_gps/rtk_status` で、起動側が配信元へremapする。実機はUM982ドライバのprivate名
+（`gnss_namespace` の既定は `/rtk_gps/rtk_gps_um982_node`）、シミュレーションは公開名
+`/rtk_gps/...` を指す。bringup経由の起動を基本とし、`bringup.launch.py` が `gnss_namespace`
+に応じてremapする。単独起動時は `robot_console.launch.py` の `rtk_status_topic` /
+`ntrip_status_topic` 引数で指定する（既定値は公開名）。
 GNSS位置コールバックとは独立して診断を送る。接続成功と補正受信を区別し、CRC有効RTCMが
 5秒以上届かないと補正途絶。UIが診断topicを2.5秒超受信しないと更新遅延、5秒超で情報途絶。
 GNSS自体の鮮度は既存の1秒/3秒閾値。未受信の数値は「—」、古いFIX表示を正常色にしない。
 NTRIPを使わない設定は「無効」。外部補正入力の有無をNTRIP無効から推定しない。
+シミュレーションのGNSSノードもNTRIP接続を持たないため `DISABLED` を配信し、「無効」と
+表示される。これにより、シムの構成上の不使用と実機の診断途絶を区別できる。
 認証ユーザー・パスワード・サーバ応答本文は新しい診断JSONに含めない。
 
 局名・地域は `prepare_real_session` が `ntrip.station_id/station_label/site` に設定する。

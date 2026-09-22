@@ -26,6 +26,7 @@ right_is_open / left_is_open は元経路の 2 m を保持するが、その全�
 
 - tools/gnss_environment_core.py: 建物平面輪郭までの距離、状態ヒステリシス、相関 bias を計算する。
 - tools/gnss_simulator_node.py: 環境オプションに応じ NavSatFix、Imu、RtkStatus を配信する。
+  基地局診断は NTRIP を持たない構成として `DISABLED` を配信する。
 - tools/evaluate_terrain_trial.py: 建物 GNSS オプション、RTK 状態件数、projection 設定を追加する。
 - tools/prepare_waypoint_evaluation.py: 同一ウェイポイントの FIX/FLOAT/障害物比較環境を別々に生成する。
 - tests/test_gnss_environment.py: 距離境界、ヒステリシス、bias の蓄積と減衰、不正値を確認する。

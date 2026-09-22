@@ -134,7 +134,7 @@ def test_ntrip_status_reaches_snapshot_via_dds(monkeypatch):
     c = _make_core()
     node = RobotConsoleNode(c, node_name='test_ntrip_consumer')
     producer = rclpy.create_node('test_ntrip_producer')
-    pub = producer.create_publisher(String, '/rtk_gps/rtk_gps_um982_node/ntrip_status', 10)
+    pub = producer.create_publisher(String, '/rtk_gps/ntrip_status', 10)
     try:
         deadline = time.monotonic()+5.
         while time.monotonic() < deadline:

@@ -63,6 +63,18 @@ _TOPIC_CONFIGS = [
         '/perception/traffic_signal/overlay',
         '信号認識の結果トピック',
     ),
+    (
+        'rtk_status_topic',
+        'rtk_gps/rtk_status',
+        '/rtk_gps/rtk_status',
+        'RTK測位品質トピック（実機はUM982ドライバのprivate名を指定する）',
+    ),
+    (
+        'ntrip_status_topic',
+        'rtk_gps/ntrip_status',
+        '/rtk_gps/ntrip_status',
+        'NTRIP基地局診断トピック（実機はUM982ドライバのprivate名を指定する）',
+    ),
     ('active_target_topic', 'active_target', '/active_target', 'ターゲット姿勢トピック'),
     ('pose_enu_topic', 'localization/pose_enu', '/localization/pose_enu', 'ENU自己位置トピック'),
     ('cmd_vel_topic', 'cmd_vel', '/cmd_vel', '速度指令トピック'),

@@ -229,6 +229,10 @@ route、waypoint、active targetも同様に、現行のmap/ENU/PoseStamped前�
 | `/rtk_gps/fix` | `sensor_msgs/msg/NavSatFix` | 現行 | 緯度経度高度、GPS fix鮮度、位置共分散表示 |
 | `/rtk_gps/heading` | `sensor_msgs/msg/Imu` | 現行 | デュアルアンテナheading鮮度、姿勢補助 |
 | `/rtk_gps/rtk_status` | `rtk_gps_um982_msgs/msg/RtkStatus` | 現行 | RTK種別、衛星数、HDOP、補正age、RTCM受信量表示 |
+| `/rtk_gps/ntrip_status` | `std_msgs/msg/String` | 現行 | 基地局接続状態、CRC確認済みRTCM量・速度、再接続回数 |
+
+`/rtk_gps/rtk_status` と `/rtk_gps/ntrip_status` は相対名 `rtk_gps/...` で購読し、
+配信元（実機ドライバのprivate名、シミュレーションの公開名）へは起動側がremapする。
 
 ### 7.2 発行トピック
 

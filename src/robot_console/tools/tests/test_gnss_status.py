@@ -42,6 +42,23 @@ def test_ros_status_through_core_qt_and_web_then_timeout():
     assert dict(gnss_rows(ConsoleSnapshot())[1])['HDOP'] == '—'
 
 
+def test_simulation_disabled_status_is_distinguished_from_unreceived():
+    """シムのGNSSノードが配信するDISABLED診断が「無効」として表示されることを確認する.
+
+    未配信のままだと「未受信」となり、実機で診断が途絶した異常と区別できない.
+    """
+
+    c = core()
+    c.update_ntrip_status(SimpleNamespace(data=json.dumps(dict(
+        state='DISABLED', host='', port=0, mountpoint='', station_id='',
+        station_label='', site='', transport_connected=False,
+        rtcm_bytes_total=0, rtcm_bytes_per_s=0., last_rtcm_age_s=None,
+        reconnect_count=0, last_error=''))))
+    snap = c.build_snapshot()
+    assert snap.ntrip_state.freshness == F.OK
+    assert ntrip_summary(snap.ntrip_state) == '無効'
+
+
 @pytest.mark.parametrize('bad', ['[]', '{', '{"state":"bogus"}',
     '{"state":"RECEIVING","rtcm_bytes_per_s":NaN}',
     '{"state":"RECEIVING","port":true}',

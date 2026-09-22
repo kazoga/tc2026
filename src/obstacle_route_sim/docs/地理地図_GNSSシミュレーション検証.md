@@ -73,6 +73,7 @@ GNSS 原点の楕円体高 67.078 m は近傍の公開点群原点からの仮�
 | 姿勢 | 真値 quaternion の roll/pitch/yaw でアンテナ位置を回転 |
 | 出力 | `/rtk_gps/fix`、`/rtk_gps/slave_fix`: NavSatFix |
 | 方位 | `/rtk_gps/heading`: Imu、`/rtk_gps/rtk_status`: RtkStatus |
+| 基地局診断 | `/rtk_gps/ntrip_status`: String JSON。1 Hz、`state=DISABLED` 固定 |
 | 既定周期 | 10 Hz、配信キュー確認 100 Hz、reliable depth 10 |
 | 誤差 | 水平各軸 σ=0.02 m、鉛直 σ=0.04 m、方位 σ=0.5° の独立 Gaussian |
 | アンテナ間 | 位置誤差は共通。方位誤差は別の試験モデルで加える |
@@ -81,6 +82,10 @@ GNSS 原点の楕円体高 67.078 m は近傍の公開点群原点からの仮�
 | 真値欠落 | 0.5 秒以上でキューを消去し、古い真値を新しい測位として再送しない |
 | 途絶 | dropout_sec、dropout_duration_sec。0 秒 duration は永久途絶 |
 | 品質 | RTK_FIX を仮定。FLOAT、衛星配置、遮蔽、マルチパス、補正通信は未モデル化 |
+
+NTRIP 接続はシムに存在しないため、基地局診断は `DISABLED`（UI 表示「無効」）を
+明示して配信する。無配信にすると UI は「未受信」となり、実機で診断が途絶した異常と
+区別できない。補正を受信しているかのような値は作らない。
 
 緯度経度高度変換は `geo_pose_converter.geo_core.enu_to_llh` を再利用する。
 方位はスレーブ→マスター方向を北基準時計回りに変換する。
