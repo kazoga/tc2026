@@ -786,6 +786,10 @@ HTML UIには以下を置かない。
 
 HTML UIは読み取り専用であることを実装上も保証する。HTTP APIはSnapshot、画像、healthのGET系に限定し、topic送信、launch、設定更新に相当するPOST/PUT/DELETE APIを提供しない。
 
+読み取り専用であっても位置・経路・カメラ画像を配信し、認証は持たない。どこから閲覧可能に
+するかの運用は [HTML遠隔観測UIの公開範囲](html_ui_access.md) に定める。サーバのbind先は
+loopback固定とし、別端末への公開はTailscale側のproxy機能で行う。
+
 ## 9. 画面間導線
 
 画面の切り替えはタブ操作で行い、行き先を指定するだけの遷移ボタンは画面へ置かない。

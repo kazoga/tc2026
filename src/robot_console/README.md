@@ -19,6 +19,7 @@
 | GNSS・基地局 | 接続先・マウントポイント・RTCM受信状態、GNSS品質・アンテナ情報 |
 
 追加画面の仕様・検証・起動環境は [GNSS・基地局表示](docs/gnss_station_ui.md) を参照。
+HTML版をどこから閲覧可能にするかは [HTML遠隔観測UIの公開範囲](docs/html_ui_access.md) を参照。
 
 
 ## 主な機能
