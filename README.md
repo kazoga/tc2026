@@ -2,6 +2,14 @@
 
 ROS 2 Jazzy ワークスペース。
 
+## つくばチャレンジ2026の公式情報
+
+[最新のソフトウェア評価と不足点（2026-09-22、HW対象外）](docs/reviews/tc2026_software_20260922/README.md)
+
+[公式ルール・参加条件・日程の参照ガイド](docs/references/tsukuba_challenge_2026/README.md)
+（2026-09-22確認）に、出典URL、未公表事項、公式ページ間の記載差、実装確認事項をまとめています。
+大会条件に関係する設計・設定・走行準備では、この資料とリンク先の最新公式情報を参照してください。
+
 ## パッケージ一覧
 
 ### センサ / アクチュエータドライバ
@@ -17,7 +25,13 @@ ROS 2 Jazzy ワークスペース。
 | [`src/route_planner`](src/route_planner/README.md)          | YAML / CSV から経路を生成し `/get_route`・`/update_route` を提供。可変ブロックの再計画にも対応 |
 | [`src/route_manager`](src/route_manager/README.md)          | `route_planner` のサービスを呼び出し `/active_route` を配信、滞留報告から再計画を統括する FSM |
 | [`src/route_follower`](src/route_follower/README.md)        | `/active_route` を追従し、現在の目標 Pose を `/active_target` として配信。滞留検知で `/report_stuck` を発行 |
-| [`src/route_msgs`](src/route_msgs/README.md)                | 経路・走行系で共有する msg / srv 定義 (`Route`, `RouteState`, `ReportStuck` ほか) |
+| [`src/tc_route_msgs`](src/tc_route_msgs/README.md)                | 経路・走行系で共有する msg / srv 定義 (`Route`, `RouteState`, `ReportStuck` ほか) |
+
+### 座標変換・地理情報
+| パッケージ                                                  | 役割                                                                 |
+| ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| [`src/tc_geo_msgs`](src/tc_geo_msgs/)                       | LLH位置、品質、地図投影条件を共有する msg 定義                       |
+| [`src/geo_pose_converter`](src/geo_pose_converter/README.md) | LLH/ENU相互変換、経路の地理座標投影、OSM経路表示を提供               |
 
 ### 走行制御・障害物
 | パッケージ                                                  | 役割                                                                 |
@@ -35,10 +49,27 @@ ROS 2 Jazzy ワークスペース。
 | パッケージ                                                  | 役割                                                                 |
 | ----------------------------------------------------------- | -------------------------------------------------------------------- |
 | [`src/yolo_detector`](src/yolo_detector/README.md)          | USB カメラ画像を YOLO (PyTorch / NCNN) で物体検出し、検出画像・`Detection2DArray` を配信 |
-| [`src/robot_console`](src/robot_console/README.md)          | 走行状態・障害物回避・経路進捗・ノード起動を一画面で監視する tkinter GUI ダッシュボード |
+| [`src/traffic_signal_recognizer`](src/traffic_signal_recognizer/README.md) | YOLO検出結果から信号のGO/STOPを判定し、判定画像を配信 |
+| [`src/road_blockage_detector`](src/road_blockage_detector/README.md) | YOLO検出結果と自己位置から道路封鎖を判定し、判定画像を配信 |
+| [`src/robot_console`](src/robot_console/README.md)          | 走行状態・障害物回避・経路進捗・ノード起動を一画面で監視する PyQt5 GUI ダッシュボードとHTML遠隔観測UI |
 
 ワークスペース横断の仕様書は [`docs/`](docs/)、パッケージ固有の設計書は各パッケージ
-配下の `docs/design.md` を参照。
+配下の `docs/` を参照。
+
+## ハードウェアパーツ
+
+実機の取付部品のCAD、3Dプリント用STL、組立説明は
+[`hardware_parts/`](hardware_parts/README.md) に部品単位で配置する。
+ROSパッケージは `src/`、センサのメーカー資料は `docs/references/` で管理する。
+
+## 開発状態
+
+- `robot_console` の正式UIは PyQt5 版（`robot_console_qt`）である。遠隔観測用の
+  HTML UI（`robot_console_web`）も同じ `ConsoleCore` の状態を表示する。
+  旧 tkinter 版は削除済みで、entry point は `robot_console_qt` と `robot_console_web` の 2 つである。
+- `localization_fusion` 実装前の暫定構成では、GNSS入力がある場合に
+  `geo_pose_converter` のENU出力を `/localization/pose_enu` として使用する。
+- 走行制御はENU、OSM・GUI表示はLLHを使用し、`geo_pose_converter` が両者を変換する。
 
 ## 必要環境
 
@@ -48,6 +79,21 @@ ROS 2 Jazzy ワークスペース。
 - `ros_gz_sim`, `ros_gz_bridge`, `ros_gz_interfaces`
 - Python 3
 - (パッケージごとの追加要件は各 README を参照)
+
+## Claude Code スキル設定
+
+本リポジトリでは、GUI・UI 実装時に Anthropic 公式の `frontend-design` スキルを
+共通利用する。`.claude/settings.json` (Git 管理対象) で
+`frontend-design@claude-plugins-official` を有効化しているため、リポジトリを
+Claude Code で開いて信頼 (trust) すると、このプラグインが自動的に有効化候補として
+認識される。初回のみ、各自の環境で以下を実行してインストールする。
+
+```bash
+claude plugin install frontend-design@claude-plugins-official
+```
+
+インストール後は Claude が GUI デザイン作業時に自動でこのスキルを参照する。
+手動で呼び出す場合は `/frontend-design:frontend-design` のように実行する。
 
 ## Codex ローカル実行設定
 
@@ -70,7 +116,7 @@ network_access = true
 Python パッケージ群で使用する pip 依存モジュールは、[`requirements.txt`](requirements.txt) にまとめている。
 対象は `obstacle_monitor`, `robot_console`, `robot_navigator`, `route_follower`,
 `route_manager`, `route_planner`, `obstacle_route_sim`, `yolo_detector` と、それらが利用する
-`route_msgs`。`drive_mode_manager` の GUI 依存である `python3-pyqt5` と、
+`tc_route_msgs`。`drive_mode_manager` の GUI 依存である `python3-pyqt5` と、
 `obstacle_route_sim` の Gazebo / ros_gz 依存は pip ではなく apt / rosdep で導入する。
 
 ROS 2 の環境を読み込んだうえで、ワークスペース直下で以下を実行する。
@@ -196,8 +242,8 @@ ros2 launch robot_console robot_console.launch.py
 
 #### 障害物回避シミュレーション
 
-Gazebo GUI 付きで道路 world、robot、bridge、fake AMCL、TF を起動する。
-`obstacle_route_sim` は Gazebo 上の真値 pose から `/amcl_pose` を配信するため、経路追従側は
+Gazebo GUI 付きで道路 world、robot、bridge、fake localization pose、TF を起動する。
+`obstacle_route_sim` は Gazebo 上の真値 pose から `/localization/pose_enu` を配信するため、経路追従側は
 自己位置推定誤差なしの前提で結合確認できる。
 
 ```bash
@@ -241,7 +287,47 @@ pylon ありで障害物回避を確認する場合は、`obstacle_monitor` も�
 
 - `src/rtk_gps_um982/third_party/UM982-RTK-GPS-Library` (MIT)
 - `src/ypspur_ros2/third_party/yp-spur` (MIT) — Issue #245 のパッチを CMake が自動適用
+- `src/FAST_LIO` (GPL-2.0) — ROS 2 Jazzy 用の固定 revision。内部の ikd-Tree も再帰取得する
+- `src/livox_ros_driver2` (MIT) — FAST-LIO の Livox メッセージと実機ドライバ
+- `src/livox_sdk2_vendor/third_party/Livox-SDK2` — SDK 本体と同梱依存のライセンスは上流 `LICENSE.txt` を参照
+
+SDK は [`livox_sdk2_vendor`](src/livox_sdk2_vendor/README.md) が workspace 内へビルドする。
+ルートの `colcon.meta` が driver より先に SDK を構築する順序を指定するため、
+colcon はワークスペースのルートから実行する。
+
+## GNSS/LIO・デジタルツイン・経路採取
+
+つくば2026の完成済み試験地図をGitに同梱している。
+[同梱地図の入口](src/obstacle_route_sim/maps/tsukuba2026/README.md)には、
+ネット接続不要の3D閲覧版と静止画像がある。再帰clone後、通常のROS依存導入・ビルドを行えば、
+地図のダウンロードや再生成なしで次の1コマンドから模擬確認を始められる。
+
+```bash
+source install/setup.bash
+ros2 run icart_bringup run_digital_twin --output log/digital_twin/session01 --start-ui
+```
+
+`preview.html` の閲覧だけならROS環境は不要。シミュレーションの実行にはROS/Gazebo等が必要。
+
+- [GNSS/LIO 融合](src/gnss_lio_fusion/README.md): 品質判定、時刻同期、方位推定
+- [共通起動](src/icart_bringup/README.md): 実機・模擬環境の選択とセッション準備
+- [経路採取・編集](src/route_survey/README.md): 手動走行から LLH 経路を保存
+- [シミュレーション](src/obstacle_route_sim/README.md): 地形・センサ生成と評価
+- [検証用経路](src/route_planner/routes/tsukuba2026_digital_twin/README.md): 未測量の試験データ
+
+新規パッケージのテストもルートの `pytest` に含まれる。ROS 環境とビルド済み
+`install/setup.bash` を読み込み、有効な venv で実行する。
+GUI テストには Qt WebEngine と pytest-forked、地形生成には Node.js が必要。
+地理地形の生成には `src/obstacle_route_sim/tools/terrain3d` で `npm ci` も実行する。
+通常 install のツールを使う場合は、
+`npm ci --prefix "$(ros2 pkg prefix obstacle_route_sim)/lib/obstacle_route_sim/terrain3d"`
+で実行先へ依存を導入する。`node_modules` は Git と colcon の配布対象から除外する。
 
 ## ライセンス
 
-各パッケージは MIT。本リポジトリ全体としてのライセンスは [`LICENSE`](LICENSE) を参照。
+リポジトリ全体のライセンスは [`LICENSE`](LICENSE) を参照。
+各パッケージの宣言は `package.xml`、外部コードは各 submodule のライセンスに従う。
+
+実機用の一括設定・稲城／つくばのRTK局選択は
+[実機ハードウェア統合](src/icart_bringup/docs/実機ハードウェア統合.md)を参照。
+昨年度構成のROS 2化、MID-360下向き25度とアンテナ位置、採取時の手動固定を含む。

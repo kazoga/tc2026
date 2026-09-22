@@ -104,16 +104,16 @@ def _setup_simulation(context: LaunchContext, *args, **kwargs) -> list:
         parameters=[{"use_sim_time": use_sim_time}],
     )
 
-    fake_amcl_node = Node(
+    fake_localization_node = Node(
         package="obstacle_route_sim",
-        executable="fake_amcl_pose.py",
-        name="fake_amcl_pose",
+        executable="fake_localization_pose.py",
+        name="fake_localization_pose",
         output="screen",
         parameters=[
             {
                 "use_sim_time": use_sim_time,
                 "pose_topic": "/gazebo/dynamic_pose_info",
-                "amcl_topic": "/amcl_pose",
+                "pose_enu_topic": "/localization/pose_enu",
                 "frame_id": "map",
                 "target_pose_index": 0,
             }
@@ -170,7 +170,7 @@ def _setup_simulation(context: LaunchContext, *args, **kwargs) -> list:
         ),
         gazebo_launch,
         bridge_node,
-        fake_amcl_node,
+        fake_localization_node,
         odom_tf_node,
         map_to_odom_tf,
         base_to_laser_tf,

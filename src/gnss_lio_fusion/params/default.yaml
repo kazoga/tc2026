@@ -1,0 +1,22 @@
+gnss_lio_fusion:
+  ros__parameters:
+    gnss_heading_offset_deg: 0.0
+    lio_yaw_offset_deg: 0.0
+    wheel_fallback_enabled: true
+    gnss_dropout.button_index: 5  # SDL PS3 R1: hold only
+    gnss_dropout.joy_timeout_s: 0.5
+    buffer_s: 0.35
+    position_sigma_fix: 0.15
+    position_sigma_float: 3.0
+    heading_sigma_fix_deg: 1.0
+    heading_sigma_float_deg: 15.0
+    correction_speed_mps: 0.5
+    correction_yaw_rate: 0.12
+    baseline.initial_m: 0.5
+    baseline.min_satellites: 14
+    baseline.initialize_s: 2.0
+    baseline.reacquire_s: 8.0
+    baseline.adapt_tau_s: 60.0
+    baseline.tolerance_min_m: 0.01
+    baseline.tolerance_max_m: 0.03
+    baseline.stable_sigma_m: 0.004

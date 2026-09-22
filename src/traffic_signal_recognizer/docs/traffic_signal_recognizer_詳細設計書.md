@@ -13,24 +13,27 @@ YOLO モデルのロードと画像推論は `yolo_detector` に任せ、本パ�
 
 tc2025 では、ROS 2 側の `route_follower` と ROS 1 側の信号認識ノードが `ros1_bridge` を介して
 連携していた。tc2026 では ROS 2 に一本化するが、route stack との接続契約は維持する。
-認識系の画像 topic は `road_blockage_detector` と対になるように整理し、判定重畳画像の
-既定 topic は `/perception/traffic_signal/decision_image` とする。
+認識ノードは画像を配信せず、`road_blockage_detector` と対になる形で認識結果のみを
+`tc_perception_msgs/msg/PerceptionOverlay` として配信する。画像への重畳は表示側
+（`robot_console` の `ConsoleCore`）が行う。
 
 | Topic | Type | 方向 | 用途 |
 | --- | --- | --- | --- |
 | `/recog_flag` | `std_msgs/msg/Int32` | Subscribe | `1` の間だけ信号認識を有効化する。 |
 | `/sig_recog` | `std_msgs/msg/Int32` | Publish | 信号認識結果。`1=GO`, `2=STOP` を既定とする。 |
-| `/perception/traffic_signal/decision_image` | `sensor_msgs/msg/Image` | Publish | 信号認識結果を確認する判定重畳画像。 |
+| `/perception/traffic_signal/overlay` | `tc_perception_msgs/msg/PerceptionOverlay` | Publish | 検出矩形と判定結果。表示側が画像へ重畳するために使う。 |
 
 `route_follower` は signal stop ウェイポイントで `/recog_flag=1` を publish し、`/sig_recog==1`
 を受信すると停止解除可能と判断する。本ノードはこの運用契約を ROS 2 内で満たす。
-tc2026 では画像 topic を `/perception/traffic_signal/decision_image` へ完全に切り替える。
+フロントカメラは 1 台のみであり、認識ノードごとに重畳画像を配信すると同一フレームの
+画像が複数系統流れる。tc2026 では認識ノードから画像配信を廃し、ネットワークを流れる
+カメラ画像を `/usb_cam/image_raw` の 1 本に限定する。
 
 ## 3. ノード構成
 
 | ファイル | 役割 |
 | --- | --- |
-| `traffic_signal_recognizer_node.py` | ROS 2 の parameter、subscriber、publisher、画像変換、描画を担当する。 |
+| `traffic_signal_recognizer_node.py` | ROS 2 の parameter、subscriber、publisher を担当する。 |
 | `signal_recognition_core.py` | ROS 非依存の GO/STOP 判定ロジックを担当する。 |
 
 `traffic_signal_recognizer_node.py` は thin node とし、判定状態や連続 green 判定は
@@ -44,22 +47,37 @@ tc2026 では画像 topic を `/perception/traffic_signal/decision_image` へ完
 | --- | --- | --- | --- |
 | `recog_flag_topic` | `/recog_flag` | `std_msgs/msg/Int32` | 信号認識の有効化フラグ。 |
 | `detections_topic` | `/perception/traffic_signal/detections` | `vision_msgs/msg/Detection2DArray` | YOLO 信号検出結果。 |
-| `image_topic` | `/usb_cam/image_raw` | `sensor_msgs/msg/Image` | 判定重畳画像生成用の元画像。 |
 
 ### 4.2 Publish
 
 | パラメータ | 既定値 | 型 | 用途 |
 | --- | --- | --- | --- |
 | `sig_recog_topic` | `/sig_recog` | `std_msgs/msg/Int32` | GO/STOP 判定結果。 |
-| `decision_image_topic` | `/perception/traffic_signal/decision_image` | `sensor_msgs/msg/Image` | 判定枠と検出矩形を重畳した画像。 |
+| `overlay_topic` | `/perception/traffic_signal/overlay` | `tc_perception_msgs/msg/PerceptionOverlay` | 検出矩形と判定結果。 |
 
-`/recog_flag != 1` の間は判定履歴を reset し、推論結果を受けても `/sig_recog` を publish しない。
-`publish_image_when_disabled=true` の場合、無効時も入力画像を `decision_image_topic` へ流し、GUI の信号監視画像を維持する。
+`/recog_flag != 1` の間は判定履歴を reset し、推論結果を受けても `/sig_recog` と
+`overlay_topic` のいずれも publish しない。表示側は鮮度低下により未受信として扱う。
 
-### 4.3 画像 topic の位置づけ
+`overlay_topic` は表示用であり取りこぼしを許容できるため BEST_EFFORT で配信し、
+`road_blockage_detector` 側と QoS を揃える。制御経路へ渡す `/sig_recog` は既定
+（RELIABLE）のままとする。
+
+### 4.3 フレームの紐付け
+`PerceptionOverlay.header` には、判定根拠となった元画像フレームの `stamp` / `frame_id` を
+そのまま引き継ぐ。`yolo_detector` が `Detection2DArray.header` へ元画像の header を複製して
+いるため、本ノードはそれを転記するだけでよい。
+
+認識は生画像より低いレートで動作するため、生画像の全フレームに対して結果が対応する
+とは限らない。表示側は直近の結果を保持して描画する前提で実装する（保持時間や
+同期判定の扱いは `robot_console` 側の責務）。
+
+`OverlayDetection.adopted` には、`confidence_threshold` 以上で判定に採用した検出かどうかを
+入れる。採用外の検出も残すことで、判定に使われなかった検出を表示側で描き分けられる。
+
+### 4.4 画像 topic の位置づけ
 - `/perception/traffic_signal/detection_image` は `yolo_detector_traffic_signal` が publish する YOLO 生検出の確認用画像である。
-- `/perception/traffic_signal/decision_image` は `traffic_signal_recognizer` が publish する意味判定後の確認用画像である。
-- 判定重畳画像は運用確認用であり、制御判断の正本は `/sig_recog` とする。
+- 本ノードは画像を publish しない。判定後の重畳表示は `robot_console` が生画像へ描画する。
+- 制御判断の正本は `/sig_recog` とする。
 
 ## 5. パラメータ
 
@@ -77,8 +95,7 @@ tc2026 では画像 topic を `/perception/traffic_signal/decision_image` へ完
 | `class_names` | `['red', 'green']` | `Detection2D.results[].hypothesis.class_id` から class name を復元するための対応表。 |
 | `hold_go` | `false` | 一度 GO 判定した後に GO を保持するか。 |
 | `publish_stop_when_disabled` | `false` | 無効化時に STOP を publish するか。 |
-| `decision_image_topic` | `/perception/traffic_signal/decision_image` | 判定重畳画像の出力 topic。 |
-| `publish_image_when_disabled` | `true` | 無効時も入力画像を判定重畳画像 topic へ publish するか。 |
+| `overlay_topic` | `/perception/traffic_signal/overlay` | 認識結果の出力 topic。 |
 
 ## 6. 判定仕様
 
@@ -93,18 +110,21 @@ tc2026 では画像 topic を `/perception/traffic_signal/decision_image` へ完
 この仕様は、ROS 1 実装の「3 回連続 green で GO、それ以外は STOP」という運用を維持する。
 ただし ROS 1 実装にあった DataFrame 依存や `rospy.wait_for_message` 中心のループ構造は採用しない。
 
-## 7. 画像出力
+## 7. 認識結果の出力
 
-`/perception/traffic_signal/decision_image` には以下を重畳する。
+`/perception/traffic_signal/overlay` には以下を載せる。本ノードは画像を扱わない。
 
-- GO の場合は緑、STOP の場合は赤の画像外枠。
-- confidence 閾値以上の検出矩形。
+- 検出矩形（中心座標と大きさ）。
 - class name と score。
-- `sig_recog=<value>` の判定値。
-- 判定履歴や連続 green 回数は、運用上必要になった場合に表示項目へ追加する。
+- `confidence_threshold` 以上で判定に採用したかを表す `adopted`。
+- `decision`（`sig_recog` と同じ値）と `decision_text`（`GO` / `STOP`）。
 
-画像生成は運用確認用であり、制御判断の正本は `/sig_recog` とする。
-元画像が未受信の場合は画像 publish をスキップし、`/sig_recog` 判定は継続する。
+描画内容の決定は表示側の責務とする。`robot_console` は採用した検出を太線、採用外を
+細線で描き分け、判定結果は画像へ焼き込まずチップとして表示する。走行中に運転者が
+読むのは判定そのものであり、画像内の小さな文字では数 m 離れた位置から判読できない
+ためである。
+
+配信は運用確認用であり、制御判断の正本は `/sig_recog` とする。
 
 ## 8. 起動構成
 
@@ -122,12 +142,13 @@ tc2026 では画像 topic を `/perception/traffic_signal/decision_image` へ完
 | 項目 | traffic_signal_recognizer | road_blockage_detector |
 | ---- | ---- | ---- |
 | YOLO 入力 | `/perception/traffic_signal/detections` | `/perception/road_blockage/detections` |
-| raw 画像入力 | `/usb_cam/image_raw` | `/usb_cam/image_raw` |
+| raw 画像入力 | なし（画像を扱わない） | なし（画像を扱わない） |
 | 制御出力 | `/sig_recog` | `/road_blocked` |
-| 判定重畳画像 | `/perception/traffic_signal/decision_image` | `/perception/road_blockage/decision_image` |
+| 認識結果 | `/perception/traffic_signal/overlay` | `/perception/road_blockage/overlay` |
 | YOLO 生検出画像 | `/perception/traffic_signal/detection_image` | `/perception/road_blockage/detection_image` |
 
-`/perception/*/detection_image` は YOLO 推論結果の確認用、`/perception/*/decision_image` は後段判定結果の確認用として使い分ける。
+`/perception/*/detection_image` は YOLO 推論結果の確認用である。後段判定結果の確認は
+`/perception/*/overlay` を `robot_console` が生画像へ重畳した表示で行う。
 
 ## 10. テスト方針
 
@@ -145,4 +166,4 @@ ROS 通信、画像描画、実モデル推論は実機・rosbag・GUI に依存
 
 - 信号モデルの class id と class name の正式定義をモデル管理資料に記録する。
 - 実機で `detection_interval` と `judge_count` の組み合わせを評価する。
-- `/perception/traffic_signal/decision_image` の描画内容を robot_console の表示要件に合わせて調整する。
+- `PerceptionOverlay` に載せる項目が robot_console の表示要件を満たすか実機で評価する。

@@ -2,29 +2,17 @@
 """road_blockage_detector ノードの実装モジュール."""
 
 from collections import deque
-import copy
 import math
-import threading
 from typing import Deque, List, Optional, Tuple
-
-import cv2
-from cv_bridge import CvBridge
-import numpy as np
 
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from rclpy.time import Time
 from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
-from sensor_msgs.msg import Image
 from std_msgs.msg import Bool
-from std_msgs.msg import Header
+from tc_perception_msgs.msg import OverlayDetection, PerceptionOverlay
 from vision_msgs.msg import Detection2D, Detection2DArray
-
-CONFIRMED_COLOR = (0, 0, 255)
-JUDGING_COLOR = (0, 255, 255)
-VALID_COLOR = (0, 255, 0)
-TEXT_COLOR = (255, 255, 255)
 
 
 class RoadBlockageDetector(Node):
@@ -37,16 +25,12 @@ class RoadBlockageDetector(Node):
         self._load_parameters()
 
         self.count_history: Deque[Tuple[int, int]] = deque()
-        self.latest_amcl_pose: Optional[Pose] = None
-        self.latest_amcl_time: Optional[Time] = None
+        self.latest_pose_enu: Optional[Pose] = None
+        self.latest_pose_enu_time: Optional[Time] = None
         self.blocked_positions: List[Pose] = []
         self.temporary_decision_count = 0
         self.blocked_state_started_at: Optional[float] = None
         self.road_blocked_state = False
-        self.bridge = CvBridge()
-        self.latest_image: Optional[np.ndarray] = None
-        self.latest_image_header: Optional[Header] = None
-        self.image_lock = threading.Lock()
         self.last_valid_detection_count = 0
         self.last_detection_ratio = 0.0
 
@@ -57,31 +41,24 @@ class RoadBlockageDetector(Node):
             self._detections_callback,
             qos_sensor_data,
         )
-        if self.publish_decision_image:
-            self.image_subscriber = self.create_subscription(
-                Image,
-                self.image_topic,
-                self._image_callback,
-                qos_sensor_data,
-            )
-            self.decision_image_publisher = self.create_publisher(
-                Image,
-                self.decision_image_topic,
-                qos_sensor_data,
-            )
-        self.amcl_subscriber = self.create_subscription(
+        self.overlay_publisher = self.create_publisher(
+            PerceptionOverlay,
+            self.overlay_topic,
+            qos_sensor_data,
+        )
+        self.pose_enu_subscriber = self.create_subscription(
             PoseWithCovarianceStamped,
-            self.amcl_pose_topic,
-            self._amcl_pose_callback,
+            self.pose_enu_topic,
+            self._pose_enu_callback,
             10,
         )
         self.road_blocked_publisher = self.create_publisher(Bool, self.road_blocked_topic, 10)
 
         self.get_logger().info(
             'road_blockage_detector を起動しました。'
-            f' detections={self.detections_topic}, amcl_pose={self.amcl_pose_topic}, '
+            f' detections={self.detections_topic}, pose_enu={self.pose_enu_topic}, '
             f'road_blocked={self.road_blocked_topic}, '
-            f'decision_image={self.decision_image_topic}'
+            f'overlay={self.overlay_topic}'
         )
 
     def _declare_parameters(self) -> None:
@@ -89,14 +66,9 @@ class RoadBlockageDetector(Node):
 
         self.declare_parameter('target_class_id', 0)
         self.declare_parameter('detections_topic', '/perception/road_blockage/detections')
-        self.declare_parameter('image_topic', '/usb_cam/image_raw')
-        self.declare_parameter('amcl_pose_topic', '/amcl_pose')
+        self.declare_parameter('pose_enu_topic', '/localization/pose_enu')
         self.declare_parameter('road_blocked_topic', '/road_blocked')
-        self.declare_parameter(
-            'decision_image_topic',
-            '/perception/road_blockage/decision_image',
-        )
-        self.declare_parameter('publish_decision_image', True)
+        self.declare_parameter('overlay_topic', '/perception/road_blockage/overlay')
         self.declare_parameter('score_threshold', 0.5)
         self.declare_parameter('bbox_width_min', -1.0)
         self.declare_parameter('bbox_width_max', -1.0)
@@ -113,11 +85,9 @@ class RoadBlockageDetector(Node):
 
         self.target_class_id = self._get_int_parameter('target_class_id')
         self.detections_topic = self._get_string_parameter('detections_topic')
-        self.image_topic = self._get_string_parameter('image_topic')
-        self.amcl_pose_topic = self._get_string_parameter('amcl_pose_topic')
+        self.pose_enu_topic = self._get_string_parameter('pose_enu_topic')
         self.road_blocked_topic = self._get_string_parameter('road_blocked_topic')
-        self.decision_image_topic = self._get_string_parameter('decision_image_topic')
-        self.publish_decision_image = self._get_bool_parameter('publish_decision_image')
+        self.overlay_topic = self._get_string_parameter('overlay_topic')
         self.score_threshold = self._get_double_parameter('score_threshold')
         self.bbox_width_min = self._get_double_parameter('bbox_width_min')
         self.bbox_width_max = self._get_double_parameter('bbox_width_max')
@@ -146,29 +116,11 @@ class RoadBlockageDetector(Node):
 
         return self.get_parameter(name).get_parameter_value().string_value
 
-    def _get_bool_parameter(self, name: str) -> bool:
-        """真偽値パラメータを取得するヘルパー."""
+    def _pose_enu_callback(self, msg: PoseWithCovarianceStamped) -> None:
+        """最新の pose_enu をキャッシュする."""
 
-        return self.get_parameter(name).get_parameter_value().bool_value
-
-    def _image_callback(self, msg: Image) -> None:
-        """判定重畳画像に使う最新画像をキャッシュする."""
-
-        try:
-            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-        except Exception as exc:
-            self.get_logger().error(f'画像変換に失敗しました: {exc}')
-            return
-
-        with self.image_lock:
-            self.latest_image = cv_image.copy()
-            self.latest_image_header = copy.deepcopy(msg.header)
-
-    def _amcl_pose_callback(self, msg: PoseWithCovarianceStamped) -> None:
-        """最新の amcl_pose をキャッシュする."""
-
-        self.latest_amcl_pose = msg.pose.pose
-        self.latest_amcl_time = Time.from_msg(msg.header.stamp)
+        self.latest_pose_enu = msg.pose.pose
+        self.latest_pose_enu_time = Time.from_msg(msg.header.stamp)
 
     def _detections_callback(self, msg: Detection2DArray) -> None:
         """Detection2DArray を受信し、判定処理を行う."""
@@ -182,14 +134,14 @@ class RoadBlockageDetector(Node):
             self._record_count(detection_time, 0)
             self.last_valid_detection_count = 0
             self.last_detection_ratio = self._compute_detection_ratio()
-            self._publish_decision_image(msg, [], 'no_pose')
+            self._publish_overlay(msg, [], 'no_pose')
             return
 
         self._maybe_clear_blocked_state(pose)
         if self._suppress_near_blocked_position(pose, detection_time):
             self.last_valid_detection_count = 0
             self.last_detection_ratio = self._compute_detection_ratio()
-            self._publish_decision_image(msg, [], 'suppressed')
+            self._publish_overlay(msg, [], 'suppressed')
             return
 
         valid_detections = self._extract_valid_detections(msg.detections)
@@ -198,7 +150,7 @@ class RoadBlockageDetector(Node):
         self.last_valid_detection_count = valid_count
         self._evaluate_decision(detection_time, pose)
         self.last_detection_ratio = self._compute_detection_ratio()
-        self._publish_decision_image(msg, valid_detections, '')
+        self._publish_overlay(msg, valid_detections, '')
 
     def _count_valid_detections(self, detections: List[Detection2D]) -> int:
         """要求仕様に合致する検知数を数える."""
@@ -336,102 +288,64 @@ class RoadBlockageDetector(Node):
         ratio = (active_buckets / len(self.count_history)) * 100.0
         return ratio
 
-    def _publish_decision_image(
+    def _publish_overlay(
         self,
         detection_msg: Detection2DArray,
         valid_detections: List[Detection2D],
         status_note: str,
     ) -> None:
-        """判定状態を重畳した画像を publish する."""
+        """重畳表示用の認識結果を publish する.
 
-        if not self.publish_decision_image:
-            return
+        本ノードは画像を購読・配信しない。`header` は判定に使用した
+        `Detection2DArray` のものをそのまま引き継ぎ、`yolo_detector` が複製した
+        元画像フレームの stamp/frame_id を表示側へ伝える。
 
-        with self.image_lock:
-            if self.latest_image is None:
-                return
-            image = copy.deepcopy(self.latest_image)
-            image_header = copy.deepcopy(self.latest_image_header)
+        `valid_detections` に含まれない検出も `adopted=False` として残し、
+        判定に採用されなかった検出を表示側で描き分けられるようにする。
 
-        color = self._decision_color()
-        for detection in valid_detections:
-            x1, y1, x2, y2 = self._bbox_to_xyxy(detection)
-            cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
-            best = self._extract_best_result(detection)
-            label = 'road_blockage'
-            if best is not None:
-                label = f'road_blockage:{best[1]:.2f}'
-            cv2.putText(
-                image,
-                label,
-                (x1, max(y1 - 10, 0)),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                color,
-                2,
-            )
+        Args:
+            detection_msg (Detection2DArray): 判定に使用した検出結果.
+            valid_detections (List[Detection2D]): 判定に採用した検出.
+            status_note (str): 判定できなかった理由。正常時は空文字.
+        """
 
-        self._draw_decision_overlay(image, status_note)
+        adopted_ids = {id(detection) for detection in valid_detections}
 
-        try:
-            image_msg = self.bridge.cv2_to_imgmsg(image, encoding='bgr8')
-        except Exception as exc:
-            self.get_logger().error(f'判定画像の変換に失敗しました: {exc}')
-            return
-
-        if image_header is not None:
-            image_msg.header = image_header
-        else:
-            image_msg.header = detection_msg.header
-        self.decision_image_publisher.publish(image_msg)
-
-    def _decision_color(self) -> Tuple[int, int, int]:
-        """現在の封鎖状態に応じた描画色を返す."""
-
-        if self.road_blocked_state and self.temporary_decision_count == 0:
-            return CONFIRMED_COLOR
-        if self.temporary_decision_count > 0:
-            return JUDGING_COLOR
-        return VALID_COLOR
-
-    def _draw_decision_overlay(self, image: np.ndarray, status_note: str) -> None:
-        """判定状態テキストを画像へ描画する."""
-
-        elapsed = 0.0
-        if self.blocked_state_started_at is not None:
-            now_sec = self.get_clock().now().nanoseconds / 1e9
-            elapsed = max(now_sec - self.blocked_state_started_at, 0.0)
-
-        state = self._decision_state_label()
-        lines = [
-            f'road_blocked={str(self.road_blocked_state).lower()} ({state})',
-            f'valid={self.last_valid_detection_count} '
-            f'ratio={self.last_detection_ratio:.1f}/{self.decision_frame_ratio:.1f}%',
-            f'elapsed={elapsed:.1f}/{self.confirmation_duration:.1f}s',
+        overlay = PerceptionOverlay()
+        overlay.header = detection_msg.header
+        overlay.source = 'road_blockage'
+        overlay.detections = [
+            self._to_overlay_detection(detection, id(detection) in adopted_ids)
+            for detection in detection_msg.detections
         ]
-        if status_note:
-            lines.append(f'note={status_note}')
+        overlay.decision = 1 if self.road_blocked_state else 0
+        overlay.decision_text = self._decision_state_label()
+        overlay.status_note = status_note
+        self.overlay_publisher.publish(overlay)
 
-        for index, line in enumerate(lines):
-            y = 28 + index * 26
-            cv2.putText(
-                image,
-                line,
-                (12, y),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0, 0, 0),
-                4,
-            )
-            cv2.putText(
-                image,
-                line,
-                (12, y),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                TEXT_COLOR,
-                2,
-            )
+    def _to_overlay_detection(
+        self, detection: Detection2D, adopted: bool
+    ) -> OverlayDetection:
+        """Detection2D を表示用の OverlayDetection へ変換する.
+
+        Args:
+            detection (Detection2D): 変換元の検出.
+            adopted (bool): 判定に採用された検出か.
+
+        Returns:
+            OverlayDetection: 表示用の検出 1 件.
+        """
+
+        entry = OverlayDetection()
+        entry.center_x = float(detection.bbox.center.position.x)
+        entry.center_y = float(detection.bbox.center.position.y)
+        entry.size_x = float(detection.bbox.size_x)
+        entry.size_y = float(detection.bbox.size_y)
+        entry.label = 'road_blockage'
+        best = self._extract_best_result(detection)
+        entry.score = float(best[1]) if best is not None else 0.0
+        entry.adopted = adopted
+        return entry
 
     def _decision_state_label(self) -> str:
         """画像表示用の封鎖判定状態名を返す."""
@@ -441,21 +355,6 @@ class RoadBlockageDetector(Node):
         if self.temporary_decision_count > 0:
             return 'judging'
         return 'clear'
-
-    @staticmethod
-    def _bbox_to_xyxy(detection: Detection2D) -> Tuple[int, int, int, int]:
-        """Detection2D.bbox を OpenCV 描画用座標へ変換する."""
-
-        center_x = detection.bbox.center.position.x
-        center_y = detection.bbox.center.position.y
-        half_w = detection.bbox.size_x / 2.0
-        half_h = detection.bbox.size_y / 2.0
-        return (
-            int(center_x - half_w),
-            int(center_y - half_h),
-            int(center_x + half_w),
-            int(center_y + half_h),
-        )
 
     def _handle_confirmation(self, pose: Optional[Pose]) -> None:
         """confirmation_duration を超えた場合に封鎖確定処理を行う."""
@@ -467,7 +366,7 @@ class RoadBlockageDetector(Node):
         if now_sec - self.blocked_state_started_at < self.confirmation_duration:
             return
 
-        target_stamp = self.latest_amcl_time or Time()
+        target_stamp = self.latest_pose_enu_time or Time()
         confirmation_pose = pose or self._lookup_pose(target_stamp)
         if confirmation_pose is None:
             self.get_logger().warn(
@@ -486,19 +385,19 @@ class RoadBlockageDetector(Node):
         self._reset_temporary_decision_state()
 
     def _lookup_pose(self, stamp: Time) -> Optional[Pose]:
-        """最新の amcl_pose から現在位置を取得する."""
+        """最新の pose_enu から現在位置を取得する."""
 
-        if self.latest_amcl_pose is None or self.latest_amcl_time is None:
+        if self.latest_pose_enu is None or self.latest_pose_enu_time is None:
             return None
 
-        time_diff_sec = abs(self.latest_amcl_time.nanoseconds - stamp.nanoseconds) / 1e9
+        time_diff_sec = abs(self.latest_pose_enu_time.nanoseconds - stamp.nanoseconds) / 1e9
         if time_diff_sec >= 3.0:
             self.get_logger().warn(
-                'Detection と /amcl_pose のタイムスタンプに'
+                'Detection と /localization/pose_enu のタイムスタンプに'
                 '3秒以上の差があります。'
             )
 
-        return self._copy_pose(self.latest_amcl_pose)
+        return self._copy_pose(self.latest_pose_enu)
 
     def _is_within_blocked_positions(self, pose: Pose) -> bool:
         """過去の封鎖位置近傍にいるかを判定する."""

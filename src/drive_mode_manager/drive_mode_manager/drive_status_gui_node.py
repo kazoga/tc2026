@@ -11,7 +11,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from route_msgs.msg import DriveModeStatus, FollowerState, ManagerStatus
+from tc_route_msgs.msg import DriveModeStatus, FollowerState, ManagerStatus
 
 try:
     from rtk_gps_um982_msgs.msg import RtkStatus

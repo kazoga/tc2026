@@ -14,7 +14,7 @@ from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPo
 from geometry_msgs.msg import Point, Quaternion
 from std_msgs.msg import Header
 from visualization_msgs.msg import Marker, MarkerArray
-from route_msgs.msg import Route, Waypoint  # type: ignore
+from tc_route_msgs.msg import Route, Waypoint  # type: ignore
 
 
 def _q_to_yaw(q: Quaternion) -> float:

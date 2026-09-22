@@ -1,12 +1,17 @@
 robot_navigator:
   ros__parameters:
-    max_vel: 1.1
-    max_w: 1.8
-    max_acc_v: 1.0
-    max_acc_w: 1.5
+    max_vel: 1.0
+    max_w: 1.0
+    max_acc_v: 0.7
+    max_acc_w: 0.6
+    max_decel_v: 1.5
+    braking_delay_sec: 0.2  # 通信・driver遅延の設計予算。制御1周期を別途加算
+    require_motion_limits: true
     pos_tol: 0.5
     ang_tol: 0.25
     control_rate_hz: 20.0
+    pose_timeout_sec: 1.0
+    odom_timeout_sec: 1.0
     robot_width: 0.6
     marker_frame: "map"
     obstacle_distance_mode: "hint"
@@ -16,4 +21,3 @@ robot_navigator:
     log_csv_path: "/tmp/control_log.csv"
     enable_debug_pub: false
     use_nav2_action: false
-

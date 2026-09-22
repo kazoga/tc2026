@@ -10,8 +10,14 @@ def generate_launch_description() -> LaunchDescription:
         default_value='/ypspur_ros/odom',
         description='シミュレータが配信するオドメトリトピック',
     )
+    pose_topic_arg = DeclareLaunchArgument(
+        'pose_topic',
+        default_value='/localization/pose_enu',
+        description='シミュレータが配信し、原点更新にも使用する ENU 自己位置トピック',
+    )
 
     odom_topic = LaunchConfiguration('odom_topic')
+    pose_topic = LaunchConfiguration('pose_topic')
 
     simulator_node = Node(
         package='robot_navigator',
@@ -24,8 +30,9 @@ def generate_launch_description() -> LaunchDescription:
                 'publish_tf': True,
                 'pose_noise_std_m': 0.0,
                 'yaw_noise_std_deg': 0.0,
+                'pose_topic': pose_topic,
                 'enable_glitch_trigger': True,
-                'glitch_trigger_topic': '/amcl_glitch_trigger',
+                'glitch_trigger_topic': '/localization/pose_enu_glitch_trigger',
                 'glitch_cooldown_sec': 5.0,
                 'glitch_wait_after_stop_sec': 5.0,
                 'glitch_radius_min_m': 2.0,
@@ -46,5 +53,6 @@ def generate_launch_description() -> LaunchDescription:
 
     return LaunchDescription([
         odom_topic_arg,
+        pose_topic_arg,
         simulator_node,
     ])

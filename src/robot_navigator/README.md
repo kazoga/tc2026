@@ -10,7 +10,7 @@
 配信する `robot_simulator` ノード（同パッケージ内）も併載しています。
 
 ## 主な機能
-- `/odom`・`/amcl_pose`・`/active_target` を監視し、線速度・角速度の時間最適解を近似計算。
+- `/odom`・`/localization/pose_enu`・`/active_target` を監視し、線速度・角速度の時間最適解を近似計算。
 - `obstacle_distance_mode` に応じて `/scan` もしくは `/obstacle_avoidance_hint` から前方距離を取得し、
   `safety_distance`・`min_obstacle_distance` に基づき減速／停止を制御する。
 - 角速度は PID（`kp=0.65`, `ki=0.001`, `kd=0.02`）で生成し、角度誤差に応じて線速度をスケール。
@@ -53,11 +53,11 @@ ros2 run robot_navigator robot_navigator
 | 名称 | 型 | 説明 | QoS |
 |------|----|------|-----|
 | `/odom` | `nav_msgs/Odometry` | 現在速度を取得し加速度制限に利用。 | RELIABLE / VOLATILE / depth=10 |
-| `/amcl_pose` | `geometry_msgs/PoseWithCovarianceStamped` | 現在姿勢（位置・ヨー角）を取得。 | RELIABLE / VOLATILE / depth=10 |
+| `/localization/pose_enu` | `geometry_msgs/PoseWithCovarianceStamped` | 現在姿勢（位置・ヨー角）を取得。launch の `pose_enu_topic` で `/localization/pose_enu` などへ変更可能。 | RELIABLE / VOLATILE / depth=10 |
 | `/active_target` | `geometry_msgs/PoseStamped` | 追従対象の目標姿勢。 | RELIABLE / VOLATILE / depth=10 |
-| `/obstacle_avoidance_hint` | `route_msgs/ObstacleAvoidanceHint` | `obstacle_distance_mode=hint` のとき使用。 | BEST_EFFORT / VOLATILE / depth=1 |
+| `/obstacle_avoidance_hint` | `tc_route_msgs/ObstacleAvoidanceHint` | `obstacle_distance_mode=hint` のとき使用。 | BEST_EFFORT / VOLATILE / depth=1 |
 | `/scan` | `sensor_msgs/LaserScan` | `obstacle_distance_mode=scan` のとき使用（SensorDataQoS）。 | BEST_EFFORT / VOLATILE / depth=1 |
-| `/amcl_glitch_trigger` | `std_msgs/Bool` | `robot_simulator` が停止中に受信すると `/amcl_pose` へ単発オフセットを加算。 | RELIABLE / VOLATILE / depth=10 |
+| `/localization/pose_enu_glitch_trigger` | `std_msgs/Bool` | `robot_simulator` が停止中に受信すると `pose_topic` へ単発オフセットを加算。 | RELIABLE / VOLATILE / depth=10 |
 
 ### Publisher
 | 名称 | 型 | 説明 | QoS |
@@ -86,7 +86,7 @@ ros2 run robot_navigator robot_navigator
 | `log_csv_path` | string | `~/control_log.csv` | CSV ログ出力先パス。
 
 ## 状態管理・処理フロー
-1. `/odom`・`/amcl_pose`・`/active_target` の受信状況を監視し、欠損時は `cmd_vel_topic` にゼロを出力して
+1. `/odom`・`/localization/pose_enu`・`/active_target` の受信状況を監視し、欠損時は `cmd_vel_topic` にゼロを出力して
    WARN を 5 秒周期で報告する。
 2. 入力が揃うと `compute_time_optimal_cmd_vel()` を呼び出し、角度誤差の PID 制御で角速度を算出。
 3. 線速度は角度誤差および障害物距離に基づくスケールを適用し、`max_acc_v` に従って加速度を制限。
@@ -96,7 +96,7 @@ ros2 run robot_navigator robot_navigator
 6. CSV ログが有効な場合は制御ループの各種値（速度、誤差、障害物距離）を逐次書き出す。
 
 ## 動作確認手順
-1. `robot_simulator`（当パッケージ内）を起動し、最終 `/cmd_vel` を受け取って `/amcl_pose`・`/odom` を配信させる。
+1. `robot_simulator`（当パッケージ内）を起動し、最終 `/cmd_vel` を受け取って `pose_topic`（既定 `/localization/pose_enu`）・`/odom` を配信させる。`/localization/pose_enu` 移行時は `pose_topic:=/localization/pose_enu` を指定する。
 2. `route_follower` もしくは手動で `/active_target` を Publish し、目標指令を入力する。
 3. `obstacle_monitor` を起動して `/obstacle_avoidance_hint` を供給するか、`obstacle_distance_mode:=scan`
    として `/scan` を直接購読させる。
@@ -108,7 +108,7 @@ ros2 run robot_navigator robot_navigator
 - `obstacle_distance_mode` が `scan` で距離が常に `None` となる場合は `/scan` の FOV がロボット幅帯を
   カバーしているか確認します。
 - WARN ログのスロットルが頻発する場合は、入力トピックの QoS やリマップ設定を再確認してください。
-- `/amcl_pose` に付与されるノイズはガウス分布（位置 `pose_noise_std_m`、ヨー角 `yaw_noise_std_deg`）を
+- `robot_simulator` の `pose_topic` に付与されるノイズはガウス分布（位置 `pose_noise_std_m`、ヨー角 `yaw_noise_std_deg`）を
   各 publish ごとにサンプリングして加算する実装です。標準偏差を 1.0 に設定すれば平均的には 1m 規模の
   ばらつきが常時発生しますが、「停止中にごくまれに 1m だけジャンプする」ような突発外れ値を再現する
   仕組みは現状ありません。単発のステップ状誤差を模擬する場合は、別途一時的にオフセットを加える
@@ -119,9 +119,9 @@ ros2 run robot_navigator robot_navigator
 に外部トリガ入力で単発オフセットを付与する機能を実装しました。確率分布による自動発火は行わず、
 テストスクリプトや人間操作で明示的に発火させることで再現性を確保します。
 
-- **トリガトピック**: `/amcl_glitch_trigger`（`std_msgs/Bool`）。`data=true` を受信した瞬間に 1 回
+- **トリガトピック**: `/localization/pose_enu_glitch_trigger`（`std_msgs/Bool`）。`data=true` を受信した瞬間に 1 回
   だけオフセットを予約し、停止状態で `glitch_wait_after_stop_sec`（既定 5 秒）の待機後に
-  `/amcl_pose` へ反映します。一度適用されたオフセットは `data=false` を受信するまで同じ値のまま
+  `pose_topic` へ反映します。一度適用されたオフセットは `data=false` を受信するまで同じ値のまま
   付与され続けます。走行中にトリガを受けた場合は「停止するまで予約」を保持し、停止と
   クールダウンを満たしたタイミングから待機を開始します。連続発火を防ぐため、
   `glitch_cooldown_sec` 経過まで後続トリガは無視します。false を送れば予約・適用中の外れ値を
@@ -143,3 +143,20 @@ ros2 run robot_navigator robot_navigator
 - default.yaml の `obst_fov_deg` や `enable_debug_pub` など未使用パラメータは Phase3 での
   ナビゲーション高度化向けに予約されています。
 - `robot_simulator_node` の TF 連携と組み合わせた統合試験手順書を docs 配下に追記予定です。
+
+## 入力途絶時の停止（2026-09-13）
+
+`pose_timeout_sec`、`odom_timeout_sec` はそれぞれ既定 1.0 秒である。
+`/localization/pose_enu` または odom が未受信、または受信間隔が閾値以上の場合、
+制御タイマーでゼロ速度を発行し、PID 積分・前回指令をクリアする。
+両入力の受信が復帰すると既存目標への追従を再開する。
+判定時刻は実機で `time.monotonic()`、`use_sim_time=true` ではROS時計とする。
+低速物理計算や一時停止のwall時間を模擬入力の欠測に数えない。
+ROSメッセージ自体のstampの鮮度はこの監視では検証しない。融合ノード側で別に監視する。
+古い内容の再配信、LiDAR の途絶、自己位置の品質低下、ノード自体の停止は別途対策が必要である。
+ROS 非依存の `input_watchdog_core.py` と境界・復帰テストを追加した。
+Gazebo と仮想 GNSS による停止確認は obstacle_route_sim の地理地図検証記録を参照する。
+
+`obstacle_timeout_sec`（既定0:監視無効）を正の秒数にすると、
+選択したscan/hint入力の未受信・途絶時に速度をゼロにする。
+icart_bringupの新しい実機profileは1秒を設定する。手動速度系には適用しない。

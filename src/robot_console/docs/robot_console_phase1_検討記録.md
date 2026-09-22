@@ -7,9 +7,9 @@
 
 ### 2. 対象ノードと主要インタフェース
 - `route_manager`：`active_route`、`route_state`、`mission_info`、`manager_status`を配信し、`report_stuck`サービスを受け付ける。
-- `route_follower`：`active_route`、`amcl_pose`、`obstacle_avoidance_hint`、`manual_start`、`sig_recog`を購読し、`active_target`と`follower_state`を配信する。
-- `obstacle_monitor`：`/scan`・`amcl_pose`・`active_target`を購読し、`obstacle_avoidance_hint`と`sensor_viewer`画像を配信する。
-- `robot_navigator`：`active_target`・`amcl_pose`・`odom`・`scan`（または`obstacle_avoidance_hint`）を購読し、`cmd_vel`と`direction_marker`を配信する。
+- `route_follower`：`active_route`、`pose_enu`、`obstacle_avoidance_hint`、`manual_start`、`sig_recog`を購読し、`active_target`と`follower_state`を配信する。
+- `obstacle_monitor`：`/scan`・`pose_enu`・`active_target`を購読し、`obstacle_avoidance_hint`と`sensor_viewer`画像を配信する。
+- `robot_navigator`：`active_target`・`pose_enu`・`odom`・`scan`（または`obstacle_avoidance_hint`）を購読し、`cmd_vel`と`direction_marker`を配信する。
 
 ### 3. `route_state` と `follower_state` の表示整理
 - `route_state`（`route_manager_node.py` で生成）からは以下を常時掲示する。

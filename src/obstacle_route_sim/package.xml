@@ -13,18 +13,45 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>rcl_interfaces</exec_depend>
+  <exec_depend>gz_transport_vendor</exec_depend>
+  <exec_depend>gz_msgs_vendor</exec_depend>
+  <exec_depend>python3-protobuf</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>rosgraph_msgs</exec_depend>
 
   <exec_depend>launch</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
   <exec_depend>launch_ros</exec_depend>
+  <exec_depend>sensor_msgs_py</exec_depend>
+  <exec_depend>fast_lio</exec_depend>
+  <exec_depend>gnss_lio_fusion</exec_depend>
 
   <exec_depend>ros_gz_sim</exec_depend>
   <exec_depend>ros_gz_bridge</exec_depend>
   <exec_depend>ros_gz_interfaces</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-pil</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-matplotlib</exec_depend>
+  <exec_depend>python3-shapely</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>nodejs</exec_depend>
+  <exec_depend>geo_pose_converter</exec_depend>
+  <exec_depend>rtk_gps_um982_msgs</exec_depend>
+  <exec_depend>tf2_msgs</exec_depend>
+  <exec_depend>tc_route_msgs</exec_depend>
+  <exec_depend>route_planner</exec_depend>
+  <exec_depend>route_manager</exec_depend>
+  <exec_depend>route_follower</exec_depend>
+  <exec_depend>robot_navigator</exec_depend>
+  <exec_depend>obstacle_monitor</exec_depend>
+  <exec_depend>drive_mode_manager</exec_depend>
 
   <test_depend>ament_cmake_pytest</test_depend>
 

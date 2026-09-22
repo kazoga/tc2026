@@ -35,8 +35,11 @@ from geometry_msgs.msg import Pose, Point
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool
-from route_msgs.msg import ObstacleAvoidanceHint, Route
+from tc_route_msgs.msg import ObstacleAvoidanceHint, Route, MotionLimits
 from visualization_msgs.msg import Marker
+
+from robot_navigator.input_watchdog_core import InputWatchdog
+from robot_navigator.braking import limit_for_stop, validate_limits, driver_compatible
 
 
 @dataclass
@@ -66,15 +69,22 @@ class RobotNavigator(Node):
         """ノードの初期化と通信・タイマー準備を行う。"""
         super().__init__('robot_navigator')
 
-        # --- パラメータ宣言（既定値は従来実装を踏襲） ---
-        self.declare_parameter('max_vel', 1.1)
-        self.declare_parameter('max_w', 1.8)
-        self.declare_parameter('max_acc_v', 1.0)
-        self.declare_parameter('max_acc_w', 1.5)
+        # --- パラメータ宣言（i-Cartの通常加速と制動を分離） ---
+        immutable = ParameterDescriptor(read_only=True)
+        self.declare_parameter('max_vel', 1.0, immutable)
+        self.declare_parameter('max_w', 1.0, immutable)
+        self.declare_parameter('max_acc_v', 0.7, immutable)
+        self.declare_parameter('max_acc_w', 0.6, immutable)
+        self.declare_parameter('max_decel_v', 1.5, immutable)
+        self.declare_parameter('braking_delay_sec', 0.2, immutable)
+        self.declare_parameter('require_motion_limits', True, immutable)
         self.declare_parameter('pos_tol', 0.5)
         self.declare_parameter('pos_tol_exit_margin', 0.2)
         self.declare_parameter('ang_tol', 0.25)
         self.declare_parameter('control_rate_hz', 20.0)
+        self.declare_parameter('pose_timeout_sec', 1.0)
+        self.declare_parameter('odom_timeout_sec', 1.0)
+        self.declare_parameter('obstacle_timeout_sec', 0.0)
         self.declare_parameter('road_block_hold_sec', 5.0)
 
         # 旧実装の固定相当をパラメータ化
@@ -107,6 +117,10 @@ class RobotNavigator(Node):
             self.pos_tol_exit_margin = 0.0
         self.ang_tol: float = float(self.get_parameter('ang_tol').value)
         self.control_rate_hz: float = float(self.get_parameter('control_rate_hz').value)
+        self.max_decel_v = float(self.get_parameter('max_decel_v').value)
+        self.braking_delay_sec = float(self.get_parameter('braking_delay_sec').value)
+        validate_limits(self.max_v, self.max_w, self.max_a_v, self.max_a_w,
+                        self.max_decel_v, self.braking_delay_sec, self.control_rate_hz)
         self.dt: float = 1.0 / self.control_rate_hz
         self.road_block_hold_sec: float = float(self.get_parameter('road_block_hold_sec').value)
         if self.road_block_hold_sec < 0.0:
@@ -131,7 +145,7 @@ class RobotNavigator(Node):
         # --- 通信に用いるトピック名（リマップ前の既定値） ---
         scan_topic = 'scan'
         odom_topic = 'odom'
-        amcl_pose_topic = 'amcl_pose'
+        pose_enu_topic = 'localization/pose_enu'
         goal_topic = 'active_target'
         road_block_topic = 'road_blocked'
         active_route_topic = 'active_route'
@@ -149,6 +163,23 @@ class RobotNavigator(Node):
         self.integral_w_limit: float = self.max_w / max(self.ki_w, 1.0e-6)
 
         # --- 内部状態 ---
+        timeouts = {
+            'pose': float(self.get_parameter('pose_timeout_sec').value),
+            'odom': float(self.get_parameter('odom_timeout_sec').value),
+        }
+        obstacle_timeout = float(self.get_parameter('obstacle_timeout_sec').value)
+        if not math.isfinite(obstacle_timeout) or obstacle_timeout < 0.:
+            raise ValueError('obstacle_timeout_secは有限の非負秒数が必要')
+        if obstacle_timeout > 0.:
+            timeouts['obstacle'] = obstacle_timeout
+        self.require_motion_limits = bool(self.get_parameter('require_motion_limits').value)
+        if self.require_motion_limits:
+            timeouts['motion_limits'] = 0.5
+        self.input_watchdog = InputWatchdog(timeouts)
+        if self.require_motion_limits:
+            self.limits_sub = self.create_subscription(
+                MotionLimits, '/motion_limits', self.on_motion_limits, 1)
+        self._stale_inputs: tuple[str, ...] = ()
         self.current_pose: Optional[Pose] = None
         self.current_velocity: Optional[Twist] = None
         self.current_goal: Optional[Pose] = None
@@ -188,9 +219,9 @@ class RobotNavigator(Node):
         )
         self.marker_pub = self.create_publisher(Marker, marker_topic, marker_qos)
 
-        # 購読（amcl, odom, goal は RELIABLE、scan は SensorDataQoS）
+        # 購読（pose_enu, odom, goal は RELIABLE、scan は SensorDataQoS）
         self.create_subscription(Odometry, odom_topic, self.on_odom, 10)
-        self.create_subscription(PoseWithCovarianceStamped, amcl_pose_topic, self.on_amcl_pose, 10)
+        self.create_subscription(PoseWithCovarianceStamped, pose_enu_topic, self.on_pose_enu, 10)
         self.create_subscription(PoseStamped, goal_topic, self.on_goal, 10)
         self.create_subscription(Bool, road_block_topic, self.on_road_blocked, 10)
         route_qos = QoSProfile(
@@ -215,7 +246,7 @@ class RobotNavigator(Node):
         # --- リマップ後の名称を保持（ログや診断用） ---
         self.scan_topic_name = self._resolve_topic_name(scan_topic)
         self.odom_topic_name = self._resolve_topic_name(odom_topic)
-        self.amcl_pose_topic_name = self._resolve_topic_name(amcl_pose_topic)
+        self.pose_enu_topic_name = self._resolve_topic_name(pose_enu_topic)
         self.goal_topic_name = self._resolve_topic_name(goal_topic)
         self.road_block_topic_name = self._resolve_topic_name(road_block_topic)
         self.active_route_topic_name = self._resolve_topic_name(active_route_topic)
@@ -260,14 +291,22 @@ class RobotNavigator(Node):
         except AttributeError:
             return name
 
+    def _input_time_seconds(self) -> float:
+        """模擬はROS時刻、実機は単調時計で受信期限を測る。計算の遅さを欠測にしない。"""
+        if self.get_parameter('use_sim_time').value:
+            return self.get_clock().now().nanoseconds*1e-9
+        return time.monotonic()
+
     # -------------------- コールバック群 --------------------
     def on_odom(self, msg: Odometry) -> None:
         """/odom から現在速度を保持する。"""
         self.current_velocity = msg.twist.twist
+        self.input_watchdog.receive('odom', self._input_time_seconds())
 
-    def on_amcl_pose(self, msg: PoseWithCovarianceStamped) -> None:
-        """/amcl_pose から現在姿勢（Pose）を保持する。"""
+    def on_pose_enu(self, msg: PoseWithCovarianceStamped) -> None:
+        """/localization/pose_enu から現在姿勢（Pose）を保持する。"""
         self.current_pose = msg.pose.pose
+        self.input_watchdog.receive('pose', self._input_time_seconds())
 
     def on_goal(self, msg: PoseStamped) -> None:
         """目標トピック（PoseStamped）から目標姿勢（Pose）を保持する。"""
@@ -348,6 +387,8 @@ class RobotNavigator(Node):
 
     def on_scan(self, msg: LaserScan) -> None:
         """/scan を処理して、前方矩形ウィンドウ内の最小前方距離を更新する。"""
+        if 'obstacle' in self.input_watchdog.timeouts:
+            self.input_watchdog.receive('obstacle', self._input_time_seconds())
         # ロボット幅の半分と検出最大距離を用意
         half_width = self.robot_width / 2.0
         max_detection_distance = self.obst_max_dist
@@ -376,6 +417,8 @@ class RobotNavigator(Node):
 
     def on_hint(self, msg: ObstacleAvoidanceHint) -> None:
         """ヒントメッセージから障害物距離を更新する。"""
+        if 'obstacle' in self.input_watchdog.timeouts:
+            self.input_watchdog.receive('obstacle', self._input_time_seconds())
         distance: Optional[float]
         if (
             msg.front_clearance_m is None
@@ -399,9 +442,35 @@ class RobotNavigator(Node):
 
         self.obstacle_distance = float(distance)
 
+    def on_motion_limits(self, msg: MotionLimits) -> None:
+        """Reject mismatched or stale driver contracts before authorizing motion."""
+        age = (self.get_clock().now().nanoseconds * 1e-9 -
+               (msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9))
+        compatible = driver_compatible(msg, self.max_v, self.max_w, self.max_a_v,
+                                       self.max_a_w, self.max_decel_v)
+        if compatible and 0.0 <= age < 0.5:
+            self.input_watchdog.receive('motion_limits', self._input_time_seconds())
+        else:
+            self.input_watchdog.last_received.pop('motion_limits', None)
+            self.get_logger().error('ドライバの実効制限が不整合または古いため走行を許可しません',
+                                    throttle_duration_sec=2.0)
+
     # -------------------- 制御ループ --------------------
     def on_timer(self) -> None:
         """周期制御ロジック。必要な入力が揃ったら cmd_vel と Marker を発行し、CSV ログを追記する。"""
+        stale = self.input_watchdog.stale_inputs(self._input_time_seconds())
+        if stale:
+            if stale != self._stale_inputs:
+                self.get_logger().warn(f'入力未受信・途絶のため停止します: {", ".join(stale)}')
+            self._stale_inputs = stale
+            self.integral_w = 0.0
+            self.prev_yaw_error = 0.0
+            self.prev_cmd_vel = Twist()
+            self.cmd_pub.publish(Twist())
+            return
+        if self._stale_inputs:
+            self.get_logger().info('自己位置・odom の受信が復帰しました')
+            self._stale_inputs = ()
         if self._should_stop_due_to_road_block():
             self._publish_stop_for_road_block()
             return
@@ -443,7 +512,7 @@ class RobotNavigator(Node):
     def _publish_stop_with_throttle(self) -> None:
         """入力未揃い時の安全停止（5秒スロットルの WARN ログ付き）。"""
         self.get_logger().warn(
-            f"データ待ち（{self.amcl_pose_topic_name}, {self.odom_topic_name}, {self.goal_topic_name})",
+            f"データ待ち（{self.pose_enu_topic_name}, {self.odom_topic_name}, {self.goal_topic_name})",
             throttle_duration_sec=5.0,
         )
         self.cmd_pub.publish(Twist())
@@ -682,25 +751,21 @@ class RobotNavigator(Node):
         angle_scaling = max(0.0, 1.0 - (angle_diff / math.pi))
         v_scaled = v_ref * angle_scaling
 
-        # --- 障害物に応じた減速/停止 ---
-        if self.obstacle_distance is not None:
-            max_decel = self.max_a_v
-            # 停止距離を計算する際は、次のステップでの速度（v_scaled）を使用
-            # これにより、停止状態からの加速を許可する
-            stopping_distance = (v_scaled ** 2) / (2.0 * max_decel) + self.min_obstacle_distance
+        # Stop at the target centre, allowing the existing position tolerance
+        # to issue zero earlier. Include a control cycle plus pipeline budget.
+        # Use measured/previous speed, never the heading-scaled command alone.
+        delay = self.braking_delay_sec + self.dt
+        previous_speed = float(self.prev_cmd_vel.linear.x)
+        v_scaled = limit_for_stop(v_scaled, v_current, previous_speed,
+                                  distance_error, self.max_decel_v, delay)
 
-            if self.obstacle_distance <= stopping_distance:
-                # 完全停止（緊急停止領域）
-                v_scaled = 0.0
-                if abs(yaw_error) <= self.ang_tol:
-                    # 目標向きに十分近い場合のみ角速度も停止
-                    w_desired = 0.0
-            elif self.obstacle_distance < self.safety_distance:
-                # 安全距離内では線形に減速（min_obst_dist で 0、safety で v_scaled）
-                denom = max(1e-6, (self.safety_distance - self.min_obstacle_distance))
-                scale = (self.obstacle_distance - self.min_obstacle_distance) / denom
-                scale = max(0.0, min(1.0, scale))
-                v_scaled *= scale
+        if self.obstacle_distance is not None:
+            v_scaled = limit_for_stop(
+                v_scaled, v_current, previous_speed,
+                self.obstacle_distance - self.min_obstacle_distance,
+                self.max_decel_v, delay)
+            if v_scaled == 0.0 and abs(yaw_error) <= self.ang_tol:
+                w_desired = 0.0
 
         if self._within_goal_ang_tolerance:
             # 位置許容内で角度許容に入った後のみ角速度を停止する。

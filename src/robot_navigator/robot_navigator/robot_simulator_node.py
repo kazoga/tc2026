@@ -3,8 +3,8 @@
 """robot_simulator_node.py
 ROS 2 ノード: robot_simulator
 - /cmd_vel を購読し、差動二輪モデルで運動学を積分
-- 最初に受信した /active_target で初期姿勢と map→odom 原点を確定し、以降は /amcl_pose で原点更新に対応
-- /odom, /amcl_pose, /tf を配信
+- 最初に受信した /active_target で初期姿勢と map→odom 原点を確定し、以降は pose_topic で原点更新に対応
+- /odom, pose_topic, /tf を配信
 """
 
 from __future__ import annotations
@@ -22,7 +22,16 @@ from rclpy.qos import QoSProfile
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped, Quaternion, TransformStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool, Header
+from tc_route_msgs.msg import MotionLimits
 from tf2_ros import TransformBroadcaster
+
+
+# /motion_limits として申告する駆動系契約の既定値。実機の ypspur_node が
+# ypspur_ros2/config/default.yaml の acceleration_max / deceleration_max から
+# 配信する値と揃えてあり、シミュレーションでも実機と同一の契約を通す。
+DEFAULT_MAX_ACCEL_MPS2 = 0.7
+DEFAULT_MAX_DECEL_MPS2 = 1.5
+DEFAULT_MAX_ANGULAR_ACCEL_RPS2 = 1.5
 
 
 def clamp(value: float, lo: float, hi: float) -> float:
@@ -75,10 +84,17 @@ class RobotSimulatorNode(Node):
         self.declare_parameter('max_linear_mps', 2.0)
         self.declare_parameter('max_angular_rps', 3.0)
         self.declare_parameter('enable_cmd_limit', True)
+        # robot_navigator が要求する駆動系契約（/motion_limits）の申告値。
+        # 実機では ypspur_node が同じ意味の値を配信する。既定値は
+        # ypspur_ros2/config/default.yaml の acceleration_max / deceleration_max に
+        # 揃え、シミュレーションでも実機と同一の契約を通るようにする。
+        self.declare_parameter('max_accel_mps2', DEFAULT_MAX_ACCEL_MPS2)
+        self.declare_parameter('max_decel_mps2', DEFAULT_MAX_DECEL_MPS2)
+        self.declare_parameter('max_angular_accel_rps2', DEFAULT_MAX_ANGULAR_ACCEL_RPS2)
         self.declare_parameter('pose_noise_std_m', 0.0)
         self.declare_parameter('yaw_noise_std_deg', 0.0)
         self.declare_parameter('enable_glitch_trigger', True)
-        self.declare_parameter('glitch_trigger_topic', '/amcl_glitch_trigger')
+        self.declare_parameter('glitch_trigger_topic', '/localization/pose_enu_glitch_trigger')
         self.declare_parameter('glitch_cooldown_sec', 5.0)
         self.declare_parameter('glitch_wait_after_stop_sec', 5.0)
         self.declare_parameter('glitch_radius_min_m', 2.0)
@@ -98,12 +114,18 @@ class RobotSimulatorNode(Node):
         self.declare_parameter('yaw0_deg', 0.0)
         self.declare_parameter('timer_publish_odom_ms', 100)
         self.declare_parameter('cmd_timeout_sec', 2.0)
+        self.declare_parameter('pose_topic', '/localization/pose_enu')
 
         self._cycle_hz: float = float(self.get_parameter('cycle_hz').value)
         self._dt: float = 1.0 / self._cycle_hz if self._cycle_hz > 0.0 else 0.1
         self._max_v: float = float(self.get_parameter('max_linear_mps').value)
         self._max_w: float = float(self.get_parameter('max_angular_rps').value)
         self._enable_limit: bool = bool(self.get_parameter('enable_cmd_limit').value)
+        self._max_accel: float = float(self.get_parameter('max_accel_mps2').value)
+        self._max_decel: float = float(self.get_parameter('max_decel_mps2').value)
+        self._max_angular_accel: float = float(
+            self.get_parameter('max_angular_accel_rps2').value
+        )
         self._pose_noise_std_m: float = float(self.get_parameter('pose_noise_std_m').value)
         self._yaw_noise_std_deg: float = float(self.get_parameter('yaw_noise_std_deg').value)
         self._enable_glitch_trigger: bool = bool(self.get_parameter('enable_glitch_trigger').value)
@@ -137,6 +159,7 @@ class RobotSimulatorNode(Node):
         yaw0: float = math.radians(float(self.get_parameter('yaw0_deg').value))
         self._odom_period_ms: int = int(self.get_parameter('timer_publish_odom_ms').value)
         self._cmd_timeout_sec: float = float(self.get_parameter('cmd_timeout_sec').value)
+        self._pose_topic: str = str(self.get_parameter('pose_topic').value)
 
         # --- 状態 ---
         now = time.time()
@@ -170,22 +193,29 @@ class RobotSimulatorNode(Node):
                 self._glitch_yaw_min_deg,
             )
 
-        # --- 初期AMCL姿勢保持（map→odom変換） ---
-        self._amcl_origin_received = False
+        # --- 初期ENU自己位置保持（map→odom変換） ---
+        self._pose_origin_received = False
         self._initial_pose_set = False
         self._map_origin_x = 0.0
         self._map_origin_y = 0.0
         self._map_origin_yaw = 0.0
-        self._last_published_amcl_stamp: Optional[tuple[int, int]] = None
+        self._last_published_pose_stamp: Optional[tuple[int, int]] = None
 
         qos = QoSProfile(depth=10)
         self._pub_odom = self.create_publisher(Odometry, '/odom', qos)
-        self._pub_amcl = self.create_publisher(PoseWithCovarianceStamped, '/amcl_pose', qos)
+        self._pub_pose = self.create_publisher(PoseWithCovarianceStamped, self._pose_topic, qos)
+        # 実機の ypspur_node と同じ相対名で配信し、launch 側の remap を可能にする。
+        self._pub_limits = self.create_publisher(MotionLimits, 'motion_limits', 1)
         self._tf_broadcaster: Optional[TransformBroadcaster] = TransformBroadcaster(self) if self._enable_tf_pub else None
 
         # --- 購読 ---
         self._sub_cmd = self.create_subscription(Twist, '/cmd_vel', self._on_cmd_vel, qos)
-        self._sub_amcl = self.create_subscription(PoseWithCovarianceStamped, '/amcl_pose', self._on_amcl_origin, qos)
+        self._sub_pose_origin = self.create_subscription(
+            PoseWithCovarianceStamped,
+            self._pose_topic,
+            self._on_pose_origin,
+            qos,
+        )
         self._sub_active_target = self.create_subscription(PoseStamped, '/active_target', self._on_active_target, qos)
         if self._enable_glitch_trigger:
             self._sub_glitch = self.create_subscription(
@@ -200,7 +230,10 @@ class RobotSimulatorNode(Node):
         # --- タイマ ---
         self._timer_update = self.create_timer(self._dt, self._on_timer_update)
 
-        self.get_logger().info(f'robot_simulator_node started (cycle_hz={self._cycle_hz:.1f})')
+        self.get_logger().info(
+            f'robot_simulator_node started (cycle_hz={self._cycle_hz:.1f}, '
+            f'pose_topic={self._pose_topic})'
+        )
 
     # ------------------------------
     # コールバック
@@ -229,22 +262,22 @@ class RobotSimulatorNode(Node):
         self._state.w = w
         self._state.last_cmd_time = now
 
-    def _on_amcl_origin(self, msg: PoseWithCovarianceStamped) -> None:
-        """初期化完了後の /amcl_pose で map→odom 原点を更新。"""
+    def _on_pose_origin(self, msg: PoseWithCovarianceStamped) -> None:
+        """初期化完了後の pose_topic で map→odom 原点を更新する。"""
         if not self._initial_pose_set:
             return
 
         stamp_tuple = (msg.header.stamp.sec, msg.header.stamp.nanosec)
-        if self._last_published_amcl_stamp is not None and stamp_tuple == self._last_published_amcl_stamp:
+        if self._last_published_pose_stamp is not None and stamp_tuple == self._last_published_pose_stamp:
             return
 
         self._map_origin_x = msg.pose.pose.position.x
         self._map_origin_y = msg.pose.pose.position.y
         self._map_origin_yaw = quaternion_to_yaw(msg.pose.pose.orientation)
-        self._amcl_origin_received = True
+        self._pose_origin_received = True
 
         self.get_logger().info(
-            f"AMCL origin updated from /amcl_pose: "
+            f"Pose origin updated from {self._pose_topic}: "
             f"({self._map_origin_x:.2f}, {self._map_origin_y:.2f}, yaw={math.degrees(self._map_origin_yaw):.1f}°)"
         )
 
@@ -270,7 +303,7 @@ class RobotSimulatorNode(Node):
         self._map_origin_x = x - (c * odom_x - s * odom_y)
         self._map_origin_y = y - (s * odom_x + c * odom_y)
 
-        self._amcl_origin_received = True
+        self._pose_origin_received = True
         self._initial_pose_set = True
         self._state.last_cmd_time = time.time()
         self._last_wait_log = 0.0
@@ -329,7 +362,29 @@ class RobotSimulatorNode(Node):
                 f'and wait {self._glitch_wait_after_stop_sec:.1f}s before applying.'
             )
 
+    def _publish_motion_limits(self) -> None:
+        """駆動系契約を生存信号として配信する.
+
+        `robot_navigator` は `/motion_limits` を 0.5 秒の watchdog で監視し、途絶すると
+        停止指令を出し続ける。実機では ypspur_node が制御周期ごとに配信するのと同じ
+        役割を、シミュレーション時は本ノードが担う。積分ループと同じタイマーから出す
+        ことで、シミュレータが動いている間だけ契約が成立する。
+        """
+
+        limits = MotionLimits()
+        limits.header.stamp = self.get_clock().now().to_msg()
+        limits.max_linear_velocity = self._max_v
+        limits.max_angular_velocity = self._max_w
+        limits.linear_acceleration = self._max_accel
+        limits.linear_deceleration = self._max_decel
+        limits.angular_acceleration = self._max_angular_accel
+        self._pub_limits.publish(limits)
+
     def _on_timer_update(self) -> None:
+        # 初期姿勢待ちで早期returnする前に配信する。契約の成立条件は積分ループが
+        # 生きていることであり、/active_target の受信完了ではない。
+        self._publish_motion_limits()
+
         now = time.time()
         if not self._initial_pose_set:
             if now - self._last_wait_log > 1.0:
@@ -353,7 +408,7 @@ class RobotSimulatorNode(Node):
         if self._odom_accum_ms + 1e-9 >= self._odom_period_s:
             self._odom_accum_ms = 0.0
             self._publish_odom()
-            self._publish_amcl_pose()
+            self._publish_pose()
             if self._enable_tf_pub and self._tf_broadcaster is not None:
                 self._publish_tf()
 
@@ -382,14 +437,14 @@ class RobotSimulatorNode(Node):
         msg.twist.twist.angular.z = self._state.w
         self._pub_odom.publish(msg)
 
-    def _publish_amcl_pose(self) -> None:
+    def _publish_pose(self) -> None:
         msg = PoseWithCovarianceStamped()
         stamp = self.get_clock().now().to_msg()
         msg.header = Header(stamp=stamp, frame_id=self._frame_map)
 
         # odom->map 変換
         x_odom, y_odom, yaw_odom = self._state.x, self._state.y, self._state.yaw
-        if self._amcl_origin_received:
+        if self._pose_origin_received:
             c = math.cos(self._map_origin_yaw)
             s = math.sin(self._map_origin_yaw)
             x = self._map_origin_x + c * x_odom - s * y_odom
@@ -419,7 +474,7 @@ class RobotSimulatorNode(Node):
         cov[35] = cov_yaw
         msg.pose.covariance = cov
 
-        self._last_published_amcl_stamp = (stamp.sec, stamp.nanosec)
+        self._last_published_pose_stamp = (stamp.sec, stamp.nanosec)
 
         if self._pending_glitch is not None:
             ready = self._pending_glitch_ready_time is None or (
@@ -436,7 +491,7 @@ class RobotSimulatorNode(Node):
                 )
             else:
                 self.get_logger().debug('Glitch offset pending until stop/wait period is satisfied.')
-                self._pub_amcl.publish(msg)
+                self._pub_pose.publish(msg)
                 return
 
         if self._active_glitch is not None:
@@ -453,7 +508,7 @@ class RobotSimulatorNode(Node):
             cov[35] = cov_yaw
             msg.pose.covariance = cov
 
-        self._pub_amcl.publish(msg)
+        self._pub_pose.publish(msg)
 
     def _publish_tf(self) -> None:
         assert self._tf_broadcaster is not None
@@ -464,7 +519,7 @@ class RobotSimulatorNode(Node):
         t_map_odom.header.stamp = stamp
         t_map_odom.header.frame_id = self._frame_map
         t_map_odom.child_frame_id = self._frame_odom
-        if self._amcl_origin_received:
+        if self._pose_origin_received:
             t_map_odom.transform.translation.x = self._map_origin_x
             t_map_odom.transform.translation.y = self._map_origin_y
             t_map_odom.transform.rotation = yaw_to_quaternion(self._map_origin_yaw)

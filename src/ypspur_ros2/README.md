@@ -10,16 +10,21 @@
 | `cmd_vel` | `geometry_msgs/msg/Twist` | sub | `YPSpur_vel(linear.x, angular.z)` を呼ぶ。既定では `drive_mode_manager` が publish する `/cmd_vel` と接続する |
 | `odom` | `nav_msgs/msg/Odometry` | pub | `YPSpur_get_pos` / `YPSpur_get_vel` を 50Hz で配信 |
 
-`ypspur_node` は相対 topic `cmd_vel` を購読し、相対 topic `odom` を publish します。namespace なしで `drive_mode_manager.launch.py` と同時起動した場合、`drive_cmd_mux_node` の最終出力 `/cmd_vel` がそのまま `ypspur_node` に入ります。topic 名を変える場合は launch 引数 `cmd_vel_topic` と `odom_topic` を指定します。
+`ypspur_node` は相対 topic `cmd_vel` を購読し、相対 topic `odom` を publish します。launch の既定では `odom` を `/ypspur_ros/odom` へ remap します（`robot_navigator`、`obstacle_route_sim` の Gazebo bridge、`robot_simulator` がいずれもこの topic 名を前提とするため）。namespace なしで `drive_mode_manager.launch.py` と同時起動した場合、`drive_cmd_mux_node` の最終出力 `/cmd_vel` がそのまま `ypspur_node` に入ります。topic 名を変える場合は launch 引数 `cmd_vel_topic` と `odom_topic` を指定します。
 
 ## Issue #245 への対処
 
-`yp-spur` 本体は Linux kernel 6.x 環境で
-[issue #245](https://github.com/openspur/yp-spur/issues/245) (tcflush が入力バッファも flush する問題)
-の影響を受けます。**Ubuntu 22.04 / 24.04 では必ずパッチが必要** で、
-本パッケージはこれを CMake からビルド用コピーへ **自動適用** します
-([`third_party/patches/0001-fix-tcflush-kernel-6.x.patch`](third_party/patches/0001-fix-tcflush-kernel-6.x.patch))。
-`third_party/yp-spur` の submodule 本体は変更しません。
+[Issue #245](https://github.com/openspur/yp-spur/issues/245) の公式修正
+[PR #248](https://github.com/openspur/yp-spur/pull/248)（commit `d653dee`）を、
+CMakeからビルド用コピーへ **自動適用** します。
+[`third_party/patches/0001-fix-tcflush-kernel-6.x.patch`](third_party/patches/0001-fix-tcflush-kernel-6.x.patch)
+は公式コミットのパッチそのものです。
+
+送信直後の `tcflush(..., TCOFLUSH)` は未送信データを破棄してしまいます。
+Kernel 6.6以降のCDC-ACMドライバがこの処理に対応したことで問題が表面化しました。
+公式修正に合わせ、`encode_write()` と `encode_int_write()` の両方から呼び出しを削除し、
+不要になった `serial_flush_out()` の定義・宣言も削除します。
+`third_party/yp-spur` のsubmodule本体・固定リビジョンは変更しません。
 
 `colcon build` 時に
 ```
@@ -27,7 +32,7 @@
 ```
 もしくは
 ```
--- yp-spur patch already applied (or not needed)
+-- yp-spur patch already applied
 ```
 が表示されます。
 
@@ -80,7 +85,7 @@ ros2 launch ypspur_ros2 ypspur_ros2.launch.py \
 `drive_mode_manager` と組み合わせる場合、既定では `drive_mode_manager` の `/cmd_vel` と `ypspur_node` の `cmd_vel` が接続されます。明示する場合は以下のようにします。
 
 ```bash
-ros2 launch ypspur_ros2 ypspur_ros2.launch.py cmd_vel_topic:=/cmd_vel odom_topic:=/odom
+ros2 launch ypspur_ros2 ypspur_ros2.launch.py cmd_vel_topic:=/cmd_vel odom_topic:=/ypspur_ros/odom
 ```
 
 ### 3. 動作確認
@@ -90,7 +95,7 @@ ros2 launch ypspur_ros2 ypspur_ros2.launch.py cmd_vel_topic:=/cmd_vel odom_topic
 ros2 topic pub /cmd_vel geometry_msgs/Twist "{linear: {x: 0.1}, angular: {z: 0.0}}" -r 10
 
 # odometry を監視
-ros2 topic echo /odom
+ros2 topic echo /ypspur_ros/odom
 ```
 
 cmd_vel が `cmd_vel_timeout_s` (既定 0.5 秒) 入らないとロボットは自動停止します。
@@ -110,7 +115,7 @@ cmd_vel が `cmd_vel_timeout_s` (既定 0.5 秒) 入らないとロボットは�
 | `velocity_max.linear`   | double  | `1.0`       | 受信 linear.x のクリップ閾値 (m/s, ±対称)           |
 | `velocity_max.angular`  | double  | `1.5`       | 受信 angular.z のクリップ閾値 (rad/s, ±対称)        |
 | launch `cmd_vel_topic` | string | `cmd_vel` | `cmd_vel` の remap 先。`drive_mode_manager` と接続する場合は既定または `/cmd_vel` |
-| launch `odom_topic` | string | `odom` | `odom` の remap 先 |
+| launch `odom_topic` | string | `/ypspur_ros/odom` | `odom` の remap 先。robot_navigator 等が前提とする既定値 |
 | launch `start_coordinator` | bool | `false` | true の場合、launch から `ypspur-coordinator` を同時起動 |
 | launch `coordinator_device` | string | `/dev/ttyACM0` | `ypspur-coordinator -d` に渡す device path |
 | launch `coordinator_param` | string | `""` | `ypspur-coordinator -p` に渡す robot parameter file path |
@@ -129,7 +134,7 @@ ypspur-coordinator が起動していないか、別ユーザで起動してい�
 - パッチが適用されていない場合 (本パッケージ経由でビルドしていない場合) は Issue #245 の症状
   (接続拒否・異音・負荷で coordinator が落ちる) が出る
 
-### `/odom` が出ているのに位置が動かない
+### odom が出ているのに位置が動かない
 
 - coordinator のパラメータファイルでホイール直径やトレッド幅が合っていない
 - `coordinate_system` がロボットの初期化方法と合っていない
@@ -141,3 +146,31 @@ ypspur-coordinator が起動していないか、別ユーザで起動してい�
 ## ライセンス
 
 MIT (yp-spur 本体も MIT)
+
+## このPCのi-Cart middle（2026-09-22）
+
+提供された `ダウンロード/icart-middle.param` を内容変更せず
+`config/icart-middle.param` に格納。colcon buildでshare配下にも配置される。
+車輪単体の起動は次のコマンドで行う（車輪制御が有効になる）。
+
+```bash
+source ~/colcon_ws/install/setup.bash
+ros2 launch ypspur_ros2 ypspur_ros2.launch.py start_coordinator:=true
+```
+
+既定のデバイスはT-frogのUSB固定名、パラメータは同梱ファイル。
+`icart_bringup/params/hardware.yaml` も同じファイルをpackage URIで参照する。
+以前に生成済みのsessionは `wheel.coordinator_param` を
+`package://ypspur_ros2/config/icart-middle.param` に更新するか再生成する。
+走行時は既存のdrive_mode_managerを通し、停止監視を有効にする。
+
+### 速度・加速度の初期化
+
+車輪ノードは接続後にゼロ速度を送り、`velocity_max` と `acceleration_max` を
+YP-Spurへ設定する。coordinatorのユーザー上限は初期値ゼロのため、この設定なしでは
+`cmd_vel` を受信しても走行しない。加速度の既定値は直進0.3 m/s²、旋回0.6 rad/s²。
+これらの上限は正の有限値が必要。
+
+2026-09-22: 旋回の角加速度を0.6から1.5 rad/s²へ調整。
+角速度上限1.0 rad/sは維持し、静止から上限に達する指令上の時間は約1.67秒から0.67秒へ短縮する。
+実車パラメータのMAX_ACC_W=3.28 rad/s²以下。角加速度は起動時設定のため反映には再起動が必要。

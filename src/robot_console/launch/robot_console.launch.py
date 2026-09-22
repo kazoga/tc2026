@@ -46,20 +46,57 @@ _TOPIC_CONFIGS = [
     ('follower_state_topic', 'follower_state', '/follower_state', '追従状態トピック'),
     ('sensor_viewer_topic', 'sensor_viewer', '/sensor_viewer', 'センサビューアトピック'),
     (
-        'drive_camera_topic',
-        'perception/road_blockage/decision_image',
-        '/perception/road_blockage/decision_image',
-        '道路封鎖判定画像トピック',
+        'camera_image_topic',
+        'usb_cam/image_raw',
+        '/usb_cam/image_raw',
+        'フロントカメラ生画像トピック',
     ),
     (
-        'signal_camera_topic',
-        'perception/traffic_signal/decision_image',
-        '/perception/traffic_signal/decision_image',
-        '信号判定画像トピック',
+        'road_blockage_overlay_topic',
+        'perception/road_blockage/overlay',
+        '/perception/road_blockage/overlay',
+        '経路封鎖の認識結果トピック',
+    ),
+    (
+        'traffic_signal_overlay_topic',
+        'perception/traffic_signal/overlay',
+        '/perception/traffic_signal/overlay',
+        '信号認識の結果トピック',
+    ),
+    (
+        'rtk_status_topic',
+        'rtk_gps/rtk_status',
+        '/rtk_gps/rtk_status',
+        'RTK測位品質トピック（実機はUM982ドライバのprivate名を指定する）',
+    ),
+    (
+        'ntrip_status_topic',
+        'rtk_gps/ntrip_status',
+        '/rtk_gps/ntrip_status',
+        'NTRIP基地局診断トピック（実機はUM982ドライバのprivate名を指定する）',
     ),
     ('active_target_topic', 'active_target', '/active_target', 'ターゲット姿勢トピック'),
-    ('amcl_pose_topic', 'amcl_pose', '/amcl_pose', 'AMCL 推定姿勢トピック'),
+    ('pose_enu_topic', 'localization/pose_enu', '/localization/pose_enu', 'ENU自己位置トピック'),
     ('cmd_vel_topic', 'cmd_vel', '/cmd_vel', '速度指令トピック'),
+    (
+        'cmd_vel_autonomous_topic',
+        'cmd_vel/autonomous',
+        '/cmd_vel/autonomous',
+        '自律速度指令トピック',
+    ),
+    (
+        'drive_mode_status_topic',
+        'drive_mode_status',
+        '/drive_mode_status',
+        '走行モード状態トピック',
+    ),
+    (
+        'odom_topic',
+        'odom',
+        '/ypspur_ros/odom',
+        'オドメトリトピック（実機のypspur_ros2、Gazebo bridge、robot_simulatorの'
+        'いずれも既定で/ypspur_ros/odomへ publish する）',
+    ),
 ]
 
 
@@ -70,12 +107,14 @@ def _launch_setup(context: LaunchContext, *args, **kwargs) -> List[Node]:
     remappings = [
         (from_name, LaunchConfiguration(arg_name)) for arg_name, from_name, *_ in _TOPIC_CONFIGS
     ]
+    # 正式UIはPyQt5版（robot_console_qt）である。ログ保存先はROSパラメータではなく
+    # CLI引数で受け取る（ConsoleCoreをNode生成前に構築するため）。
     node = Node(
         package='robot_console',
-        executable='robot_console',
-        name='robot_console',
+        executable='robot_console_qt',
+        name='robot_console_qt',
         output='screen',
-        parameters=[{'console_log_directory': log_dir}],
+        arguments=['--console-log-directory', log_dir],
         remappings=remappings,
     )
     return [node]

@@ -1,13 +1,21 @@
 """UM982 RTK GNSS ドライバノード (rclpy)。"""
 
+from dataclasses import replace
+import json
+import time
+
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Imu, NavSatFix
+from std_msgs.msg import String
 
 from rtk_gps_um982_msgs.msg import RtkStatus
-from um982 import UM982Client
+from rtk_gps_um982.ntrip_client import CorrectedUM982Client as UM982Client
 
 from rtk_gps_um982 import converters
+from rtk_gps_um982.ntrip_status import NtripStatus
+from rtk_gps_um982.time_sync_core import RmcClockRelay
+from rtk_gps_um982.time_sync_client import ClockRelayClient
 
 
 class Um982DriverNode(Node):
@@ -24,7 +32,12 @@ class Um982DriverNode(Node):
                 ('frame_id', 'gps_link'),
                 ('stamp_source', 'gnss_utc'),
                 ('transport_delay_ms', 0),
+                ('time_sync.enabled', False),
+                ('time_sync.chrony_socket', '/run/chrony/um982.sock'),
                 ('ntrip.enabled', False),
+                ('ntrip.station_id', ''),
+                ('ntrip.station_label', ''),
+                ('ntrip.site', ''),
                 ('ntrip.host', ''),
                 ('ntrip.port', 2101),
                 ('ntrip.mountpoint', ''),
@@ -61,13 +74,27 @@ class Um982DriverNode(Node):
             if p('publish.rtk_status').value else None
         )
 
-        self._client = UM982Client(
+        self._relay = None
+        client_type = UM982Client
+        client_options = {}
+        if p('time_sync.enabled').value:
+            if (p('use_sim_time').value or self._stamp_source != 'gnss_utc'
+                    or self._transport_delay_ms != 0):
+                raise ValueError('時刻配信は実時刻・gnss_utc・transport_delay_ms=0が必要')
+            self._relay = RmcClockRelay(p('time_sync.chrony_socket').value)
+            client_type = ClockRelayClient
+            client_options['clock_relay'] = self._relay
+            self._pub_time = self.create_publisher(String, '~/time_sync', 10)
+            self._time_timer = self.create_timer(1., self._publish_time_sync)
+
+        self._client = client_type(
             port=self._port,
             baud=self._baud,
             output_rate=self._output_rate,
+            **client_options,
         )
-        self._client.start()
         self._client.set_position_callback(self._on_position)
+        self._client.start()
 
         if p('ntrip.enabled').value:
             host = p('ntrip.host').value
@@ -88,12 +115,29 @@ class Um982DriverNode(Node):
                     user=user, password=password,
                 )
 
+        # 実際に起動した接続設定を保持。パラメータ変更だけで接続先表示を変えない。
+        self._ntrip_fields = {key: p('ntrip.'+key).value for key in (
+            'enabled', 'host', 'port', 'mountpoint', 'station_id', 'station_label', 'site')}
+        self._ntrip_status = NtripStatus()
+        self._pub_ntrip = self.create_publisher(String, '~/ntrip_status', 10)
+        self._ntrip_timer = self.create_timer(1., self._publish_ntrip_status)
+
         self.get_logger().info(
             f'rtk_gps_um982_node up (port={self._port} baud={self._baud} '
             f'rate={self._output_rate}Hz stamp={self._stamp_source})'
         )
 
+    def _publish_ntrip_status(self) -> None:
+        data = self._ntrip_status.sample(
+            self._client._ntrip_client, now=time.monotonic(), **self._ntrip_fields)
+        self._pub_ntrip.publish(String(data=json.dumps(data, ensure_ascii=False, allow_nan=False)))
+
     def _on_position(self, pos) -> None:
+        if self._relay is not None:
+            stamp = self._relay.date_gga(pos.timestamp, time.monotonic())
+            if stamp is None:
+                return
+            pos = replace(pos, timestamp=stamp)
         if not pos.is_valid:
             return
         if not converters.passes_fix_filter(pos.rtk_state, self._min_fix):
@@ -121,11 +165,23 @@ class Um982DriverNode(Node):
                 )
             )
 
+    def _publish_time_sync(self) -> None:
+        anchor = self._relay.anchor
+        age = time.monotonic()-anchor[1] if anchor else None
+        msg = String()
+        msg.data = json.dumps(dict(
+            rmc_fresh=age is not None and age <= 2., rmc_age_s=age,
+            samples_sent=self._relay.sent, rejected=self._relay.rejected,
+            socket_error=self._relay.error, precision_verified=False))
+        self._pub_time.publish(msg)
+
     def destroy_node(self) -> bool:
         try:
             self._client.stop()
         except Exception as exc:  # noqa: BLE001
             self.get_logger().warn(f'UM982Client.stop() raised: {exc}')
+        if self._relay is not None:
+            self._relay.close()
         return super().destroy_node()
 
 

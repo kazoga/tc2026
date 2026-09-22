@@ -1,6 +1,7 @@
 route_planner:
   ros__parameters:
-    config_yaml_path: "routes/obstacle_route_sim/straight_w5/route_config.yaml"
-    csv_base_dir: "routes/obstacle_route_sim/straight_w5"
-    map_image_path: ""
-    map_worldfile_path: ""
+    projection_config_path: params/default.yaml
+    config_yaml_path: routes/obstacle_route_sim/straight_w5/route_config.yaml
+    csv_base_dir: routes/obstacle_route_sim/straight_w5
+    map_image_path: ''
+    map_worldfile_path: ''

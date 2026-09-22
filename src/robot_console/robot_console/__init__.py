@@ -1,20 +1,10 @@
-"""robot_console パッケージの公開インタフェース。"""
+"""robot_console パッケージの公開インタフェース。
+
+正式UIはPyQt5版（`ui_qt_main`）であり、遠隔観測はHTML版（`web_main`）が担当する。
+ROS通信は `ros/console_node.py`、状態集約は `core/console_core.py` が持つ。
+利用側はこれらのモジュールを直接importする。
+"""
 
 from __future__ import annotations
 
-from importlib import import_module
-from typing import Any
-
-__all__ = ['GuiCore', 'RobotConsoleNode', 'UiMain']
-
-
-def __getattr__(name: str) -> Any:
-    """遅延インポートで主要コンポーネントを公開する。"""
-
-    if name == 'GuiCore':
-        return import_module('robot_console.gui_core').GuiCore
-    if name == 'RobotConsoleNode':
-        return import_module('robot_console.robot_console_node').RobotConsoleNode
-    if name == 'UiMain':
-        return import_module('robot_console.ui_main').UiMain
-    raise AttributeError(name)
+__all__: list = []

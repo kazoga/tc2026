@@ -37,8 +37,8 @@ def generate_launch_description() -> LaunchDescription:
     active_route_topic_arg = DeclareLaunchArgument(
         'active_route_topic', default_value='/active_route', description='経路入力トピック名'
     )
-    amcl_pose_topic_arg = DeclareLaunchArgument(
-        'amcl_pose_topic', default_value='/amcl_pose', description='現在位置Poseトピック名'
+    pose_enu_topic_arg = DeclareLaunchArgument(
+        'pose_enu_topic', default_value='/localization/pose_enu', description='ENU自己位置Poseトピック名'
     )
     obstacle_hint_topic_arg = DeclareLaunchArgument(
         'obstacle_hint_topic',
@@ -73,7 +73,7 @@ def generate_launch_description() -> LaunchDescription:
     param_file = LaunchConfiguration('param_file')
 
     active_route_topic = LaunchConfiguration('active_route_topic')
-    amcl_pose_topic = LaunchConfiguration('amcl_pose_topic')
+    pose_enu_topic = LaunchConfiguration('pose_enu_topic')
     obstacle_hint_topic = LaunchConfiguration('obstacle_hint_topic')
     manual_start_topic = LaunchConfiguration('manual_start_topic')
     signal_recognition_topic = LaunchConfiguration('signal_recognition_topic')
@@ -100,7 +100,7 @@ def generate_launch_description() -> LaunchDescription:
         ],
         remappings=[
             ('active_route', active_route_topic),
-            ('amcl_pose', amcl_pose_topic),
+            ('localization/pose_enu', pose_enu_topic),
             ('obstacle_avoidance_hint', obstacle_hint_topic),
             ('manual_start', manual_start_topic),
             ('sig_recog', signal_recognition_topic),
@@ -120,7 +120,7 @@ def generate_launch_description() -> LaunchDescription:
         target_frame_arg,
         node_name_arg,
         active_route_topic_arg,
-        amcl_pose_topic_arg,
+        pose_enu_topic_arg,
         obstacle_hint_topic_arg,
         manual_start_topic_arg,
         signal_recognition_topic_arg,

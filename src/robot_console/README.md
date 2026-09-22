@@ -1,22 +1,42 @@
 # robot_console パッケージ README (phase3 実装版)
 
 ## 概要
-`robot_console` は ROS2 ベースの自律走行システムを遠隔監視・操作するための統合ダッシュボードです。`rclpy` ノード (`RobotConsoleNode`) と tkinter GUI (`UiMain`) を同一プロセスで動作させ、走行状態・障害物回避・経路進捗・ノード起動状態を一画面で俯瞰できます。GUI と ROS 通信は `GuiCore` が橋渡しし、GUI 操作からのコマンドと ROS トピックからの最新情報を双方向に同期します。
+現行の正式UIは **PyQt5版 `robot_console_qt`** です。ROS通信・状態集約は
+`RobotConsoleNode` / `ConsoleCore`、遠隔閲覧は同じSnapshotを読むHTML版が担当します。
+旧tkinter版（`robot_console`）は削除済みで、entry point は `robot_console_qt` と
+`robot_console_web` の 2 つである。下記の「画面構成」節は旧tkinter版の画面説明を
+残しており、現行画面の正は
+[画面・機能詳細設計書](docs/robot_console_gui_screen_function_design.md) とする。
+
+### 現行の5タブ（2026-09-20）
+
+| タブ | 内容 |
+|---|---|
+| ダッシュボード | 運行フェーズ、経路進捗、速度、手動操作、起動操作、ノード稼働、RTK・基地局要約 |
+| 自己位置・センサ情報 | 地図、現在位置・経路、配信されているセンサ／認識画像 |
+| 起動・設定 | 実機／模擬・手動／自律の選択、起動予定、各ノードの設定 |
+| コンソールログ | ノードごとのログ確認 |
+| GNSS・基地局 | 接続先・マウントポイント・RTCM受信状態、GNSS品質・アンテナ情報 |
+
+追加画面の仕様・検証・起動環境は [GNSS・基地局表示](docs/gnss_station_ui.md) を参照。
+HTML版をどこから閲覧可能にするかは [HTML遠隔観測UIの公開範囲](docs/html_ui_access.md) を参照。
+
 
 ## 主な機能
 - `/route_state`・`/manager_status`・`/follower_state` などのトピックを購読し、走行状況や再計画履歴をカード形式で可視化。
-- `/sensor_viewer` および外部カメラ映像（走行・信号監視）を 3 つの画像パネルに表示し、障害物ヒントをオーバレイ。
+- `/sensor_viewer` とフロントカメラ映像を画像パネルに表示。カメラ映像には認識ノードから受け取った
+  検出矩形を `ConsoleCore` が重畳する（PyQt5版・HTML版）。
 - `manual_start`・`sig_recog`・`road_blocked`・`obstacle_avoidance_hint` の送信 UI を備え、運用者がラッチ値や回避指示を即時に発行可能。
 - `NodeLaunchManager` により `ros2 launch` コマンドを GUI から起動／停止し、主要ノードの稼働状況とログをサイドバーとタブで確認。
 - 走行距離・速度・目標到達率を自動算出し、閾値を超えた場合に色分けで警告。
-- `tools/mock_ui.py` を用いたダミーデータ表示と `tools/tests/` によるロジック単体テストで回帰検出に対応。
+- `tools/tests/` によるロジック単体テストで回帰検出に対応。
 
 ## 画面構成
 ### Dashboard タブ
 - **ステータスカード列**：ルート進捗、フォロワ状態、速度・目標距離カードを 5Hz 以内で更新。
 - **イベントバナー**：`road_blocked` → `manual_start` → `sig_recog` の優先順位で最新イベントを表示。60 秒経過で自動クリア。
 - **制御コマンドタブ**：各トピックの送信 UI を Notebook 形式でまとめ、Spinbox やラジオボタンで値を入力。`frame_image_path` タグでは静止画パスを入力して `/frame_image_path` トピックへ単発 publish できます。送信結果は最終送信値と時刻として即座に反映されます。
-- **画像パネル**：ルート地図（`/active_route` の付帯画像）、障害物ビュー（`/sensor_viewer`）、カメラ映像（`/perception/road_blockage/decision_image`・`/perception/traffic_signal/decision_image`）。レターボックス処理でアスペクト比を保持し、障害物ヒント値を左上にオーバレイ表示。
+- **画像パネル**：障害物ビュー（`/sensor_viewer`）とフロントカメラ（`/usb_cam/image_raw`）。カメラ画像には `ConsoleCore` が認識結果の検出矩形を重畳する。
 - **ノード起動サイドバー**：主要ノードカードに加え `Drive Mode Manager`、
   `Road Blockage Detector`、`Traffic Signal Recognizer` カードを配置。各カードは対応パッケージの統合 launch を起動し、
   下流判定ノードと用途別 `yolo_detector` インスタンスを同時に立ち上げます。
@@ -39,11 +59,10 @@ ros2 launch robot_console robot_console.launch.py \
 ### 主要パラメータ
 | パラメータ | 型 | 既定値 | 説明 |
 |------------|----|--------|------|
-| `ui.refresh_period_ms` | int | 200 | GUI が `GuiCore.snapshot()` を呼ぶ周期。|
-| `ui.image_rate_limit_hz.*` | double | route:2 / sensor:5 / camera_drive:5 / camera_signal:5 | 画像パネルごとの最大更新頻度。|
+| `ui.refresh_period_ms` | int | 200 | GUI が `ConsoleCore.build_snapshot()` を呼ぶ周期。|
+| `ui.image_rate_limit_hz.*` | double | route:2 / sensor:5 / camera:5 | 画像パネルごとの最大更新頻度。|
 | `commands.cooldown_ms.*` | int | 500 | manual_start / sig_recog / road_blocked の連打抑止時間。|
 | `commands.override_timer_hz.obstacle_hint` | double | 0.5 | 障害物ヒント固定送出の周期。|
-| `topics.camera.drive` / `topics.camera.signal` | string | `/perception/road_blockage/decision_image` / `/perception/traffic_signal/decision_image` | 外部カメラの購読トピック名。|
 | `topics.road_blocked.external_priority` | bool | true | 外部 `/road_blocked` を GUI 送信より優先するか。|
 
 ## ROS インタフェース
@@ -52,18 +71,19 @@ ros2 launch robot_console robot_console.launch.py \
 |----------|----|------|
 | `/manual_start` | `std_msgs/msg/Bool` | 手動開始フラグ（Transient Local）。|
 | `/sig_recog` | `std_msgs/msg/Int32` | 信号認識結果 1=GO / 2=STOP。|
-| `/obstacle_avoidance_hint` | `route_msgs/msg/ObstacleAvoidanceHint` | GUI 指定の固定回避指示。停止時はゼロ値を送信。|
+| `/obstacle_avoidance_hint` | `tc_route_msgs/msg/ObstacleAvoidanceHint` | GUI 指定の固定回避指示。停止時はゼロ値を送信。|
 | `/road_blocked` | `std_msgs/msg/Bool` | 道路封鎖通知（外部入力と競合した場合は外部を優先）。|
 
 ### Subscription（抜粋）
 | トピック | 型 | 表示場所 |
 |----------|----|----------|
-| `/route_state` / `/manager_status` | `route_msgs/msg/RouteState` / `route_msgs/msg/ManagerStatus` | ルート進捗カード、再計画履歴。|
-| `/follower_state` | `route_msgs/msg/FollowerState` | フォロワ状態カード、イベントログ。|
-| `/active_route` | `route_msgs/msg/Route` | ルート地図画像とウェイポイント一覧。|
+| `/route_state` / `/manager_status` | `tc_route_msgs/msg/RouteState` / `tc_route_msgs/msg/ManagerStatus` | ルート進捗カード、再計画履歴。|
+| `/follower_state` | `tc_route_msgs/msg/FollowerState` | フォロワ状態カード、イベントログ。|
+| `/active_route` | `tc_route_msgs/msg/Route` | ルート地図画像とウェイポイント一覧。|
 | `/sensor_viewer` | `sensor_msgs/msg/Image` | 障害物ビュー画像パネル。|
-| `/perception/road_blockage/decision_image` / `/perception/traffic_signal/decision_image` | `sensor_msgs/msg/Image` | 走行カメラ・信号監視パネル。|
-| `/active_target` / `/amcl_pose` | `geometry_msgs/msg/PoseStamped` / `PoseWithCovarianceStamped` | 目標距離計算。|
+| `/usb_cam/image_raw` | `sensor_msgs/msg/Image` | フロントカメラ生画像。`ConsoleCore` が認識結果を重畳して 1 枚のカメラパネルに表示する。|
+| `/perception/traffic_signal/overlay` / `/perception/road_blockage/overlay` | `tc_perception_msgs/msg/PerceptionOverlay` | 認識結果。検出矩形は画像へ重畳し、判定結果は判定チップとして表示する。|
+| `/active_target` / `/localization/pose_enu` | `geometry_msgs/msg/PoseStamped` / `PoseWithCovarianceStamped` | 目標距離計算。|
 | `/cmd_vel` | `geometry_msgs/msg/Twist` | 速度カード。|
 | `/manual_start` / `/sig_recog` / `/road_blocked` | `std_msgs/msg/Bool` / `Int32` / `Bool` | イベントバナー、タブ表示の現在値。|
 
@@ -83,10 +103,14 @@ ros2 launch robot_console robot_console.launch.py \
 - 「全起動」は `launch_priority` の昇順で処理し、途中で失敗した場合は残りのノードを停止状態で維持します。ログタブでエラーメッセージを確認のうえ再試行してください。
 
 ## 開発・テスト
-- GUI なしでロジックを確認したい場合は `python3 -m robot_console.gui_core` でユニットテスト用メインを実行できます（PyYAML / Pillow / OpenCV が未導入でもフォールバック動作）。
-- モック画面は `python3 tools/mock_ui.py` で起動し、ROS 環境なしに画面レイアウトと操作フローを確認できます。
 - `tools/tests/` 配下に pytest ベースのテストを収録しています。`pytest tools/tests` を実行してロジックの回帰を検出してください。
-- `tools/headless_route_stack_eval.py` は tkinter 画面を生成せず、`GuiCore` に
+- ワークスペースの `requirements.txt` で `pytest-forked` も導入してください。
+  QtWebEngine の状態をテスト間で共有しないよう各テストを別プロセスで実行します。
+  未導入の場合は `pytest.ini` の必須プラグイン検査で実行前にエラーになります。
+- テストは既定で `QT_QPA_PLATFORM=offscreen` と
+  `QT_QUICK_BACKEND=software` を設定するため、ディスプレイのないCIでも地図タブの
+  切り替えを検証できます。これらの設定はテストにのみ適用します。
+- `tools/headless_route_stack_eval.py` は GUI を生成せず、`ConsoleCore` に
   GUI 操作相当の入力を与えて route stack の簡易回帰評価を行う補助ツールです。
   `route_planner`、`route_manager`、`route_follower`、`drive_mode_manager`、
   `robot_navigator`、`robot_simulator` を起動し、`/route_state`、`/active_route`、
@@ -107,12 +131,13 @@ ros2 launch robot_console robot_console.launch.py \
   既定では `route_planner` / `route_manager` に `tsukuba.yaml`、`route_follower` /
   `drive_mode_manager` は `start_gui=false` で `joy_node`、manual teleop、mux を同時起動し、`robot_navigator` は
   `cmd_vel_topic=/cmd_vel/autonomous` で起動し、`robot_navigator` の simulator を有効にします。
-  評価終了時は `GuiCore.request_stop_all()` 相当の停止処理を行い、各 profile の
-  停止状態を出力します。GUI あり評価で専用状態 GUI も起動する場合は
-  `tools/gui_route_stack_eval.py --show-drive-status-gui` を指定します。異なる範囲を評価する場合は `--start-label`、`--goal-label`、
-  `--timeout-sec`、`--post-goal-wait-sec`、`--no-simulator` などを指定してください。
-- `tools/gui_route_stack_eval.py` は `UiMain` を実際に生成し、座標クリックではなく
-  automation hook 経由で Combobox、Entry、Checkbutton、Button 相当の操作を行います。
+  評価終了時は起動順の逆順で各 profile を停止し、停止状態を出力します。
+  異なる範囲を評価する場合は `--start-label`、`--goal-label`、`--timeout-sec`、
+  `--post-goal-wait-sec`、`--no-simulator` などを指定してください。
+  `drive_mode_manager` の走行状態 GUI も起動する場合は `--show-drive-status-gui`
+  を指定します。
+- `tools/qt_route_stack_eval.py` は `MainWindow` を実際に表示し、起動操作カード・
+  起動設定タブが呼ぶのと同じ `ConsoleCore` の公開メソッドで操作します。
   ローカルデスクトップまたは X11 転送ありの環境で実行してください。
 
   ```bash
@@ -120,11 +145,10 @@ ros2 launch robot_console robot_console.launch.py \
   run_id=$(date +%Y%m%d_%H%M%S)
   mkdir -p "log/codex/${run_id}/ros" "log/codex/${run_id}/robot_console"
   export ROS_LOG_DIR="$PWD/log/codex/${run_id}/ros"
-  python3 src/robot_console/tools/gui_route_stack_eval.py \
+  python3 src/robot_console/tools/qt_route_stack_eval.py \
     --start-label 10 \
     --goal-label 30 \
-    --console-log-directory "log/codex/${run_id}/robot_console" \
-    --verify-log-open-buttons
+    --console-log-directory "log/codex/${run_id}/robot_console"
   ```
 
 ### 評価ツール実行時のログ
@@ -148,7 +172,113 @@ export ROS_LOG_DIR="$PWD/log/codex/${run_id}/ros"
 保存済み ROS ログは `ROS_LOG_DIR` 配下を参照してください。
 
 ## 依存パッケージ
-- GUI 機能：`tkinter`（標準ライブラリ）、`Pillow`（画像描画）、`opencv-python`（画像デコード）。Pillow / OpenCV は未導入でも縮退動作します。
-- ROS2 メッセージ：`route_msgs`、`geometry_msgs`、`sensor_msgs`、`std_msgs`。
+- GUI 機能：`PyQt5`・`PyQt5.QtWebEngine`（画面描画・地図表示）、`Pillow`（画像描画）、`opencv-python`（画像デコード）。
+- ROS2 メッセージ：`tc_route_msgs`、`tc_geo_msgs`、`tc_perception_msgs`、`rtk_gps_um982_msgs`、`geometry_msgs`、`sensor_msgs`、`nav_msgs`、`std_msgs`。
 
 以上の内容を参考に、運用開始前に `config/node_launch_profiles.yaml` や `config/robot_console.yaml`（必要に応じて作成）を実際の環境に合わせて整備してください。
+
+
+## GNSS/LIO融合とデジタルツイン
+
+正式launchはPyQt5 UIを起動する。起動設定の「デジタルツイン／自律走行」と
+「実機（融合）／自律走行」はicart_bringupの共通構成を使う。
+生成したsession.yamlをi-Cart融合profileで選択する。旧の個別profileと同時起動しない。
+GPS/PoseカードはGNSS北CW方位、融合map CCW yaw、推定方位σ、適応baselineを区別して表示する。
+実機private RTK topicと模擬公開topicの両方に対応するが、両環境は別DDS domainで実行する。
+
+[共通起動・環境切替](../icart_bringup/docs/共通起動設計.md)と
+[方位の実装評価](../gnss_lio_fusion/docs/方位実装評価.md)を参照する。
+
+## 正式UIの不足依存とローカル展開
+
+PyQt5正式入口はQt WebEngineを必要とする。通常は既存package.xmlに従い、
+`python3-pyqt5.qtwebengine`をaptで導入する。sudo認証が使えず、Ubuntu 24.04の
+基本PyQt5は導入済みの場合、次の補助手順で不足依存をローカル展開できる。
+
+```bash
+python3 src/robot_console/tools/prepare_ui_runtime.py --output log/codex/ui_local
+source src/robot_console/tools/activate_ui_runtime.bash log/codex/ui_local/runtime
+```
+
+補助ツールはaptの不足依存をサイズ・checksum照合して展開し、aptデータベースを変更しない。
+Qt 5はWebEngineの資源パスを環境変数だけで移設できないため、qt.confとQt resourceを生成する。
+`ROBOT_CONSOLE_QT_RESOURCE`は本UIだけで読み込み、通常のシステム導入時には不要である。
+[Qtのqt.conf探索仕様](https://doc.qt.io/qt-6.10/qt-conf.html)に沿い、この環境のQt 5で動作確認した。
+生成物はGitに追加しない。異なる場所へ移動した場合は補助ツールを再実行する。
+
+ヘッドレス検証には`--headless-tests`を付けて、Xvfbとpytest-forkedも展開できる。
+既存conftestのfork隔離を有効にして実行する。正式入口を模擬ROS graph（domain=86）へ
+接続し、4タブと実受信の地図・方位を保存する試験はtools/check_qt_entry.pyである。
+Xvfbの非公開仮想画面を使用し、実機への操作指令は送らない。
+
+CLI同時起動時は`--business-environment`で初期環境を指定できる。
+後からUIを起動してmanual_start履歴を取り逃した場合でも、鮮度OKのfollower RUNNING/AVOIDINGを
+運行フェーズ表示に反映する。コマンド値を推測して再配信することはしない。
+
+### PC側UIからROSBAG保存
+
+ダッシュボードの「ROSBAG保存」で保存先を選び、記録開始 → 停止・保存を操作する。
+既定はPC内 `~/rosbags` に日時別保存。累積地図は10秒ごとに`/Laser_map_record`へ記録し、ほかの通常トピックは全件記録する。
+元の`/Laser_map`は記録対象から除外し、経過時間・容量・保存先を表示する。
+Web UIには追加していない。詳細は [ROSBAG保存](docs/rosbag_ui.md) を参照。
+
+### R1によるGNSS途絶模擬
+
+R1（SDLボタン5）を押している間だけ、融合ノードへのGNSS位置・品質内の方位入力を破棄する。
+離すと即座に解除し、Joy受信が0.5秒途絶えた場合も解除する（判定は単調時計）。
+受信機/NTRIP通信・生GNSSトピック・その記録は維持する。LIO/車輪入力も継続し、
+融合は通常のGNSS期限切れ・復帰判定を使う。解除はRTK FIXや融合採用の即時回復を保証しない。
+切替時は未処理GNSSと品質キャッシュを捨て、解除後の新規観測から再開する。
+R1の既定ターボ機能は解除済み。カスタム設定でturbo_button=5を指定しないこと。
+`/fusion/gnss_dropout_active`を10Hzおよびボタン更新時に配信し、ROSBAGにも記録する。
+PCダッシュボード最上部・Webメイン画面に模擬中は赤、通知期限切れは黄の警告を表示する。
+正常解除後は警告を隠す。通常のGNSS受信表示とは別に模擬中であることを示す。
+
+### GUIから実機の手動走行・軌跡取得（2026-09-22）
+
+「起動・設定」で「実機／手動走行」→「プリセット適用」。起動予定の
+「実機・手動走行／軌跡取得（センサ一式）」を選び、場所（稲城／つくば）、
+RTK補正局（地域の既定局／NTRIPなし）、軌跡の保存先を設定する。
+場所は未選択のまま起動できない。「実機（融合）／手動走行」も同じ構成を使う。
+
+既存の走行構成を停止してから、ダッシュボードの「起動予定ノードを一斉起動」を押す。
+車輪・Joy・GNSS・URG・MID-360・カメラ・FAST-LIO・融合・経路採取を共通起動する。
+RUN/STOPの数は起動グループ単位であり、この構成は1グループとして表示される。
+既存ドライバとの重複はエラーとして起動を拒否する。
+
+「ルート記録」タブで融合位置の受信を待ち、「ルート記録開始」を押す。
+L1を押しながら手動操縦し、車体停止後「終了・保存」を押して「保存完了」を確認する。
+記録操作は車体の走行開始・停止指令を出さない。コントローラーの×／□も併用可能。
+開始は位置受信中のみ有効、終了・保存は位置が途絶えても可能。
+状態が3秒届かなければ未接続表示に戻り、ボタンを無効にする。
+保存失敗は画面に表示し、保存完了とは表示しない。
+
+保存先はPC上の指定親ディレクトリ（既定 `~/route_surveys`）の日時別フォルダ。
+`session/` に場所と実機設定、`survey/` にCSVと `survey.json` を保存する。
+iPhoneへの自動配信は行わない。センサログも必要ならダッシュボードのROSBAG保存を使用する。
+
+### 記録したルートで自律走行する
+
+1. 「ルート記録」で「終了・保存」し、保存完了を確認する。
+2. 車体停止後、ダッシュボードで採取構成の「起動予定ノードを一斉停止」。
+3. 「起動・設定」で「実機／自律走行」→「プリセット適用」。
+4. 起動予定の「実機・記録ルート自律走行」を選択する。右側の「記録ルート」で
+   日時を選ぶ（別の保存先は「フォルダを選ぶ…」）。形状・始点・終点・点数を確認する。
+   採取時の場所、RTK局、実機設定、座標原点を引き継ぐ。元の記録は変更しない。
+   幅未確認の点数も表示する。左右幅0は通行可能幅の確定値ではない。
+5. ダッシュボードで「起動予定ノードを一斉起動」。この段階は走行開始待ち。
+6. 自己位置・センサ情報で始点と車体位置を確認し、車体を始点付近へ準備する。
+7. ダッシュボードのManual Ops「自律走行」タブで「自律走行開始／停止点から再開」。
+   経路の始点から終点まで走行する。停止点では同じボタンで再開する。
+
+「開始入力を解除」は走行停止ボタンではない。走行構成の停止には一斉停止を使う。
+記録中・2点未満・必要ファイル欠落の経路は起動できない。採取構成が残っている場合も
+重複起動を拒否する。自律構成の設定コピーはPC上の `~/route_runs/<日時>/` に保存する。
+
+### 自己位置・センサ情報の地図操作
+
+地図は `/active_route` の緯度経度付きウェイポイントを表示します。緑は未走行、
+灰色は走行済み、水色は現在位置、黄色は目標点です。ルート未受信時はその旨を表示します。
+初回受信・形状変更時はルート全体へ移動し、進捗更新では手動の拡大率を維持します。
+「ルート全体」ボタンで全体表示に戻せます。Qt画面とブラウザ版の拡大上限は22で、
+19を超える部分は背景タイルを拡大表示します（背景地図の情報量は増えません）。

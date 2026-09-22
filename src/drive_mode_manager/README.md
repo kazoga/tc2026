@@ -124,9 +124,9 @@ ros2 launch drive_mode_manager ps3_joy_sim.launch.py
 | `/joy` | `sensor_msgs/Joy` | `manual_teleop_node`, `drive_cmd_mux_node` | 手動走行入力、走行モード切替入力 |
 | `/cmd_vel/autonomous` | `geometry_msgs/Twist` | `drive_cmd_mux_node`, `drive_status_gui_node` | 自律走行側の速度指令 |
 | `/cmd_vel/manual` | `geometry_msgs/Twist` | `drive_cmd_mux_node` | 手動走行側の速度指令 |
-| `/drive_mode_status` | `route_msgs/DriveModeStatus` | `drive_status_gui_node` | 走行モード状態 |
-| `/follower_state` | `route_msgs/FollowerState` | `drive_status_gui_node` | waypoint 表示 |
-| `/manager_status` | `route_msgs/ManagerStatus` | `drive_status_gui_node` | route manager 状態表示 |
+| `/drive_mode_status` | `tc_route_msgs/DriveModeStatus` | `drive_status_gui_node` | 走行モード状態 |
+| `/follower_state` | `tc_route_msgs/FollowerState` | `drive_status_gui_node` | waypoint 表示 |
+| `/manager_status` | `tc_route_msgs/ManagerStatus` | `drive_status_gui_node` | route manager 状態表示 |
 | `/rtk_gps/rtk_status` | `rtk_gps_um982_msgs/RtkStatus` | `drive_status_gui_node` | RTK 状態表示 |
 
 ### Publisher
@@ -135,7 +135,7 @@ ros2 launch drive_mode_manager ps3_joy_sim.launch.py
 | --- | --- | --- | --- |
 | `/cmd_vel/manual` | `geometry_msgs/Twist` | `manual_teleop_node` | Joy 入力から生成した手動走行指令 |
 | `/cmd_vel` | `geometry_msgs/Twist` | `drive_cmd_mux_node` | 車体へ渡す最終速度指令 |
-| `/drive_mode_status` | `route_msgs/DriveModeStatus` | `drive_cmd_mux_node` | 現在の走行モードと mux 状態 |
+| `/drive_mode_status` | `tc_route_msgs/DriveModeStatus` | `drive_cmd_mux_node` | 現在の走行モードと mux 状態 |
 | `/joy` | `sensor_msgs/Joy` | `ps3_joy_sim_node` | 開発用 Joy 入力 |
 
 ## パラメータ
@@ -158,8 +158,8 @@ ROS 2 依存は `package.xml` で管理します。実 controller 入力には `
 ## ビルドと確認
 
 ```bash
-colcon build --symlink-install --packages-select route_msgs drive_mode_manager
-colcon build --packages-select route_msgs drive_mode_manager
+colcon build --symlink-install --packages-select tc_route_msgs drive_mode_manager
+colcon build --packages-select tc_route_msgs drive_mode_manager
 pytest src/drive_mode_manager/tests
 ```
 
@@ -170,3 +170,13 @@ GUI 表示、Joy 入力、実機走行の確認はローカル環境で行いま
 
 詳細は [`docs/drive_mode_manager_詳細設計書.md`](docs/drive_mode_manager_詳細設計書.md) と
 [`docs/ps3_joy_sim_設計書.md`](docs/ps3_joy_sim_設計書.md) を参照してください。
+
+`drive_cmd_mux_node.allow_auto_resume`（既定true）をfalseにすると、
+manualモードからのL1解放による自律復帰を禁止する。採取用共通launchで使用する。
+手動中のL1 deadmanと入力timeoutは維持し、通常の自律起動の既定動作は変えない。
+
+### その場旋回の操作（2026-09-22）
+
+前後速度と角速度は独立。L1を押しながらスティックを横へ倒すとその場旋回する。
+旋回入力がある場合、前後軸の微小入力は `in_place_turn_deadzone`（既定0.12）まで
+ゼロとする。直進時の微速操作は従来のdeadzoneを使い、大きな前後入力との旋回は維持する。

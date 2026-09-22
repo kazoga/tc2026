@@ -62,7 +62,7 @@ Visualization Manager:
       Enabled: true
       Head Length: 0.3
       Head Radius: 0.1
-      Name: AMCL Pose
+      Name: Localization Pose ENU
       Shaft Length: 1
       Shaft Radius: 0.05
       Shape: Arrow
@@ -71,7 +71,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /amcl_pose
+        Value: /localization/pose_enu
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true

@@ -11,7 +11,7 @@
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>visualization_msgs</depend>
-  <depend>route_msgs</depend>
+  <depend>tc_route_msgs</depend>
   <depend>sensor_msgs</depend>
 
   <buildtool_depend>ament_python</buildtool_depend>

@@ -1,0 +1,7 @@
+{
+  "names": {
+    "livox_ros_driver2": {
+      "dependencies": ["livox_sdk2_vendor"]
+    }
+  }
+}

@@ -1,0 +1,302 @@
+:root {
+  --bg: #121212;
+  --panel-bg: #1e1e1e;
+  --border: #333333;
+  --text: #e0e0e0;
+  --muted: #9e9e9e;
+  --accent: #4fc3f7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0 16px 32px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Noto Sans JP", "Segoe UI", sans-serif;
+}
+
+header {
+  padding: 16px 0 8px;
+}
+
+.title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title-row h1 {
+  margin: 0 0 4px;
+  font-size: 1.4rem;
+}
+
+/* ページタイトル脇の鮮度表示。詳細メッセージや色分けは行わず、経過時間と
+   鮮度（OK/STALE）のみを端的に示す。 */
+.freshness-indicator {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.notice {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+main {
+  display: grid;
+  /* minmax(0, 1fr)とし、内容の最小幅が列幅を押し広げないようにする。1frのままだと
+     鮮度・稼働状態一覧の表など横幅を要する子に合わせて列全体が画面幅を超え、
+     ページ全体に横スクロールが出る。 */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  /* 幅の広いPCモニタで地図・画像の高さが固定pxのまま横方向にだけ際限なく
+     伸び、極端な横長（映画のシネマスコープ比2.35:1すら超える）になるのを防ぐ。 */
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* 768px以上（タブレット・PC・横向きスマホ）では、状態サマリ+GPSを左列に縦積みし、
+   地図を右側に大きく固定配置する。768px未満はDOM順の1列表示のまま。 */
+@media (min-width: 768px) {
+  main {
+    grid-template-columns: minmax(240px, 1fr) minmax(280px, 1fr) minmax(280px, 1fr);
+    grid-template-areas:
+      "summary map map"
+      "events map map"
+      "gps-summary map map"
+      "sensors sensors sensors"
+      "health health health";
+  }
+
+  #summary {
+    grid-area: summary;
+  }
+
+  #events {
+    grid-area: events;
+  }
+
+  #gps-summary {
+    grid-area: gps-summary;
+  }
+
+  #map {
+    grid-area: map;
+  }
+
+  #sensors {
+    grid-area: sensors;
+  }
+
+  #health {
+    grid-area: health;
+  }
+}
+
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+
+.panel h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: var(--accent);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.fields dt {
+  color: var(--muted);
+}
+
+.fields dd {
+  margin: 0;
+}
+
+/* 地図カードは左列（状態サマリ・イベント・GNSS）の積み上げ高さに合わせて伸びる。
+   地図本体を固定高のままにするとカード下部に余白が残るため、見出しとcaptionを
+   除いた残り全体へ地図を広げる。 */
+#map {
+  display: flex;
+  flex-direction: column;
+}
+
+.leaflet-map {
+  width: 100%;
+  /* 余りがある場合は縦に伸ばす。1列表示（スマホ幅）では余りが無いため、
+     aspect-ratio由来の高さがそのまま使われる。 */
+  flex: 1 1 auto;
+  aspect-ratio: 16 / 9;
+  min-height: 320px;
+  background: #000;
+  border: 1px solid var(--border);
+}
+
+.caption {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.grid {
+  display: grid;
+  /* 画面幅によらず1列の縦積みとする。左右に並べると1枚あたりの幅が半分になり、
+     横長のカメラ映像では縦方向が余って表示が小さくなる
+     （PyQt5側のlocalization_sensor_tab.pyと同じ扱い）。 */
+  grid-template-columns: 1fr;
+  gap: 12px;
+  /* カード幅には上限があるため、PC幅ではセクション内に余りが出る。左寄せのまま
+     右側だけが空くのを避け、カード（見出し行・画像・判定チップ）ごと中央へ寄せる。
+     画像だけを中央にすると、見出し行がセクション全幅へ広がり画像と離れる。 */
+  justify-items: center;
+}
+
+.sensor-card {
+  margin: 0;
+  padding: 0;
+  /* 中央寄せの対象を上限幅いっぱいまで広げる（justify-items: center だけでは
+     内容幅に縮む）。 */
+  width: 100%;
+  /* 縦積みにするとカードはセクション全幅（PCで最大1400px）まで広がり得る。
+     4:3の映像では高さが1000pxを超えて1画面に収まらなくなるため上限を設ける。
+     スマホ幅ではこの上限に達しないので、従来どおり全幅で表示される。 */
+  max-width: 720px;
+}
+
+.sensor-card img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: #000;
+  border: 1px solid var(--border);
+  display: block;
+}
+
+/* パネル名（左）とtopic・鮮度（右）を同じ行へ置く。2行に分けるとその分だけ
+   画像領域が狭くなる（PyQt5側のImagePanelと同じ扱い）。 */
+.sensor-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+  /* スマホ幅ではパネル名とtopicが1行に収まらない。折り返しを許さないと行の
+     min-content幅がそのままグリッド列幅の下限となり、ページ全体が横に広がる。 */
+  flex-wrap: wrap;
+}
+
+.sensor-card-title {
+  font-weight: bold;
+}
+
+.sensor-card-status {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: right;
+  /* 長いtopic名で行が縮められなくなるのを防ぐ。 */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 判定チップ。カメラ画像の下へ1行で並べ、幅もカメラカードに合わせる。
+   縦並びの定義リストにすると認識種別の数だけ縦を消費する。 */
+.perception-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+}
+
+.perception-fields dt {
+  color: var(--muted);
+}
+
+.perception-fields dd {
+  margin: 0 12px 0 0;
+}
+
+/* 表はprofile名が長く、スマートフォン幅では画面内に収まらない。カード内だけで
+   横スクロールさせ、ページ全体が横に広がらないようにする。 */
+#health {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  color: var(--muted);
+  font-weight: normal;
+}
+
+/* イベント一覧。優先度順はサーバ側（core/event_priority.py）で決まるため、
+   ここでは並び替えを行わず受け取った順に表示する。 */
+.event-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.event-list li {
+  font-size: 0.9rem;
+}
+
+.event-list .event-source {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-left: 6px;
+}
+
+.event-list .event-empty {
+  color: var(--muted);
+}
+
+/* 基地局名・接続先が長くてもスマートフォン幅に収める。 */
+#gps-summary .fields {
+  grid-template-columns: minmax(0, 45%) minmax(0, 1fr);
+}
+#gps-summary .fields dt, #gps-summary .fields dd {
+  overflow-wrap: anywhere;
+}
+
+#gnss-details {
+  margin-top: 12px;
+}
+#gnss-details summary {
+  cursor: pointer;
+  padding: 10px 0;
+  color: var(--accent);
+}
+#gnss-details h3 {
+  font-size: 1rem;
+  margin: 12px 0 8px;
+}

@@ -27,8 +27,12 @@ def generate_launch_description() -> LaunchDescription:
     )
     odom_topic_arg = DeclareLaunchArgument(
         'odom_topic',
-        default_value='odom',
-        description='ypspur_node が publish する Odometry topic',
+        default_value='/ypspur_ros/odom',
+        description=(
+            'ypspur_node が publish する Odometry topic。'
+            'robot_navigator・obstacle_route_sim(Gazebo bridge)・robot_simulator が'
+            '/ypspur_ros/odom を前提としているため、既定でこれに合わせる'
+        ),
     )
     start_coordinator_arg = DeclareLaunchArgument(
         'start_coordinator',
@@ -37,12 +41,12 @@ def generate_launch_description() -> LaunchDescription:
     )
     coordinator_device_arg = DeclareLaunchArgument(
         'coordinator_device',
-        default_value='/dev/ttyACM0',
+        default_value='/dev/serial/by-id/usb-T-frog_project_T-frog_Driver-if00',
         description='ypspur-coordinator に渡す device path',
     )
     coordinator_param_arg = DeclareLaunchArgument(
         'coordinator_param',
-        default_value='',
+        default_value=os.path.join(pkg_share, 'config', 'icart-middle.param'),
         description='ypspur-coordinator に渡す robot parameter file path',
     )
 

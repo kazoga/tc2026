@@ -1,0 +1,3 @@
+# Generated CAD interchange files; review build_model.py and rendered previews.
+exports/*.step binary
+exports/*.dxf binary

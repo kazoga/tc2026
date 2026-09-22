@@ -1,0 +1,49 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>つくばチャレンジ2026｜全ルート・デジタルツイン</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#e9eef2;color:#172333;font:14px system-ui,sans-serif}header{padding:20px 24px 14px;background:#fff;border-bottom:1px solid #d1dbe3}h1{font-size:23px;margin:0 0 6px}p{margin:6px 0;color:#536375}.stats{display:flex;gap:24px;flex-wrap:wrap;padding-top:10px}.stats b{font-size:23px;display:block}.stats span{font-size:12px;color:#54687b}main{position:relative;height:calc(100vh - 190px);min-height:420px}#view{width:100%;height:100%;display:block}aside{position:absolute;left:16px;top:16px;background:#ffffffed;padding:14px;border-radius:10px;box-shadow:0 2px 16px #1232;width:184px}label{display:block;margin:9px 0}button,a.button{border:1px solid #b9c7d3;background:#fff;color:#17374b;border-radius:6px;padding:7px 10px;cursor:pointer;text-decoration:none;font:inherit}button:hover{background:#eaf1f5}.toolbar{display:flex;gap:5px;flex-wrap:wrap}#legend{position:absolute;right:16px;bottom:18px;background:#fffffff0;border-radius:8px;padding:12px;max-width:320px;font-size:12px}#status{position:absolute;top:16px;right:16px;background:#fff;padding:8px;border-radius:6px}footer{padding:9px 18px;background:#fff;font-size:11px;color:#516174;line-height:1.6}footer a{color:#345b77}#inspect{position:absolute;right:16px;top:55px;background:#fff;padding:12px;max-width:290px;border-radius:7px;display:none}#photo{position:absolute;inset:0;background:#e6ebef;display:none;align-items:center;justify-content:center}#photo img{width:100%;height:100%;object-fit:contain}@media(max-width:750px){header{padding:12px}h1{font-size:18px}.stats{gap:12px}.stats b{font-size:18px}aside{width:157px;font-size:12px;padding:9px}#legend{max-width:220px;bottom:8px}main{height:68vh}#status{font-size:11px;max-width:170px}}
+</style>
+<header><h1>つくばチャレンジ 2026｜全ルートのデジタルツイン</h1><p>地理参照付き航空写真・標高・建物・物体候補を統合。黄色線は公式図をトレースした概略ルートです。</p>
+<div class="stats"><div><b id="length">—</b><span>概略ルート長</span></div><div><b id="area">—</b><span>再構成範囲</span></div><div><b id="building-count">—</b><span>建物形状（部分形状含む）</span></div><div><b id="tree-count">—</b><span>樹木モデル</span></div><div><b id="candidate-count">—</b><span>車両・植栽帯候補</span></div></div></header>
+<main><canvas id="view"></canvas><div id="photo"><img src="analysis_overlay.jpg" alt="航空写真と公式ルート・物体候補の重ね合わせ"></div>
+<aside><strong>表示レイヤー</strong><label><input type="checkbox" data-layer="buildings" checked> 建物</label><label><input type="checkbox" data-layer="trees" checked> 樹木</label><label><input type="checkbox" data-layer="vehicles" checked> 駐車車両候補</label><label><input type="checkbox" data-layer="hedges" checked> 植栽帯候補</label><label><input type="checkbox" data-layer="street" checked> OSM 街路物</label><label><input type="checkbox" data-layer="route" checked> 公式ルート概略</label><label><input type="checkbox" data-layer="conflicts"> 物体との重なり候補</label><div class="toolbar"><button id="oblique">3D全景</button><button id="top">真上</button><button id="cityhall">市役所</button><button id="station">駅・ホテル</button><button id="aerial">写真比較</button></div><hr><a href="editor.html" class="button" target="_blank">terrain3d で編集</a><p style="font-size:11px;margin-top:12px">ドラッグ：回転<br>右ドラッグ：移動<br>ホイール：拡大</p></aside>
+<div id="status">モデルを読み込み中…</div><div id="inspect"></div><div id="legend"><b style="color:#ae8100">━ 黄色：概略ルート（走行済み軌跡ではありません）</b><p>緑：開始／橙：終了。樹高・車高・植栽帯の高さは推定です。画像の影・撮影時期・屋根の視差により誤検出や位置ずれが残ります。</p></div></main>
+<footer>地形：<a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a> ／ 建物・街路物：<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a> ／ 写真：Esri, Vantor, Earthstar Geographics, GIS User Community<br>公式図：<a href="https://tsukubachallenge.jp/2026/regulations/tasks">つくばチャレンジ2026</a>。全域を再構成していますが、実地測量・全コース完走の検証は未実施です。画像メタデータ：2024-01-10、元解像度0.46 m、位置精度欄5 m。<a href="scene.json" download>シーンJSON</a> ／ <a href="trial.sdf" download>Gazebo SDF</a></footer>
+<script src="viewer_vendor/three.min.js"></script><script src="viewer_vendor/OrbitControls.js"></script>
+<script>
+(async()=>{try{
+const D=await(await fetch('viewer_data.json')).json(),T=THREE,canvas=document.getElementById('view');
+const renderer=new T.WebGLRenderer({canvas,antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputEncoding=T.sRGBEncoding;
+const scene=new T.Scene();scene.background=new T.Color('#dce7ef');
+const camera=new T.PerspectiveCamera(42,1,.1,5000);camera.up.set(0,0,1);
+const controls=new T.OrbitControls(camera,canvas);controls.enableDamping=true;controls.maxPolarAngle=Math.PI*.49;
+scene.add(new T.HemisphereLight(0xffffff,0x7b8774,1.0));const sun=new T.DirectionalLight(0xffffff,.8);sun.position.set(-300,-250,600);scene.add(sun);
+const groups={};for(const name of ['buildings','trees','vehicles','hedges','street','route','conflicts']){groups[name]=new T.Group();scene.add(groups[name]);}
+const g=D.grid,n=g.w*g.h,pos=new Float32Array(n*3),uv=new Float32Array(n*2),indices=[];
+for(let j=0;j<g.h;j++)for(let i=0;i<g.w;i++){const k=j*g.w+i;pos[k*3]=g.ox+i*g.res;pos[k*3+1]=g.oy+j*g.res;pos[k*3+2]=g.height[k];uv[k*2]=(pos[k*3]+D.dimensions[0]/2)/D.dimensions[0];uv[k*2+1]=(pos[k*3+1]+D.dimensions[1]/2)/D.dimensions[1];if(i<g.w-1&&j<g.h-1)indices.push(k,k+1,k+g.w+1,k,k+g.w+1,k+g.w);}
+const ground=new T.BufferGeometry();ground.setAttribute('position',new T.BufferAttribute(pos,3));ground.setAttribute('uv',new T.BufferAttribute(uv,2));ground.setIndex(indices);ground.computeVertexNormals();
+const photo=await new Promise((resolve,reject)=>new T.TextureLoader().load('aerial_texture.jpg',resolve,undefined,reject));photo.encoding=T.sRGBEncoding;photo.anisotropy=renderer.capabilities.getMaxAnisotropy();scene.add(new T.Mesh(ground,new T.MeshLambertMaterial({map:photo,side:T.DoubleSide})));
+const colors={buildings:'#c0cbd6',vehicles:'#7898b6',hedges:'#527b38',street:'#536274'};
+for(const m of D.meshes){const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(m.positions,3));geo.computeVertexNormals();const mesh=new T.Mesh(geo,new T.MeshLambertMaterial({color:colors[m.layer],side:T.DoubleSide}));mesh.userData={id:m.id,layer:m.layer};groups[m.layer].add(mesh);}
+for(const t of D.trees){const trunk=new T.Mesh(new T.CylinderGeometry(t.trunkRadius,t.trunkRadius,t.h*.62,7),new T.MeshLambertMaterial({color:'#73503c'}));trunk.rotation.x=Math.PI/2;trunk.position.set(t.x,t.y,t.z+t.h*.31);groups.trees.add(trunk);const crown=new T.Mesh(new T.SphereGeometry(1,8,6),new T.MeshLambertMaterial({color:'#406d37'}));crown.scale.set(t.r,t.r,t.h*.3);crown.position.set(t.x,t.y,t.z+t.h*.7);groups.trees.add(crown);}
+if(D.audit){for(const p of D.audit.conflicts){const dot=new T.Mesh(new T.SphereGeometry(1.7,8,6),new T.MeshBasicMaterial({color:0xff3377,depthTest:false,depthWrite:false}));dot.renderOrder=1000;dot.position.set(p.x,p.y,3);groups.conflicts.add(dot);}groups.conflicts.visible=false;}
+function height(x,y){let i=Math.max(0,Math.min(g.w-1,Math.round((x-g.ox)/g.res))),j=Math.max(0,Math.min(g.h-1,Math.round((y-g.oy)/g.res)));return g.height[j*g.w+i];}
+const rp=D.route.map(p=>new T.Vector3(p[0],p[1],height(...p)+.6));groups.route.add(new T.Line(new T.BufferGeometry().setFromPoints(rp),new T.LineBasicMaterial({color:0xffdd35,depthTest:false,linewidth:3})));
+for(const [p,c] of [[rp[0],0x21d690],[rp[rp.length-1],0xff8e42]]){const marker=new T.Mesh(new T.SphereGeometry(2,16,12),new T.MeshBasicMaterial({color:c,depthTest:false}));marker.position.copy(p);marker.position.z+=2;groups.route.add(marker);}
+function go(x,y,z,tx=0,ty=0){camera.position.set(x,y,z);controls.target.set(tx,ty,0);controls.update();}
+function home(){go(180,-590,670);}home();
+document.querySelectorAll('[data-layer]').forEach(el=>el.onchange=()=>groups[el.dataset.layer].visible=el.checked);
+document.getElementById('oblique').onclick=home;
+document.getElementById('top').onclick=()=>go(0,-.1,1000);
+document.getElementById('cityhall').onclick=()=>go(-270,-225,220,-270,-35);
+document.getElementById('station').onclick=()=>go(215,-230,240,235,-90);
+document.getElementById('aerial').onclick=()=>{const p=document.getElementById('photo');p.style.display=p.style.display==='flex'?'none':'flex';};
+document.getElementById('length').textContent=(D.routeLength/1000).toFixed(3)+' km';
+document.getElementById('area').textContent=D.dimensions.map(Math.round).join(' × ')+' m';
+document.getElementById('building-count').textContent=D.counts.buildings;
+document.getElementById('tree-count').textContent=D.trees.length;
+document.getElementById('candidate-count').textContent=D.counts.vehicle_candidates+' / '+D.counts.hedge_candidates;
+document.getElementById('status').textContent='全域表示・2024年撮影画像／高さ倍率 1×';
+function draw(){const w=canvas.clientWidth,h=canvas.clientHeight;if(canvas.width!==Math.round(w*renderer.getPixelRatio())||canvas.height!==Math.round(h*renderer.getPixelRatio())){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}controls.update();renderer.render(scene,camera);requestAnimationFrame(draw);}draw();
+}catch(e){document.getElementById('status').textContent='読み込み失敗：'+e.message;console.error(e);}})();
+</script></html>

@@ -1,0 +1,205 @@
+{
+  "edition": 2026,
+  "checked_date": "2026-09-22",
+  "note": "公式サイトの参照台帳。HTMLのhashは動的要素でも変化する。原文のミラーではない。",
+  "sources": [
+    {
+      "url": "https://tsukubachallenge.jp/2026/",
+      "resolved_url": "https://tsukubachallenge.jp/2026/",
+      "checked_at": "2026-09-22T01:04:14.450941+00:00",
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "sha256": "94aea8b8287f314f40832e59b3a54b21bd200c916c1caa7ad3ce9c5bf728b1e8",
+      "review": "HTML本文確認"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/about/activities",
+      "resolved_url": "https://tsukubachallenge.jp/2026/about/activities",
+      "checked_at": "2026-09-22T01:04:15.289750+00:00",
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "sha256": "1ce32c1602946e623623a2810fd3ed596ab8611d24c349596d0a98c071760352",
+      "review": "HTML本文確認"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/about/final",
+      "resolved_url": "https://tsukubachallenge.jp/2026/about/final",
+      "checked_at": "2026-09-22T01:04:14.451084+00:00",
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "sha256": "fce54464a14a7cac4d73e0176c329583d033c3e2603322404b67d13da3e89854",
+      "review": "HTML本文確認"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/about/registration",
+      "resolved_url": "https://tsukubachallenge.jp/2026/about/registration",
+      "checked_at": "2026-09-22T01:04:14.450138+00:00",
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "sha256": "9dea89f383049eb6f4bfb42bd2e982263c657c0a05c6caf1886448f44178e2f5",
+      "review": "HTML本文確認"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/about/schedule",
+      "resolved_url": "https://tsukubachallenge.jp/2026/about/schedule",
+      "checked_at": "2026-09-22T01:04:15.334123+00:00",
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "sha256": "78a9eb6a424363d891549933f2b59a808326046c6f84b7d5553fa4a1d8f8b891",
+      "review": "HTML本文確認"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/info/15896",
+      "resolved_url": "https://tsukubachallenge.jp/2026/info/15896",
+      "checked_at": "2026-09-22T01:04:15.304380+00:00",
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "sha256": "f36126c7b0994dc7cb3fb696c93576d871a088ece41ec80e2a3fb68d2971d604",
+      "review": "HTML本文確認"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/regulations/evaluation",
+      "resolved_url": "https://tsukubachallenge.jp/2026/regulations/evaluation",
+      "checked_at": "2026-09-22T01:04:14.867538+00:00",
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "sha256": "b2f90bd3b857555829a51304282a9cd0f0a4ff6be7f68905c920e5280f4a9bdb",
+      "review": "HTML本文確認"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/regulations/experiments",
+      "resolved_url": "https://tsukubachallenge.jp/2026/regulations/experiments",
+      "checked_at": "2026-09-22T01:04:14.867391+00:00",
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "sha256": "95800fac380560631112eef3b80d5452f74baf5456eed84102e9631cc13e502e",
+      "review": "HTML本文確認"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/regulations/safety",
+      "resolved_url": "https://tsukubachallenge.jp/2026/regulations/safety",
+      "checked_at": "2026-09-22T01:04:14.900564+00:00",
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "sha256": "9cca3919a02ee31084eafb1c2304d9278680597f3381b00da25501060bd2e03e",
+      "review": "HTML本文確認"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/regulations/specs",
+      "resolved_url": "https://tsukubachallenge.jp/2026/regulations/specs",
+      "checked_at": "2026-09-22T01:04:15.283379+00:00",
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "sha256": "8bd555e3d9eda1fc9b356d6e6d56748ac5ec059acdacc24a995c71f007ef8551",
+      "review": "HTML本文確認"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/regulations/tasks",
+      "resolved_url": "https://tsukubachallenge.jp/2026/regulations/tasks",
+      "checked_at": "2026-09-22T01:04:15.433067+00:00",
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "sha256": "644b5700331d042805c09ee2230c98c370a3dde6bcd2b68d2a45eae47c7ef06e",
+      "review": "HTML本文確認"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/regulations/terms",
+      "resolved_url": "https://tsukubachallenge.jp/2026/regulations/terms",
+      "checked_at": "2026-09-22T01:04:15.323123+00:00",
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "sha256": "3b5e1e98af1297e6d14d284d81a486dcdad207af5cd07d3de5227b849cc00e6d",
+      "review": "HTML本文確認"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/teams/forms",
+      "resolved_url": "https://tsukubachallenge.jp/2026/teams/forms",
+      "checked_at": "2026-09-22T01:04:16.078737+00:00",
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "sha256": "25bb6cdbdc47aa9ff1f590d29d5c3e675ab2196fa92336057c335881c3bf7fb9",
+      "review": "HTML本文確認"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/teams/records",
+      "resolved_url": "https://tsukubachallenge.jp/2026/teams/records",
+      "checked_at": "2026-09-22T01:04:15.697288+00:00",
+      "http_status": 200,
+      "content_type": "text/html; charset=UTF-8",
+      "sha256": "efaa182b38ec2a0c9efa45e2263a5371461d6dececebd02793c338dd3b7c4874",
+      "review": "HTML本文確認"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/wp-content/uploads/commitment-form_2026.docx",
+      "resolved_url": "https://tsukubachallenge.jp/2026/wp-content/uploads/commitment-form_2026.docx",
+      "checked_at": "2026-09-22T01:04:15.379247+00:00",
+      "http_status": 200,
+      "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "sha256": "a034e2384d56ba24de96f38a3de14f9a84233c93283c0beb98f3e2a7d7561d10",
+      "review": "配布リンク・取得確認（本文全体の精査は未実施）"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/wp-content/uploads/out-of-team-areas_2026.pdf",
+      "resolved_url": "https://tsukubachallenge.jp/2026/wp-content/uploads/out-of-team-areas_2026.pdf",
+      "checked_at": "2026-09-22T01:04:15.675360+00:00",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "sha256": "1ea586f5d7c803fcc8643b7d97622a68248e3a05e10d39384244023093917ddf",
+      "review": "配布リンク・取得確認（本文全体の精査は未実施）"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/wp-content/uploads/requests-and-notes.pdf",
+      "resolved_url": "https://tsukubachallenge.jp/2026/wp-content/uploads/requests-and-notes.pdf",
+      "checked_at": "2026-09-22T01:04:15.589082+00:00",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "sha256": "7f40fb50f817d19e5c77fbc94467444919feab70dd1907a3244e488a19546eaa",
+      "review": "配布リンク・取得確認（本文全体の精査は未実施）"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/wp-content/uploads/robot-number-plate_2026.pptx",
+      "resolved_url": "https://tsukubachallenge.jp/2026/wp-content/uploads/robot-number-plate_2026.pptx",
+      "checked_at": "2026-09-22T01:04:15.491584+00:00",
+      "http_status": 200,
+      "content_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "sha256": "71c3980b69ca2b707594ae7956f1f286da059b88827d749f4cdb359e38acbe85",
+      "review": "配布リンク・取得確認（本文全体の精査は未実施）"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/wp-content/uploads/role-of-safety-managers.pdf",
+      "resolved_url": "https://tsukubachallenge.jp/2026/wp-content/uploads/role-of-safety-managers.pdf",
+      "checked_at": "2026-09-22T01:04:15.692325+00:00",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "sha256": "17765001efee6ce3de3989343ac1c9b26a458a0e98146d330a2c237547837ea0",
+      "review": "配布リンク・取得確認（本文全体の精査は未実施）"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/wp-content/uploads/sefety-check-sheet_2026Sep20.pdf",
+      "resolved_url": "https://tsukubachallenge.jp/2026/wp-content/uploads/sefety-check-sheet_2026Sep20.pdf",
+      "checked_at": "2026-09-22T01:04:15.679787+00:00",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "sha256": "59ddeae670d83aab1da9545fa38e9e5195a9bb481c3b65f5864507598b51d75c",
+      "review": "配布リンク・取得確認（本文全体の精査は未実施）"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/wp-content/uploads/sefety-check-sheet_2026Sep20.xlsx",
+      "resolved_url": "https://tsukubachallenge.jp/2026/wp-content/uploads/sefety-check-sheet_2026Sep20.xlsx",
+      "checked_at": "2026-09-22T01:04:15.674663+00:00",
+      "http_status": 200,
+      "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "sha256": "37164a890caa80e4c8945d7c757c1103c41e904be10e74aca318e7850e9b7bdc",
+      "review": "配布リンク・取得確認（本文全体の精査は未実施）"
+    },
+    {
+      "url": "https://tsukubachallenge.jp/2026/wp-content/uploads/team-name-cards_2026.docx",
+      "resolved_url": "https://tsukubachallenge.jp/2026/wp-content/uploads/team-name-cards_2026.docx",
+      "checked_at": "2026-09-22T01:04:15.792737+00:00",
+      "http_status": 200,
+      "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "sha256": "6847a6bcb86a42bfc26575436668ff2a3a8079d0ab90e2789f57213ad3c643c3",
+      "review": "配布リンク・取得確認（本文全体の精査は未実施）"
+    }
+  ]
+}

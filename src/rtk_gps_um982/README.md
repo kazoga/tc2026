@@ -83,9 +83,26 @@ ros2 run rtk_gps_um982 rtk_gps_um982_node \
 
 ## 時刻同期
 
-PPS は **Lidar 側にのみ** 配線する前提。GPS msg は GNSS UTC を `header.stamp` に
-入れるため、Lidar packet (PPS 同期) と同じ epoch で比較できる。
-詳細は [`docs/design.md`](docs/design.md) §13 と [`scripts/README.md`](scripts/README.md) を参照。
+既存Ethernetを使うPTP試験を[PTP試験手順](docs/PTP試験手順.md)にまとめている。
+
+| パラメータ | 既定値 | 動作 |
+| --- | --- | --- |
+| `time_sync.enabled` | `false` | 有効RMCをchrony SOCKへ配信し、GGAの日付をRMCに合わせる |
+| `time_sync.chrony_socket` | `/run/chrony/um982.sock` | chronydが作成するSOCKのパス |
+
+```bash
+ros2 run rtk_gps_um982 ptp_trial prepare --output log/ptp_trial/setup
+ros2 run rtk_gps_um982 ptp_trial check --interface <有線NIC>
+```
+
+時刻配信にはchrony設定とSOCKへの書き込み権限が必要。単なるprepareだけではPC時計は変更しない。
+GNSS launchでは`time_sync:=true`で明示的に有効化する。
+PTPツールはソフトウェアタイムスタンプでUTCを配信し、開始条件の喪失時は配信を停止する。
+MID-360の点群・IMUの同期種別を確認する受動monitorも提供する。
+位置と方位のepoch結合は既存の課題であり、静止した状態の同期試験に用いる。
+
+全体方針は[時刻同期提案](../../docs/GNSS_FASTLIO時刻同期提案.md)、
+詳細は[`docs/design.md`](docs/design.md) §13を参照する。
 
 ## トラブルシューティング
 
@@ -132,3 +149,19 @@ colcon test-result --verbose
 ## ライセンス
 
 MIT
+
+## 公開RTK局とNTRIP受信
+
+icart_bringupの地域別設定で稲城・つくばの公開局、補正なし、独自局を選択できる。
+NTRIP v1受信はワークスペース側アダプターでTCP分割と先頭データ保持を処理し、
+CRC一致のRTCM3のみシリアルへ渡す。無効なHTTP応答やSOURCETABLEを成功と扱わない。
+15秒有効RTCMが来ない接続は再接続する。ライブラリsubmoduleは変更しない。
+TLS・HTTP chunked必須のサービスは非対応。実機FIXは別途確認する。
+
+### 基地局診断
+
+`~/ntrip_status` (`std_msgs/String` JSON) を1 Hzで配信する。
+NTRIP接続状態、CRC確認済みRTCM量・速度・最終受信経過、再接続回数、通信エラー種別を
+位置コールバックとは独立して送る。認証情報は含めない。
+`ntrip.station_id`, `ntrip.station_label`, `ntrip.site` はUI向けの表示名（任意）。
+UI詳細は `robot_console/docs/gnss_station_ui.md` を参照。

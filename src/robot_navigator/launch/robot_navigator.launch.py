@@ -2,6 +2,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -26,8 +27,8 @@ def generate_launch_description() -> LaunchDescription:
         default_value='/ypspur_ros/odom',
         description='オドメトリ入力トピック',
     )
-    amcl_pose_topic_arg = DeclareLaunchArgument(
-        'amcl_pose_topic', default_value='/amcl_pose', description='現在姿勢入力トピック'
+    pose_enu_topic_arg = DeclareLaunchArgument(
+        'pose_enu_topic', default_value='/localization/pose_enu', description='ENU自己位置入力トピック'
     )
     active_target_topic_arg = DeclareLaunchArgument(
         'active_target_topic',
@@ -52,7 +53,7 @@ def generate_launch_description() -> LaunchDescription:
     node_name = LaunchConfiguration('node_name')
     scan_topic = LaunchConfiguration('scan_topic')
     odom_topic = LaunchConfiguration('odom_topic')
-    amcl_pose_topic = LaunchConfiguration('amcl_pose_topic')
+    pose_enu_topic = LaunchConfiguration('pose_enu_topic')
     active_target_topic = LaunchConfiguration('active_target_topic')
     cmd_vel_topic = LaunchConfiguration('cmd_vel_topic')
     marker_topic = LaunchConfiguration('marker_topic')
@@ -64,11 +65,12 @@ def generate_launch_description() -> LaunchDescription:
         name=node_name,
         output='screen',
         emulate_tty=True,
-        parameters=[param_file],
+        parameters=[param_file, {'require_motion_limits': ParameterValue(
+            LaunchConfiguration('require_motion_limits'), value_type=bool)}],
         remappings=[
             ('scan', scan_topic),
             ('odom', odom_topic),
-            ('amcl_pose', amcl_pose_topic),
+            ('localization/pose_enu', pose_enu_topic),
             ('active_target', active_target_topic),
             ('cmd_vel', cmd_vel_topic),
             ('direction_marker', marker_topic),
@@ -78,11 +80,13 @@ def generate_launch_description() -> LaunchDescription:
 
     return LaunchDescription(
         [
+            DeclareLaunchArgument('require_motion_limits', default_value='true',
+                                  description='実機ではtrue。シミュレータのみfalse'),
             param_file_arg,
             node_name_arg,
             scan_topic_arg,
             odom_topic_arg,
-            amcl_pose_topic_arg,
+            pose_enu_topic_arg,
             active_target_topic_arg,
             cmd_vel_topic_arg,
             marker_topic_arg,
