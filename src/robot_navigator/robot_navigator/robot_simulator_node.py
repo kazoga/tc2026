@@ -22,7 +22,16 @@ from rclpy.qos import QoSProfile
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseStamped, Quaternion, TransformStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool, Header
+from tc_route_msgs.msg import MotionLimits
 from tf2_ros import TransformBroadcaster
+
+
+# /motion_limits として申告する駆動系契約の既定値。実機の ypspur_node が
+# ypspur_ros2/config/default.yaml の acceleration_max / deceleration_max から
+# 配信する値と揃えてあり、シミュレーションでも実機と同一の契約を通す。
+DEFAULT_MAX_ACCEL_MPS2 = 0.7
+DEFAULT_MAX_DECEL_MPS2 = 1.5
+DEFAULT_MAX_ANGULAR_ACCEL_RPS2 = 1.5
 
 
 def clamp(value: float, lo: float, hi: float) -> float:
@@ -75,6 +84,13 @@ class RobotSimulatorNode(Node):
         self.declare_parameter('max_linear_mps', 2.0)
         self.declare_parameter('max_angular_rps', 3.0)
         self.declare_parameter('enable_cmd_limit', True)
+        # robot_navigator が要求する駆動系契約（/motion_limits）の申告値。
+        # 実機では ypspur_node が同じ意味の値を配信する。既定値は
+        # ypspur_ros2/config/default.yaml の acceleration_max / deceleration_max に
+        # 揃え、シミュレーションでも実機と同一の契約を通るようにする。
+        self.declare_parameter('max_accel_mps2', DEFAULT_MAX_ACCEL_MPS2)
+        self.declare_parameter('max_decel_mps2', DEFAULT_MAX_DECEL_MPS2)
+        self.declare_parameter('max_angular_accel_rps2', DEFAULT_MAX_ANGULAR_ACCEL_RPS2)
         self.declare_parameter('pose_noise_std_m', 0.0)
         self.declare_parameter('yaw_noise_std_deg', 0.0)
         self.declare_parameter('enable_glitch_trigger', True)
@@ -105,6 +121,11 @@ class RobotSimulatorNode(Node):
         self._max_v: float = float(self.get_parameter('max_linear_mps').value)
         self._max_w: float = float(self.get_parameter('max_angular_rps').value)
         self._enable_limit: bool = bool(self.get_parameter('enable_cmd_limit').value)
+        self._max_accel: float = float(self.get_parameter('max_accel_mps2').value)
+        self._max_decel: float = float(self.get_parameter('max_decel_mps2').value)
+        self._max_angular_accel: float = float(
+            self.get_parameter('max_angular_accel_rps2').value
+        )
         self._pose_noise_std_m: float = float(self.get_parameter('pose_noise_std_m').value)
         self._yaw_noise_std_deg: float = float(self.get_parameter('yaw_noise_std_deg').value)
         self._enable_glitch_trigger: bool = bool(self.get_parameter('enable_glitch_trigger').value)
@@ -183,6 +204,8 @@ class RobotSimulatorNode(Node):
         qos = QoSProfile(depth=10)
         self._pub_odom = self.create_publisher(Odometry, '/odom', qos)
         self._pub_pose = self.create_publisher(PoseWithCovarianceStamped, self._pose_topic, qos)
+        # 実機の ypspur_node と同じ相対名で配信し、launch 側の remap を可能にする。
+        self._pub_limits = self.create_publisher(MotionLimits, 'motion_limits', 1)
         self._tf_broadcaster: Optional[TransformBroadcaster] = TransformBroadcaster(self) if self._enable_tf_pub else None
 
         # --- 購読 ---
@@ -339,7 +362,29 @@ class RobotSimulatorNode(Node):
                 f'and wait {self._glitch_wait_after_stop_sec:.1f}s before applying.'
             )
 
+    def _publish_motion_limits(self) -> None:
+        """駆動系契約を生存信号として配信する.
+
+        `robot_navigator` は `/motion_limits` を 0.5 秒の watchdog で監視し、途絶すると
+        停止指令を出し続ける。実機では ypspur_node が制御周期ごとに配信するのと同じ
+        役割を、シミュレーション時は本ノードが担う。積分ループと同じタイマーから出す
+        ことで、シミュレータが動いている間だけ契約が成立する。
+        """
+
+        limits = MotionLimits()
+        limits.header.stamp = self.get_clock().now().to_msg()
+        limits.max_linear_velocity = self._max_v
+        limits.max_angular_velocity = self._max_w
+        limits.linear_acceleration = self._max_accel
+        limits.linear_deceleration = self._max_decel
+        limits.angular_acceleration = self._max_angular_accel
+        self._pub_limits.publish(limits)
+
     def _on_timer_update(self) -> None:
+        # 初期姿勢待ちで早期returnする前に配信する。契約の成立条件は積分ループが
+        # 生きていることであり、/active_target の受信完了ではない。
+        self._publish_motion_limits()
+
         now = time.time()
         if not self._initial_pose_set:
             if now - self._last_wait_log > 1.0:
