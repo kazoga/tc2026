@@ -283,3 +283,22 @@ def test_manual_ops_card_update_snapshot_reflects_manual_controls(qt_app):
     assert card._manual_start_value_label.text() == 'True'
     assert card._manual_start_time_label.text() == '12:00:00'
     assert card._road_blocked_source_label.text() == 'external'
+
+
+def test_gnss_dropout_alert_is_on_dashboard_and_marks_stale(qt_app):
+    from robot_console.core.snapshot_model import GnssDropoutStateView
+    tab = DashboardTab()
+    snapshot = ConsoleSnapshot()
+    assert tab.gnss_dropout_alert.isHidden()
+    snapshot.gnss_dropout_state = GnssDropoutStateView(True, FreshnessLevel.OK)
+    tab.update_snapshot(snapshot)
+    assert not tab.gnss_dropout_alert.isHidden()
+    assert 'R1' in tab.gnss_dropout_alert.text()
+    assert '#b91c1c' in tab.gnss_dropout_alert.styleSheet()
+    snapshot.gnss_dropout_state.freshness = FreshnessLevel.LOST
+    tab.update_snapshot(snapshot)
+    assert '未確認' in tab.gnss_dropout_alert.text()
+    assert '#fff3cd' in tab.gnss_dropout_alert.styleSheet()
+    snapshot.gnss_dropout_state = GnssDropoutStateView(False, FreshnessLevel.OK)
+    tab.update_snapshot(snapshot)
+    assert tab.gnss_dropout_alert.isHidden()

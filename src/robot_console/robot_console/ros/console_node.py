@@ -81,6 +81,8 @@ class RobotConsoleNode(Node):
         self._core = core
         self.create_subscription(String, '/rtk_gps/rtk_gps_um982_node/ntrip_status',
                                  core.update_ntrip_status, 10)
+        from std_msgs.msg import Bool
+        self.create_subscription(Bool, '/fusion/gnss_dropout_active', self._core.update_gnss_dropout, 10)
         self.create_subscription(String, '/fusion/status', self._core.update_fusion_status, 10)
         # 既存実機ドライバのprivate topicとの互換性も維持する。
         self.create_subscription(RtkStatus, '/rtk_gps/rtk_gps_um982_node/rtk_status',

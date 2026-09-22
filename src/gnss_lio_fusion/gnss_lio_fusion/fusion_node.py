@@ -4,6 +4,7 @@ import copy
 from dataclasses import fields
 import json
 import math
+import time
 from pathlib import Path
 
 import numpy as np
@@ -13,8 +14,11 @@ from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from nav_msgs.msg import Odometry
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from sensor_msgs.msg import NavSatFix
-from std_msgs.msg import String
+from sensor_msgs.msg import NavSatFix, Joy
+from std_msgs.msg import String, Bool
+from rclpy.clock import Clock, ClockType
+from rclpy.qos import qos_profile_sensor_data
+from .gnss_dropout import GnssDropoutHold
 from rtk_gps_um982_msgs.msg import RtkStatus
 
 from geo_pose_converter.geo_core import LlhPoint, ProjectionConfig, llh_to_enu
@@ -86,18 +90,46 @@ class FusionNode(Node):
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel/fusion_limited', 10)
         self.create_subscription(Odometry, '/lio/odometry', self.on_lio, 30)
         self.create_subscription(Odometry, '/ypspur_ros/odom', self.on_wheel, 30)
+        self.gnss_dropout = GnssDropoutHold(
+            self.declare_parameter('gnss_dropout.button_index', 5).value,
+            self.declare_parameter('gnss_dropout.joy_timeout_s', .5).value)
+        self.gnss_dropout_active = False
+        self.dropout_pub = self.create_publisher(Bool, '/fusion/gnss_dropout_active', 1)
+        self.create_subscription(Joy, '/joy', self.on_dropout_joy, qos_profile_sensor_data)
+        self.dropout_clock = Clock(clock_type=ClockType.STEADY_TIME)
+        self.create_timer(.1, self.dropout_tick, clock=self.dropout_clock)
         self.create_subscription(NavSatFix, '/rtk_gps/fix', self.on_fix, 30)
         self.create_subscription(RtkStatus, '/rtk_gps/rtk_status', self.on_status, 30)
         self.create_subscription(Twist, '/cmd_vel/autonomous', self.on_command, 10)
         self.create_timer(.02, self.tick)
         self.get_logger().info('適応baseline・GNSS/LIO融合を開始する')
 
+    def refresh_dropout(self):
+        active = self.gnss_dropout.active(time.monotonic())
+        if active != self.gnss_dropout_active:
+            self.gnss_dropout_active = active
+            self.events = [event for event in self.events if event[1] != 'gps']
+            self.statuses.clear()
+            self.get_logger().warning('GNSS途絶模擬: ' + ('開始（R1押下中）' if active else '解除'))
+        return active
+
+    def on_dropout_joy(self, msg):
+        self.gnss_dropout.update(msg.buttons, time.monotonic())
+        self.dropout_tick()
+
+    def dropout_tick(self):
+        self.dropout_pub.publish(Bool(data=self.refresh_dropout()))
+
     def on_status(self, msg: RtkStatus) -> None:
+        if self.refresh_dropout():
+            return
         self.statuses[seconds(msg.header.stamp)] = msg
         while len(self.statuses) > 100:
             del self.statuses[min(self.statuses)]
 
     def on_fix(self, msg: NavSatFix) -> None:
+        if self.refresh_dropout():
+            return
         self.events.append((seconds(msg.header.stamp), 'gps', msg))
 
     def on_wheel(self, msg: Odometry) -> None:

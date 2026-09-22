@@ -10,7 +10,7 @@ manual_teleop_node:
     linear_axis_invert: false
     angular_axis_invert: false
     enable_button: 4
-    turbo_button: 5
+    turbo_button: -1  # R1はGNSS途絶模擬専用
     turbo_ratio: 1.5
     joy_timeout_s: 0.5
     publish_rate_hz: 20.0

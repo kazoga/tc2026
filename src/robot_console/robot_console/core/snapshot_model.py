@@ -269,6 +269,12 @@ class FusionStateView:
 
 
 @dataclass
+class GnssDropoutStateView:
+    active: bool = False
+    freshness: FreshnessLevel = FreshnessLevel.UNKNOWN
+
+
+@dataclass
 class ConsoleSnapshot:
     """PyQt5 UI / HTML UI 共通のSnapshot（architecture_design.md 8章）。"""
 
@@ -278,6 +284,7 @@ class ConsoleSnapshot:
     gps_state: GpsStateView = field(default_factory=GpsStateView)
     ntrip_state: NtripStateView = field(default_factory=NtripStateView)
     fusion_state: FusionStateView = field(default_factory=FusionStateView)
+    gnss_dropout_state: GnssDropoutStateView = field(default_factory=GnssDropoutStateView)
     localization_state: LocalizationStateView = field(default_factory=LocalizationStateView)
     route_state: RouteView = field(default_factory=RouteView)
     target_state: TargetView = field(default_factory=TargetView)

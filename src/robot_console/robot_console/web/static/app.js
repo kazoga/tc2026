@@ -217,6 +217,17 @@ function appendField(dl, label, value) {
   dl.appendChild(dd);
 }
 
+function renderGnssDropout(state, connectionLost = false) {
+  const alert = document.getElementById('gnss-dropout-alert');
+  if (!alert) return;
+  const stale = connectionLost || ['STALE', 'LOST'].includes(state?.freshness);
+  alert.hidden = !stale && !state?.active;
+  alert.textContent = stale ? 'GNSS途絶模擬：状態未確認（通知が途絶えています）' :
+    'GNSS途絶模擬中 — R1を離すと解除 / 融合へのGNSS入力を遮断';
+  alert.style.cssText = 'padding:12px;font-size:18px;font-weight:bold;border-radius:6px;' +
+    (stale ? 'background:#fff3cd;color:#664d03;' : 'background:#b91c1c;color:white;');
+}
+
 function renderSummary(snapshot) {
   const fields = document.getElementById('summary-fields');
   fields.innerHTML = '';
@@ -434,6 +445,7 @@ async function pollSnapshot() {
     const snapshot = await fetchSnapshot();
     // 描画までを1つの成功単位として扱う。描画途中の例外を握り潰すと、
     // 通信は成功しているのに画面だけが古いまま固まる状態を検知できない。
+    renderGnssDropout(snapshot.gnss_dropout);
     renderSummary(snapshot);
     renderEvents(snapshot.events);
     renderGpsSummary(snapshot);
@@ -446,6 +458,7 @@ async function pollSnapshot() {
     snapshotFailureCount = 0;
     lastSnapshotErrorText = '';
   } catch (error) {
+    renderGnssDropout(null, true);
     snapshotFailureCount += 1;
     lastSnapshotErrorText = `${error.name}: ${error.message}`;
     console.error('snapshotの取得または描画に失敗しました', error);

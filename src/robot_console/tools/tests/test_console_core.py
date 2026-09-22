@@ -666,3 +666,15 @@ def test_snapshot_reports_profile_error_as_event():
     events = core.build_snapshot().event_banners
 
     assert any(e.event_type == 'profile_error' and profile_id in e.message for e in events)
+
+
+def test_gnss_dropout_snapshot_and_web_payload():
+    from robot_console.web.json_codec import build_snapshot_payload
+    core = _make_core()
+    core.update_gnss_dropout(SimpleNamespace(data=True))
+    snapshot = core.build_snapshot()
+    assert snapshot.gnss_dropout_state.active
+    assert snapshot.gnss_dropout_state.freshness == FreshnessLevel.OK
+    assert build_snapshot_payload(snapshot)['gnss_dropout'] == {'active': True, 'freshness': 'OK'}
+    core.update_gnss_dropout(SimpleNamespace(data=False))
+    assert not core.build_snapshot().gnss_dropout_state.active

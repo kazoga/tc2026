@@ -60,6 +60,7 @@ from .snapshot_model import (
     DriveModeStateView,
     FollowerView,
     FusionStateView,
+    GnssDropoutStateView,
     GpsStateView,
     NtripStateView,
     HealthSummaryView,
@@ -123,6 +124,7 @@ class ConsoleCore:
         self._ntrip_state = NtripStateView()
         self.freshness.set_threshold('ntrip', 2.5, 5.)
         self._fusion_state = FusionStateView()
+        self._gnss_dropout_state = GnssDropoutStateView()
         self._localization_state = LocalizationStateView()
         self._route_state = RouteView()
         self._target_state = TargetView()
@@ -551,6 +553,11 @@ class ConsoleCore:
             self._localization_state = replace(self._localization_state, **updates)
         self.freshness.mark_received('localization.pose_llh')
 
+    def update_gnss_dropout(self, msg: Any) -> None:
+        with self._lock:
+            self._gnss_dropout_state = GnssDropoutStateView(active=bool(msg.data))
+        self.freshness.mark_received('gnss_dropout')
+
     def update_fusion_status(self, msg: Any) -> None:
         """融合JSONを表示専用Viewへ変換する。不正値でGUIを終了させない。"""
         try:
@@ -647,6 +654,7 @@ class ConsoleCore:
             gps_state = self._gps_state
             ntrip_state = self._ntrip_state
             fusion_state = self._fusion_state
+            gnss_dropout_state = self._gnss_dropout_state
             localization_state = self._localization_state
             route_state = self._route_state
             target_state = self._target_state
@@ -724,6 +732,7 @@ class ConsoleCore:
             operation_state=operation_state,
             gps_state=gps_state,
             ntrip_state=replace(ntrip_state, freshness=self.freshness.evaluate('ntrip', now=now)),
+            gnss_dropout_state=replace(gnss_dropout_state, freshness=self.freshness.evaluate('gnss_dropout', now=now)),
             fusion_state=replace(fusion_state, freshness=self.freshness.evaluate(
                 'fusion', now=now)),
             localization_state=localization_state,

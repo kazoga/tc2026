@@ -21,7 +21,7 @@ class ManualTeleopConfig:
     linear_axis_invert: bool = False
     angular_axis_invert: bool = False
     enable_button: int = 4
-    turbo_button: int = 5
+    turbo_button: int = -1
     turbo_ratio: float = 1.5
     joy_timeout_s: float = 0.5
 
