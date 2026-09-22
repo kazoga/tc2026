@@ -52,7 +52,10 @@ header {
 
 main {
   display: grid;
-  grid-template-columns: 1fr;
+  /* minmax(0, 1fr)とし、内容の最小幅が列幅を押し広げないようにする。1frのままだと
+     鮮度・稼働状態一覧の表など横幅を要する子に合わせて列全体が画面幅を超え、
+     ページ全体に横スクロールが出る。 */
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   /* 幅の広いPCモニタで地図・画像の高さが固定pxのまま横方向にだけ際限なく
      伸び、極端な横長（映画のシネマスコープ比2.35:1すら超える）になるのを防ぐ。 */
@@ -126,8 +129,19 @@ main {
   margin: 0;
 }
 
+/* 地図カードは左列（状態サマリ・イベント・GNSS）の積み上げ高さに合わせて伸びる。
+   地図本体を固定高のままにするとカード下部に余白が残るため、見出しとcaptionを
+   除いた残り全体へ地図を広げる。 */
+#map {
+  display: flex;
+  flex-direction: column;
+}
+
 .leaflet-map {
   width: 100%;
+  /* 余りがある場合は縦に伸ばす。1列表示（スマホ幅）では余りが無いため、
+     aspect-ratio由来の高さがそのまま使われる。 */
+  flex: 1 1 auto;
   aspect-ratio: 16 / 9;
   min-height: 320px;
   background: #000;
@@ -142,8 +156,9 @@ main {
 
 .grid {
   display: grid;
-  /* 768px未満（スマホ幅）では1列にし、1枚あたりの表示面積を確保する。
-     768px以上は@media側でauto-fitの複数列に戻す。 */
+  /* 画面幅によらず1列の縦積みとする。左右に並べると1枚あたりの幅が半分になり、
+     横長のカメラ映像では縦方向が余って表示が小さくなる
+     （PyQt5側のlocalization_sensor_tab.pyと同じ扱い）。 */
   grid-template-columns: 1fr;
   gap: 12px;
 }
@@ -151,6 +166,10 @@ main {
 .sensor-card {
   margin: 0;
   padding: 0;
+  /* 縦積みにするとカードはセクション全幅（PCで最大1400px）まで広がり得る。
+     4:3の映像では高さが1000pxを超えて1画面に収まらなくなるため上限を設ける。
+     スマホ幅ではこの上限に達しないので、従来どおり全幅で表示される。 */
+  max-width: 720px;
 }
 
 .sensor-card img {
@@ -162,18 +181,55 @@ main {
   display: block;
 }
 
-.sensor-card figcaption {
-  font-size: 0.8rem;
-  color: var(--muted);
-  margin-top: 4px;
+/* パネル名（左）とtopic・鮮度（右）を同じ行へ置く。2行に分けるとその分だけ
+   画像領域が狭くなる（PyQt5側のImagePanelと同じ扱い）。 */
+.sensor-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+  /* スマホ幅ではパネル名とtopicが1行に収まらない。折り返しを許さないと行の
+     min-content幅がそのままグリッド列幅の下限となり、ページ全体が横に広がる。 */
+  flex-wrap: wrap;
 }
 
-/* 768px以上（タブレット・PC・横向きスマホ）では表示幅に余裕があるため、
-   センサー画像グリッドをauto-fitの複数列に戻す。 */
-@media (min-width: 768px) {
-  .grid {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  }
+.sensor-card-title {
+  font-weight: bold;
+}
+
+.sensor-card-status {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: right;
+  /* 長いtopic名で行が縮められなくなるのを防ぐ。 */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 判定チップ。カメラ画像の下へ1行で並べ、幅もカメラカードに合わせる。
+   縦並びの定義リストにすると認識種別の数だけ縦を消費する。 */
+.perception-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+}
+
+.perception-fields dt {
+  color: var(--muted);
+}
+
+.perception-fields dd {
+  margin: 0 12px 0 0;
+}
+
+/* 表はprofile名が長く、スマートフォン幅では画面内に収まらない。カード内だけで
+   横スクロールさせ、ページ全体が横に広がらないようにする。 */
+#health {
+  overflow-x: auto;
 }
 
 table {
