@@ -7,6 +7,7 @@ manual_teleop_node:
     angular_scale: 1.5
     linear_y_scale: 0.5
     deadzone: 0.05
+    in_place_turn_deadzone: 0.12
     linear_axis_invert: false
     angular_axis_invert: false
     enable_button: 4

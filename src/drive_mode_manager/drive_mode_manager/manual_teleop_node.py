@@ -33,6 +33,7 @@ class ManualTeleopNode(Node):
         self.declare_parameter('angular_scale', 1.5)
         self.declare_parameter('linear_y_scale', 0.5)
         self.declare_parameter('deadzone', 0.05)
+        self.declare_parameter('in_place_turn_deadzone', 0.12)
         self.declare_parameter('linear_axis_invert', False)
         self.declare_parameter('angular_axis_invert', False)
         self.declare_parameter('enable_button', 4)
@@ -48,6 +49,7 @@ class ManualTeleopNode(Node):
             angular_scale=float(self.get_parameter('angular_scale').value),
             linear_y_scale=float(self.get_parameter('linear_y_scale').value),
             deadzone=float(self.get_parameter('deadzone').value),
+            in_place_turn_deadzone=float(self.get_parameter('in_place_turn_deadzone').value),
             linear_axis_invert=bool(self.get_parameter('linear_axis_invert').value),
             angular_axis_invert=bool(self.get_parameter('angular_axis_invert').value),
             enable_button=int(self.get_parameter('enable_button').value),

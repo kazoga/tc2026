@@ -18,6 +18,7 @@ class ManualTeleopConfig:
     angular_scale: float = 1.5
     linear_y_scale: float = 0.5
     deadzone: float = 0.05
+    in_place_turn_deadzone: float = 0.12
     linear_axis_invert: bool = False
     angular_axis_invert: bool = False
     enable_button: int = 4
@@ -92,6 +93,12 @@ class ManualTeleopCore:
         linear_y = 0.0
         if self._config.linear_y_axis >= 0:
             linear_y = self._read_axis(joy.axes, self._config.linear_y_axis, self._config.linear_y_scale)
+
+        # 横操作に混ざる小さな前後入力を中立として扱う。左右の車輪を
+        # 逆回転できるよう、角速度は前進速度から独立して保持する。
+        if (angular_z != 0.0 and math.isfinite(linear_x) and
+                abs(linear_x) <= abs(self._config.linear_scale) * self._config.in_place_turn_deadzone):
+            linear_x = 0.0
 
         if self._config.linear_axis_invert:
             linear_x *= -1.0

@@ -52,7 +52,7 @@ public:
 
     accel_linear_ = declare_parameter<double>("acceleration_max.linear", 0.7, immutable);
     decel_linear_ = declare_parameter<double>("deceleration_max.linear", 1.5, immutable);
-    accel_angular_ = declare_parameter<double>("acceleration_max.angular", 0.6, immutable);
+    accel_angular_ = declare_parameter<double>("acceleration_max.angular", 1.5, immutable);
     for (double limit : {vmax_linear_, vmax_angular_, accel_linear_, accel_angular_, decel_linear_}) {
       if (!std::isfinite(limit) || limit <= 0.0) {
         throw std::runtime_error("Velocity and acceleration limits must be finite and positive");
