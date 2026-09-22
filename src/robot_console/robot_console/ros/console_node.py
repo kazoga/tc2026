@@ -277,15 +277,21 @@ class RosHandle:
         self.thread.join(timeout=5.0)
 
 
-def start_ros_thread(core: ConsoleCore, *, node_name: str = DEFAULT_NODE_NAME) -> RosHandle:
+def start_ros_thread(
+    core: ConsoleCore,
+    *,
+    node_name: str = DEFAULT_NODE_NAME,
+    ros_args: Optional[list[str]] = None,
+) -> RosHandle:
     """`RobotConsoleNode` を生成し、別スレッドでexecutorを回す。
 
     Qtイベントループ（`ui_qt_main.py`）やHTTPサーバスレッド（`web_main.py`）と
     rclpy executorを分離するために用いる（architecture_design.md 14.1節）。
+    `ros_args` はROS初期化時に渡す引数列。省略時は従来どおりsys.argvを使う。
     """
 
     if not rclpy.ok():
-        rclpy.init()
+        rclpy.init(args=ros_args)
     node = RobotConsoleNode(core, node_name=node_name)
 
     def _spin() -> None:

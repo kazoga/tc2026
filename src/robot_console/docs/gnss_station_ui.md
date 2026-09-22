@@ -15,6 +15,8 @@ GNSS欄はRTK状態、衛星数、HDOP、補正データ年齢、方位・標準
 `/rtk_gps/...` を指す。bringup経由の起動を基本とし、`bringup.launch.py` が `gnss_namespace`
 に応じてremapする。単独起動時は `robot_console.launch.py` の `rtk_status_topic` /
 `ntrip_status_topic` 引数で指定する（既定値は公開名）。
+HTML版の単独起動では `--ros-args -r` で両診断トピックをremapする。
+実機向けの起動コマンドは [HTML遠隔観測UIの公開範囲](html_ui_access.md) を参照する。
 GNSS位置コールバックとは独立して診断を送る。接続成功と補正受信を区別し、CRC有効RTCMが
 5秒以上届かないと補正途絶。UIが診断topicを2.5秒超受信しないと更新遅延、5秒超で情報途絶。
 GNSS自体の鮮度は既存の1秒/3秒閾値。未受信の数値は「—」、古いFIX表示を正常色にしない。
