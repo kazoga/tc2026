@@ -65,13 +65,12 @@ class BagRecorder:
                                        output=str(output), free_bytes=free)
                 self._started = time.monotonic()
                 self._error = ''
-                # shellを介さず、記録対象は公開中および今後出現する全通常topic。
+                # 累積地図は専用relayで10秒間隔。それ以外は全通常topic。
                 log = (self.directory/(name+'.log')).open('w')
                 try:
                     self._process = subprocess.Popen([
-                        'ros2', 'bag', 'record', '--all-topics', '--storage', 'sqlite3',
-                        '--output', str(output), '--max-bag-size', str(1024**3),
-                        '--disable-keyboard-controls'], stdin=subprocess.DEVNULL,
+                        'ros2', 'run', 'robot_console', 'record_bag_with_map',
+                        '--output', str(output), '--max-bag-size', str(1024**3)], stdin=subprocess.DEVNULL,
                         stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
                 finally:
                     log.close()

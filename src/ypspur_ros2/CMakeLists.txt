@@ -14,7 +14,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 
 # -----------------------------------------------------------------------------
-# yp-spur (third_party submodule) + Issue #245 ワークアラウンドパッチ適用
+# yp-spur (third_party submodule) + Issue #245 / 公式PR #248パッチ適用
 # -----------------------------------------------------------------------------
 
 set(YPSPUR_DIR         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/yp-spur)

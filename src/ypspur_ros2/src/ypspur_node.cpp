@@ -46,6 +46,14 @@ public:
     vmax_linear_       = declare_parameter<double>("velocity_max.linear", 1.0);
     vmax_angular_      = declare_parameter<double>("velocity_max.angular", 1.5);
 
+    const double accel_linear = declare_parameter<double>("acceleration_max.linear", 0.3);
+    const double accel_angular = declare_parameter<double>("acceleration_max.angular", 0.6);
+    for (double limit : {vmax_linear_, vmax_angular_, accel_linear, accel_angular}) {
+      if (!std::isfinite(limit) || limit <= 0.0) {
+        throw std::runtime_error("Velocity and acceleration limits must be finite and positive");
+      }
+    }
+
     if (use_socket_) {
       RCLCPP_INFO(get_logger(), "Connecting to ypspur-coordinator via TCP %s:%d",
                   ipc_ip_.c_str(), ipc_port_);
@@ -63,6 +71,16 @@ public:
                      "YPSpur_init failed. Is ypspur-coordinator running?");
         throw std::runtime_error("YPSpur_init failed");
       }
+    }
+
+    // Coordinator user limits start at zero; cmd_vel alone cannot move the robot.
+    // Clear a previous client's target before enabling nonzero motion limits.
+    if (YPSpur_vel(0.0, 0.0) < 0 ||
+        YPSpur_set_vel(vmax_linear_) < 0 ||
+        YPSpur_set_angvel(vmax_angular_) < 0 ||
+        YPSpur_set_accel(accel_linear) < 0 ||
+        YPSpur_set_angaccel(accel_angular) < 0) {
+      throw std::runtime_error("Failed to initialize YP-Spur motion limits");
     }
 
     odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("odom", 10);

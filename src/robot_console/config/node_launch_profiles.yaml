@@ -69,7 +69,9 @@ profiles:
       # robot_navigator が購読する topic に合わせる。異なる名前にすると
       # robot_navigator の制御ループが odom 未受信となり停止指令を出し続ける。
       odom_topic: /ypspur_ros/odom
-      start_coordinator: 'false'
+      # UIから実機基盤を起動するときはcoordinatorも所有する。
+      # 別途起動済みの場合のみUIでfalseへ変更する。
+      start_coordinator: 'true'
 
   - profile_id: rtk_gps_um982
     category: gps_gnss

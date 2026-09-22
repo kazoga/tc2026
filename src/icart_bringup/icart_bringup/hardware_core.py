@@ -20,6 +20,16 @@ def read_yaml(path: Path) -> dict:
     return value
 
 
+def coordinator_parameter(config: dict) -> Path:
+    """インストール済みpackage URIまたは従来のファイルパスを解決する。"""
+    value = config['wheel']['coordinator_param']
+    if value.startswith('package://'):
+        from ament_index_python.packages import get_package_share_directory
+        package, relative = value[len('package://'):].split('/', 1)
+        return Path(get_package_share_directory(package)) / relative
+    return Path(value).expanduser()
+
+
 def geometry(config: dict) -> dict:
     """LiDAR原点からIMU、前主アンテナ、後副アンテナを車体座標で求める。"""
     mid, gps = config['mid360'], config['gnss']
@@ -179,7 +189,7 @@ def validate_runtime(config: dict) -> None:
     """不足時はプロセスを起動する前に具体的な設定不足を報告する。"""
     from ament_index_python.packages import get_package_prefix
     geometry(config)
-    parameter = Path(config['wheel']['coordinator_param']).expanduser()
+    parameter = coordinator_parameter(config)
     if not parameter.is_file():
         raise ValueError(f'YP-Spurの実車パラメータがありません: {parameter}')
     for package in ['urg_node', 'livox_ros_driver2', 'rtk_gps_um982', 'ypspur_ros2', 'joy', 'tf2_ros'] + (

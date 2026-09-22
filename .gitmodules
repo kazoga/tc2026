@@ -9,7 +9,7 @@
 	url = https://github.com/t-nakabayashi/FAST_LIO.git
 [submodule "src/livox_ros_driver2"]
 	path = src/livox_ros_driver2
-	url = https://github.com/atinfinity/livox_ros_driver2.git
+	url = https://github.com/t-nakabayashi/livox_ros_driver2.git
 [submodule "src/livox_sdk2_vendor/third_party/Livox-SDK2"]
 	path = src/livox_sdk2_vendor/third_party/Livox-SDK2
 	url = https://github.com/Livox-SDK/Livox-SDK2.git

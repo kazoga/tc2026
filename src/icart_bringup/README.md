@@ -86,7 +86,8 @@ FIX条件にする。`session.yaml` の `gnss_start_fix_radius_m` で半径[m]�
 
 [実機ハードウェア統合](docs/実機ハードウェア統合.md)に構成・設定・検証範囲をまとめた。
 `prepare_real_session --site inagi|tsukuba --station <選択局> --output <新規出力先>`で、
-MID-360下向き25度、主アンテナ上10cm・副アンテナ後50cmを共通設定へ反映する。
+MID-360は車軸上0.414m、roll −0.6°・pitch +26.9°。主アンテナはLiDARの鉛直上15cm、
+副アンテナはメインの後50cm（既存値）を共通設定へ反映する。2026-09-22の実測配置を基準とする。
 車軸中央x=0は確認済み。高さは昨年度値を引き継ぐ。
 `check_rtk_station --site inagi --list`で候補一覧、`--station <選択局>`でRTCM受信を検査する。
 採取時は手動固定。新しい実機profileはJoy・手動介入・カメラ・URG・GNSS・Livox・車輪を共通起動する。

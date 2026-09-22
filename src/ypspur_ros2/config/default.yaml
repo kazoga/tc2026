@@ -12,3 +12,6 @@
     velocity_max:
       linear: 1.0               # m/s, ±対称
       angular: 1.5              # rad/s, ±対称
+    acceleration_max:
+      linear: 0.3               # m/s^2, coordinatorへ起動時に設定
+      angular: 0.6              # rad/s^2

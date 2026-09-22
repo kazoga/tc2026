@@ -41,6 +41,7 @@ class BagCard(QtWidgets.QGroupBox):
         self.output.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
         self.output.setWordWrap(True)
         layout.addWidget(self.output)
+        layout.addWidget(QtWidgets.QLabel('累積地図は10秒間隔、その他のトピックは通常どおり記録'))
         self.update_state(BagState())
 
     def _choose_directory(self):

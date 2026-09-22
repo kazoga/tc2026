@@ -40,4 +40,4 @@ LIOから車体の3D姿勢を求め、レバーアームを除いた平面位置
 `master_forward_m/left_m/height_m`で主アンテナ位置を補正する。
 `publish_base_tf`（既定false）をtrueにするとmap→base_link平面TFも配信する。
 実機設定はicart_bringupのprepare_real_sessionが一括生成する。
-LiDAR内部extrinsicに車体の25度取付角を足さない。
+LiDAR内部extrinsicに車体への取付角を足さない。

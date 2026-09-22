@@ -5,7 +5,7 @@
 
 | 部品 | 内容 | 状態 |
 | --- | --- | --- |
-| [MID-360 25°マウント](mid360_mount_25deg/README.md) | MISUMI JTABS板とHFS5横梁に対応する印刷ブラケット | 試作。実機適合・強度・放熱は未検証 |
+| [MID-360 25°マウント](mid360_mount_25deg/README.md) | MISUMI JTABS板とHFS5横梁に対応、前方50mm延長の印刷ブラケット | 試作。実機適合・強度・放熱は未検証 |
 
 ## 配置
 
