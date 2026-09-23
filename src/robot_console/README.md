@@ -56,7 +56,7 @@ GO/STOP・封鎖の判定はカメラ画像の直下にチップで表示する�
 
 GNSS診断の相対購読名は `rtk_gps/rtk_status` と `rtk_gps/ntrip_status`。
 共通起動は配信元へremapし、単独Qt起動は `rtk_status_topic` / `ntrip_status_topic` 引数で指定する。
-詳細は[基地局表示](docs/gnss_station_ui.md)を参照する。
+詳細は[基地局表示](docs/robot_console_gui_screen_function_design.md)を参照する。
 HTML版は読取専用で、認証機能を持たない。loopbackで待ち受け、別端末への公開は
 [HTML遠隔観測UIの公開範囲](docs/html_ui_access.md)の手順に従う。
 
@@ -102,7 +102,7 @@ CLI同時起動時は`--business-environment`で初期環境を指定できる�
 ダッシュボードの「ROSBAG保存」で保存先を選び、記録開始 → 停止・保存を操作する。
 既定はPC内 `~/rosbags` に日時別保存。累積地図は10秒ごとに`/Laser_map_record`へ記録し、ほかの通常トピックは全件記録する。
 元の`/Laser_map`は記録対象から除外し、経過時間・容量・保存先を表示する。
-Web UIには追加していない。詳細は [ROSBAG保存](docs/rosbag_ui.md) を参照。
+Web UIには追加していない。詳細は [ROSBAG保存](docs/robot_console_gui_screen_function_design.md) を参照。
 
 ### R1によるGNSS途絶模擬
 
