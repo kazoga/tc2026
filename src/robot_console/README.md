@@ -57,8 +57,95 @@ GO/STOP・封鎖の判定はカメラ画像の直下にチップで表示する�
 GNSS診断の相対購読名は `rtk_gps/rtk_status` と `rtk_gps/ntrip_status`。
 共通起動は配信元へremapし、単独Qt起動は `rtk_status_topic` / `ntrip_status_topic` 引数で指定する。
 詳細は[基地局表示](docs/robot_console_gui_screen_function_design.md)を参照する。
-HTML版は読取専用で、認証機能を持たない。loopbackで待ち受け、別端末への公開は
-[HTML遠隔観測UIの公開範囲](docs/html_ui_access.md)の手順に従う。
+HTML版は読取専用で、認証機能を持たない。loopbackで待ち受ける。
+別端末への公開は下の「HTML遠隔観測UIの公開範囲」に従う。
+
+## HTML遠隔観測UIの公開範囲
+
+サーバはloopback（`127.0.0.1`）固定で待ち受ける。`--host` の既定値を変更せずに起動すれば、
+同じPC上からのみ閲覧できる。
+
+```bash
+ros2 run robot_console robot_console_web
+```
+
+上記はシミュレーションの公開GNSSトピック（`/rtk_gps/rtk_status` と
+`/rtk_gps/ntrip_status`）を購読する。実機UM982の診断を表示する場合は、
+ドライバのprivate名へ2つともremapして起動する。
+
+```bash
+ros2 run robot_console robot_console_web --ros-args \
+  -r rtk_gps/rtk_status:=/rtk_gps/rtk_gps_um982_node/rtk_status \
+  -r rtk_gps/ntrip_status:=/rtk_gps/rtk_gps_um982_node/ntrip_status
+```
+
+実機の `gnss_namespace` を変更した場合は、右辺の `/rtk_gps/rtk_gps_um982_node` を
+その設定値に合わせる。`--port` などのHTTPサーバ引数は `--ros-args` より前に指定できる。
+
+UIはGET専用で、手動介入・起動操作・パラメータ編集のAPIを持たない。一方で認証は無く、
+位置・経路・カメラ画像をそのまま配信する。**到達できる相手にはすべて見える**前提で
+公開範囲を決める。通信は平文HTTPであり、UI自体は経路の暗号化を行わない。
+
+### 別端末から閲覧する場合
+
+別端末から見るときも、サーバのbind先はloopbackのまま変えない。`--host 0.0.0.0` は
+有線・無線を含む全インタフェースへ開くことになるため使わない。
+
+閲覧端末とROS PCが同一のTailscale tailnetへ接続済みであることを前提に、Tailscale側の
+proxy機能でtailnet内へ限定公開する。ROS PC側で次を一度だけ実行する。
+
+```bash
+sudo tailscale serve --bg --https=443 8765
+```
+
+`8765` は `robot_console_web` の既定ポート。`--port` を変えた場合はその値を指定する。
+tailnet内の端末からは、そのPCのMagicDNS名へHTTPSでアクセスする。
+
+この構成では次の性質が得られる。
+
+- tailnet外からはTCP接続自体が成立しない（loopback以外で待ち受けていないため）
+- 接続元の判定は送信元IPではなく、Tailscaleの端末認証による
+- 経路はWireGuardで暗号化され、`--https` 指定時はTLSも終端される
+
+`--https` はtailnet側でMagicDNSとHTTPS証明書が有効である必要がある。無効の場合は
+`--http=<ポート>` でも公開範囲はtailnet内に限定されるが、TLS終端は行われない。
+
+状態の確認と撤去には次を使う。
+
+```bash
+tailscale serve status
+```
+
+```bash
+sudo tailscale serve reset
+```
+
+**この設定はtailscaledの状態として永続化され、PCやtailscaledを再起動しても残る。**
+公開をやめるときは明示的に `reset` する。撤去し忘れた場合、UIを停止している間は
+転送先が存在せず閲覧できないが、次にUIを起動した時点でtailnet内の端末から見える状態で
+立ち上がる。同じポートを別プロセスが使った場合も同様に露出するため、運用を終えたら
+状態を確認する。
+
+次の2つは行わない。
+
+- `tailscale funnel` は使わない。公開インターネットへ露出する機能であり、本UIの想定と
+  正反対である。
+- `--host 0.0.0.0` での起動はしない。
+
+既定ではtailnet内の全ノードが到達できる。特定の端末・ユーザだけに限定するときは、
+tailnet側のACLで当該ポートへのアクセスを許可するデバイスを絞る。ACLの設定値は
+Tailscale側の管理対象であり、本リポジトリでは管理しない。
+
+残るリスクは次のとおり。
+
+- 閲覧端末を紛失・乗っ取られた場合、その端末からは閲覧できる。対処はTailscale側の
+  デバイス管理（キー失効）で行う。
+- ROS PCにログインできる他のユーザ・プロセスはloopback経由で閲覧できる。これは公開範囲を
+  どう設定しても変わらない。
+- UI自体に認証を追加する場合は、別途リバースプロキシ等の導入が必要になる。
+
+本リポジトリにはポート番号と手順のみを記載し、IPアドレス、tailnet名、デバイス名、
+MagicDNS名は記載しない。これらは実行環境ごとに異なり、リポジトリ外で管理する。
 
 ## ログ・確認
 

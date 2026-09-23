@@ -146,7 +146,7 @@ GNSS/NTRIPの未受信・期限切れの数値は正常色で表示しない。
 HTMLはSnapshotによる読取専用表示で、走行・起動停止・bag・採取操作は提供しない。
 GNSS詳細は折りたたみ、スマートフォン幅でも接続先を折り返す。
 HTTPサーバはloopbackで待ち受け、認証機能を持たない。
-別端末への公開は[公開範囲の運用](html_ui_access.md)に従う。
+別端末への公開範囲と手順は[README](../README.md)に従う。
 PC内URLは遠隔端末から直接開ける共有URLではない。
 
 表示元の構造は[アーキテクチャ](robot_console_gui_architecture_design.md)、

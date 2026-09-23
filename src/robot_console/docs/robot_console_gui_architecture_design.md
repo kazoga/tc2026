@@ -69,7 +69,7 @@ R1途絶模擬は `/fusion/gnss_dropout_active` を表示する。
 
 HTMLは読取専用で、走行指令・起動停止・bag操作を提供しない。
 サーバはloopbackで待ち受け、認証機能を持たない。
-別端末への公開は[HTML遠隔観測UIの公開範囲](html_ui_access.md)に従う。
+別端末への公開範囲と手順は[README](../README.md)に従う。
 画像参照はImageStore、JSON変換はweb/json_codec.pyで扱う。
 
 [ROSBAG保存](robot_console_gui_screen_function_design.md)はPCの記録操作、[経路採取](../../route_survey/README.md)は
