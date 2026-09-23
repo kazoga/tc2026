@@ -93,10 +93,14 @@ Gazebo dynamic pose info は ROS 側で `/gazebo/dynamic_pose_info` へ remap �
 | 引数 | 既定値 | 内容 |
 | --- | --- | --- |
 | `start_drive_status_gui` | `true` | drive status GUI 起動の有無 |
-| `stack_use_sim_time` | `false` | route stack 側 ROS ノードの simulation time 使用 |
-| `route_data_dir` | `/tmp/obstacle_route_sim/routes` | 生成 waypoint CSV と route config 出力先 |
+| `generated_route_dir` | `<generated_world_dir>/routes` | 生成 waypoint CSV の出力先 |
+| `generated_config_dir` | `<generated_world_dir>/config` | 生成 route config の出力先 |
+| `waypoint_step` | `3.0` | 生成 waypoint の間隔 [m] |
 | `enable_route_blocker` | `true` | 経路中心線上の決定的 blocker pylon 生成の有無 |
 | `route_blocker_distance` | `8.0` | blocker pylon を置く経路始点からの距離 [m] |
+
+route stack 側の ROS ノードは `use_sim_time=false` 固定で起動する。Gazebo 側の
+`use_sim_time` とは別であり、launch 引数では切り替えられない。
 
 統合確認 launch では、Gazebo/bridge/fake localization pose は simulation time を扱う一方、route stack 側は
 初期 route request timer の停止を避けるため既定で wall time とする。

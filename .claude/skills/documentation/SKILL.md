@@ -91,10 +91,16 @@ interface 定義のみのパッケージ（`tc_*_msgs`）は、README でメッ�
 - コード変更により仕様、topic、パラメータ、状態遷移、QoS、launch 引数、ファイル構成が
   変わる場合は、関連文書の更新要否を確認する。
 - コードと文書が矛盾している場合は、どちらを正とするか確認し、作業報告に明記する。
-- 文書の改名・削除の後は `python3 tools/check_doc_links.py` でリンク切れを確認する。
-- `setup.py` が `glob('docs/*.md')` で文書を install 対象にしているパッケージでは、文書を
-  改名・削除すると `build/<package_name>/` に旧名の残骸が残り `colcon build` が失敗する。
-  該当パッケージの `build/` を削除してから再ビルドする。
+- 文書を変更したら `python3 tools/check_docs.py` を実行する。リンク切れ、廃止トピック名の
+  残存、パラメータ表の乖離、必須文書の欠落、記述方針ブロックの不一致、検討資料の必須ヘッダを
+  まとめて検査する。同じ検査は `tools/tests/test_doc_consistency.py` から CI でも走る。
+- 検出を除外する場合は `tools/doc_check_allowlist.yaml` へ理由を添えて書く。無条件の無視を
+  作らない。
+- 文書を改名・削除すると、`docs` を install 対象にするパッケージで `build/` と `install/` に
+  旧名の残骸が残り、`colcon build` が失敗する。該当パッケージの `build/` と `install/` を
+  削除してから再ビルドする。対象は robot_console、road_blockage_detector、
+  traffic_signal_recognizer、drive_mode_manager、tc_diagnostics、rtk_gps_um982、
+  gnss_lio_fusion である。
 
 # 作業報告
 
