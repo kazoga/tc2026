@@ -38,6 +38,14 @@ QtWebEngine内部の状態（プロファイル初期化まわり）が汚染さ
 ワークスペース全体の `pytest` 実行時も、本ディレクトリ配下のテストのみが
 フォーク対象になり、他パッケージのテストには影響しない。
 
+同じ理由から、フォーク元となる pytest の親プロセスは ROS context を初期化して
+いてはならない。ROS context の初期化で生じる DDS の内部スレッドは
+`rclpy.shutdown()` 後も残留するため、そのまま fork すると本ディレクトリの
+`test_bag_recorder.py` や `test_console_node.py` のように子プロセスで
+`rclpy.init()` を呼ぶテストがデッドロックする。ROS を起動するテストを
+別プロセスへ隔離する規則と、その検査はワークスペース直下の `conftest.py`
+に置く。
+
 このワークスペースはnumpy/opencv等のバージョン固定のためPython venv
 （`--system-site-packages`）の使用を前提とする（CLAUDE.md「実行環境」参照）。
 venvが有効化されていない場合、pytest自体は動作し得るが依存関係の

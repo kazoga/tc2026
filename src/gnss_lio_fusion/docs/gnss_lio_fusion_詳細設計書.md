@@ -217,6 +217,10 @@ baselineの初期取得、運搬後変化、FLOAT凍結、衛星不足、外れ�
 GPS途絶中の継続、GPS復帰の補正上限、共分散正定性、LIOジャンプ、方位折返し、
 測定時刻内挿、IMU取付高さの補正を単体テストする。
 模擬試験は独立DDS domain/Gazebo partition、期限付きで実行し、起動したプロセスを回収する。
+実際のsubscribe/publish経路を確認する試験は、pytestの親プロセスではなくsubprocessで
+ROSを起動する。ROS contextの初期化で生じるDDSスレッドは`rclpy.shutdown()`後も残留し、
+親プロセスに残ると後続の`pytest-forked`が`os.fork()`した子プロセスをデッドロックさせる。
+規則の検査はワークスペース直下の`conftest.py`が行う。
 完走、実際のゴール距離、接触、最大横ずれ、±1 m以内の割合、測位誤差を分けて報告する。
 完走しても経路外へ出た試験を安全な走行として合格扱いにしない。
 

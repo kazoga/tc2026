@@ -273,6 +273,11 @@ ros2 run icart_bringup run_digital_twin --output log/digital_twin/session01 --st
 各パッケージのテストはルートの `pytest` に含まれる。ROS 環境とビルド済み
 `install/setup.bash` を読み込み、有効な venv で実行する。
 GUI テストには Qt WebEngine と pytest-forked、地形生成には Node.js が必要。
+ROS を実際に起動するテストは、pytest の親プロセスではなく `pytest.mark.forked` か
+`subprocess` で別プロセスへ隔離する。ROS context の初期化で生じる DDS スレッドは
+`rclpy.shutdown()` 後も残留し、親プロセスに残ると `pytest-forked` が `os.fork()` した
+子プロセスをデッドロックさせる。この規則はワークスペース直下の
+[`conftest.py`](conftest.py) が検査し、違反したテストは停止せず失敗する。
 地理地形の生成には `src/obstacle_route_sim/tools/terrain3d` で `npm ci` も実行する。
 通常 install のツールを使う場合は、
 `npm ci --prefix "$(ros2 pkg prefix obstacle_route_sim)/lib/obstacle_route_sim/terrain3d"`
