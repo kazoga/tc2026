@@ -46,6 +46,10 @@ ROSBAGは記録開始後に停止・保存し、metadataを含む保存完了を
 「ルート全体」で表示範囲を戻せる。最大zoomは22、19超は背景タイルを拡大表示する。
 GNSS単独方位は北基準時計回り、融合yawはmap基準反時計回りと明示する。
 
+Qt側は `QWebEngineView` に地図HTMLを埋め込み、HTML遠隔観測UIと同じ Leaflet 1.9.4 と
+OSMタイルで描画する。同じ実装を共有することで両UIの表示内容を揃える。waypoint列は
+緯度経度を持つものだけを描き、現在indexを境に走行済みと未走行を色分けする。
+
 画像列は上からフロントカメラ、Sensor Viewerの順に縦積みとし、QtとHTMLで順序を揃える。
 実機カメラはusb_camの `/usb_cam/image_raw`。道路封鎖・信号の認識ノードは画像を配信せず、
 `/perception/*/overlay` の検出矩形・判定をConsoleCoreが同じカメラへ重畳する。
