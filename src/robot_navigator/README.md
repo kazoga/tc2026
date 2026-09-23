@@ -77,7 +77,7 @@ ros2 run robot_navigator robot_navigator
 | `max_vel` | double | `1.0` | 線速度の上限 [m/s]。
 | `max_w` | double | `1.0` | 角速度の上限 [rad/s]。
 | `max_acc_v` | double | `0.7` | 線加速度上限 [m/s^2]。
-| `max_acc_w` | double | `0.6` | ドライバとの整合確認に使用する角加速度要求値 [rad/s^2]。PID出力自体の変化率制限ではない。
+| `max_acc_w` | double | `1.5` | ドライバとの整合確認に使用する角加速度要求値 [rad/s^2]。PID出力自体の変化率制限ではない。
 | `max_decel_v` | double | `1.5` | 制動距離の計算で想定する線減速度 [m/s^2]。
 | `braking_delay_sec` | double | `0.2` | 通信・driver遅延の設計予算 [s]。制御1周期を別途加算する。
 | `require_motion_limits` | bool | `true` | ドライバの実効制限の受信を必須にする。

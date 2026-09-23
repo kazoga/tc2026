@@ -3,7 +3,7 @@ robot_navigator:
     max_vel: 1.0
     max_w: 1.0
     max_acc_v: 0.7
-    max_acc_w: 0.6
+    max_acc_w: 1.5
     max_decel_v: 1.5
     braking_delay_sec: 0.2  # 通信・driver遅延の設計予算。制御1周期を別途加算
     require_motion_limits: true

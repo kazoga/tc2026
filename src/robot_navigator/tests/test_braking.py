@@ -56,8 +56,8 @@ def test_icart_middle_calibration_and_three_layers_agree():
     assert hardware['RADIUS[0]']==-.148248 and hardware['RADIUS[1]']==.148248
     assert hardware['TREAD']==.30737 and hardware['GEAR']==150
     actual=SimpleNamespace(max_linear_velocity=1.,max_angular_velocity=1.,
-        linear_acceleration=.7,linear_deceleration=1.5,angular_acceleration=.6)
-    assert driver_compatible(actual,1.,1.,.7,.6,1.5)
+        linear_acceleration=.7,linear_deceleration=1.5,angular_acceleration=1.5)
+    assert driver_compatible(actual,1.,1.,.7,1.5,1.5)
     for bad in [.3, 1.0, math.nan]:
         actual.linear_deceleration=bad
-        assert not driver_compatible(actual,1.,1.,.7,.6,1.5)
+        assert not driver_compatible(actual,1.,1.,.7,1.5,1.5)
