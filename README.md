@@ -16,7 +16,7 @@ ROS 2 Jazzy ワークスペース。初めて読む場合は[システム構成]
 | パッケージ                                                  | 役割                                                                 |
 | ----------------------------------------------------------- | -------------------------------------------------------------------- |
 | [`src/rtk_gps_um982`](src/rtk_gps_um982/README.md)          | Unicore UM982 RTK GNSS ドライバ。NavSatFix / Imu / RtkStatus を配信  |
-| [`src/rtk_gps_um982_msgs`](src/rtk_gps_um982_msgs/)         | 上記用カスタム msg (`RtkStatus`)                                     |
+| [`src/rtk_gps_um982_msgs`](src/rtk_gps_um982_msgs/README.md) | 上記用カスタム msg (`RtkStatus`)                                     |
 | [`src/ypspur_ros2`](src/ypspur_ros2/README.md)              | yp-spur ベースの差動駆動ロボット制御。`/cmd_vel` で動かす            |
 
 ### 経路計画・追従
@@ -30,7 +30,7 @@ ROS 2 Jazzy ワークスペース。初めて読む場合は[システム構成]
 ### 座標変換・地理情報
 | パッケージ                                                  | 役割                                                                 |
 | ----------------------------------------------------------- | -------------------------------------------------------------------- |
-| [`src/tc_geo_msgs`](src/tc_geo_msgs/)                       | LLH位置、品質、地図投影条件を共有する msg 定義                       |
+| [`src/tc_geo_msgs`](src/tc_geo_msgs/README.md)              | LLH位置、品質、地図投影条件を共有する msg 定義                       |
 | [`src/geo_pose_converter`](src/geo_pose_converter/README.md) | LLH/ENU相互変換、経路の地理座標投影、OSM経路表示を提供               |
 | [`src/gnss_lio_fusion`](src/gnss_lio_fusion/README.md) | GNSSと水平化したFAST-LIOを融合し、車輪odomによる退避と自律速度制限を行う |
 | [`src/route_survey`](src/route_survey/README.md) | 手動走行の融合位置からLLH経路を採取し、観測した路面の横移動余裕を記録・編集する |
@@ -56,6 +56,7 @@ ROS 2 Jazzy ワークスペース。初めて読む場合は[システム構成]
 | [`src/traffic_signal_recognizer`](src/traffic_signal_recognizer/README.md) | YOLO検出結果から信号のGO/STOPを判定し、検出矩形と判定データを配信 |
 | [`src/road_blockage_detector`](src/road_blockage_detector/README.md) | YOLO検出結果と自己位置から道路封鎖を判定し、検出矩形と判定データを配信 |
 | [`src/robot_console`](src/robot_console/README.md)          | 走行状態・障害物回避・経路進捗・ノード起動を一画面で監視する PyQt5 GUI ダッシュボードとHTML遠隔観測UI |
+| [`src/tc_diagnostics`](src/tc_diagnostics/README.md)        | 各ノードが `/diagnostics` へ自己申告診断を配信するための共通ヘルパ |
 
 ワークスペース横断の仕様書は [`docs/`](docs/)、パッケージ固有の設計書は各パッケージ
 配下の `docs/` を参照。
