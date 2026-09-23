@@ -95,7 +95,15 @@ pytest src/<package_name>/tests
     （`src/gnss_lio_fusion/tests/test_gravity_transport.py`、`test_gnss_dropout.py` が例）。
 - どちらの場合も `ROS_DOMAIN_ID` と `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` で
   他の実行から隔離し、`timeout` を付けて回収する。
-- この規則はワークスペース直下の `conftest.py` が検査する。親プロセスで ROS context が
-  初期化済みのまま forked テストへ入った場合、デッドロックせずにそのテストが失敗する。
-  この失敗が出たら、直前に ROS を起動しているテストを探して別プロセスへ隔離する。
+- この規則はワークスペース直下の `conftest.py` が検査する。検査は 2 つある。
+  - fork 直前の親プロセスのネイティブスレッド数が pytest 起動時より増えていれば失敗させる。
+    ROS に限らず HTTP サーバ・Qt・背景スレッドの残留も捕まえる。
+  - 親プロセスで ROS context が初期化済みなら、原因を名指しして失敗させる。
+- どちらの失敗が出た場合も、直前に実行されたテストのうちスレッドを残すものを探して
+  別プロセスへ隔離する。デッドロックせずに失敗するため、停止を待つ必要はない。
+- ワークスペース全体を一度に実行すると `robot_console/tools/tests` の fork 元へ他
+  パッケージの状態が持ち込まれる。CI は 2 段に分けて実行しており、手元でも
+  `pytest -q --ignore-glob="*robot_console/tools/tests*"` と
+  `pytest -q src/robot_console/tools/tests` に分けて実行する。`--ignore` は `testpaths` に
+  明示されたディレクトリには効かないため `--ignore-glob` を使う。
 - テスト結果を報告する場合は、実行コマンド、成功/失敗、失敗時の原因、未確認範囲を明記する。
