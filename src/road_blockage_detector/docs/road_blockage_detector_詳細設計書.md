@@ -10,6 +10,9 @@ road_blockage_detector ノードは YOLO 推論結果と自己位置を入力と
 - YOLO の生の検出矩形だけを確認する画像は `yolo_detector` 側の `/perception/road_blockage/detection_image` を使用する。
 - 本ノードは画像を購読・配信しない。経路封鎖判定の根拠を確認するため、検出矩形と判定状態を `/perception/road_blockage/overlay` へ publish し、画像への重畳は表示側（`robot_console`）が行う。
 - 過去の経路封鎖位置はノード内メモリで累積保持すればよい。永続化要件は無し。
+- 本パッケージの launch はいずれも `use_sim_time` 引数を提供しない。判定は入力メッセージの
+  stamp を使うため、検知と自己位置の時刻基準を呼び出し側で一致させる必要がある。launch の
+  選択だけで入力の時刻不整合が補正されるわけではない。
 
 ## 3. ロボット挙動との連携と全体フロー
 - YOLO で経路封鎖看板を検出し、`road_blocked` を true で publish した時点で robot_navigator が走行を一時停止する。停止中も本ノードは検知を継続する。
