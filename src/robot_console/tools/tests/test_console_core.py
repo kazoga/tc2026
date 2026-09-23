@@ -47,7 +47,89 @@ def test_launch_status_callback_updates_health_and_launch_profiles():
     assert snapshot.launch_profiles[profile_id].status == NodeLaunchStatus.RUNNING
     assert snapshot.launch_profiles[profile_id].process_id == 4242
     health = next(item for item in snapshot.health if item.profile_id == profile_id)
+    # 起動直後はhealth_topicsがまだ流れていないことが正常であり、猶予期間内は
+    # 異常と判定しない（docs/ノード健全性監視設計.md 3.6節）。
+    assert health.status == 'STARTING'
+
+
+def test_health_reflects_topic_reception_not_only_the_process():
+    """プロセス稼働だけでなく、health_topicsの受信で RUNNING を判定する."""
+
+    core = _make_core()
+    profile = core._profiles[0]
+    core._on_launch_status(profile.profile_id, NodeLaunchStatus.RUNNING, 4242, None)
+
+    for health_topic in profile.health_topics:
+        core.mark_health_topic_received(health_topic.topic)
+    health = next(
+        item for item in core.build_snapshot().health if item.profile_id == profile.profile_id
+    )
     assert health.status == 'RUNNING'
+    assert health.health == FreshnessLevel.OK
+    assert not health.externally_started
+
+
+def test_partial_topic_loss_is_kept_visible_as_a_warning():
+    """一部のtopicだけ途絶えた部分故障を、全滅と同じ扱いにしない."""
+
+    core = _make_core()
+    profile = core._profiles[0]
+    assert len(profile.health_topics) > 1
+    core._on_launch_status(profile.profile_id, NodeLaunchStatus.RUNNING, 1, None)
+
+    core.mark_health_topic_received(profile.health_topics[0].topic)
+    health = next(
+        item for item in core.build_snapshot().health if item.profile_id == profile.profile_id
+    )
+    assert health.status == 'RUNNING'
+    assert health.health == FreshnessLevel.STALE
+
+
+def test_externally_started_profile_is_detected_from_topics_alone():
+    """GUI外で起動されたノードを、topic受信だけで稼働中と判定する."""
+
+    core = _make_core()
+    profile = core._profiles[0]
+    for health_topic in profile.health_topics:
+        core.mark_health_topic_received(health_topic.topic)
+
+    health = next(
+        item for item in core.build_snapshot().health if item.profile_id == profile.profile_id
+    )
+    assert health.status == 'RUNNING'
+    assert health.externally_started
+
+
+def test_diagnostic_error_overrides_a_healthy_looking_profile():
+    """topicは流れていても、ノード自身がERRORを申告すれば異常として表示する."""
+
+    core = _make_core()
+    profile = next(p for p in core._profiles if p.diagnostic_nodes and p.health_topics)
+    core._on_launch_status(profile.profile_id, NodeLaunchStatus.RUNNING, 1, None)
+    for health_topic in profile.health_topics:
+        core.mark_health_topic_received(health_topic.topic)
+
+    node_name = profile.diagnostic_nodes[0]
+    core.update_diagnostics(SimpleNamespace(status=[
+        SimpleNamespace(name=f'{node_name}/device', level=b'\x02', message='受信機未接続'),
+    ]))
+    health = next(
+        item for item in core.build_snapshot().health if item.profile_id == profile.profile_id
+    )
+    assert health.status == 'ERROR'
+    assert health.diagnostic_message == '受信機未接続'
+
+
+def test_diagnostics_with_invalid_names_are_discarded():
+    """name規約に合わない診断はprofileと対応付けられないため破棄する."""
+
+    core = _make_core()
+    core.update_diagnostics(SimpleNamespace(status=[
+        SimpleNamespace(name='no_aspect', level=b'\x02', message='x'),
+        SimpleNamespace(name='a/b/c', level=b'\x02', message='y'),
+        SimpleNamespace(name='/liveness', level=b'\x02', message='z'),
+    ]))
+    assert core._diagnostics == {}
 
 
 def test_launch_status_callback_handles_simulator_suffix_separately():

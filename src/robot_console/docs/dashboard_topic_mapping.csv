@@ -22,7 +22,8 @@
 画像パネル,ルート地図,active_route,tc_route_msgs/msg/Route.msg,route_image,640x360へリサイズし、画像なしの場合はプレースホルダ表示
 画像パネル,障害物ビュー,sensor_viewer,sensor_msgs/msg/Image.msg,data,400x400へletterboxし、障害物ヒントのオーバレイを重畳
 画像パネル,障害物オーバレイ,obstacle_avoidance_hint,tc_route_msgs/msg/ObstacleAvoidanceHint.msg,"front_blocked,front_clearance_m,left_offset_m,right_offset_m",遮蔽状況・余裕距離・左右オフセットをオーバレイ表示
-画像パネル,外部カメラ,perception/road_blockage/decision_image / perception/traffic_signal/decision_image,sensor_msgs/msg/Image.msg,data,信号停止waypoint待機中のみsignalフレームを選択し、それ以外はdriveフレームを480x360に調整
+画像パネル,フロントカメラ,usb_cam/image_raw,sensor_msgs/msg/Image.msg,data,生画像1本を唯一の画像入力とし、認識結果の重畳はConsoleCoreが行う
+画像パネル,認識判定チップ,perception/traffic_signal/overlay / perception/road_blockage/overlay,tc_perception_msgs/msg/PerceptionOverlay.msg,"decision_text,status_note,detections",判定文言と採用検出数をチップ表示し、検出枠は画像へ重畳する
 障害物ビュー,遮蔽,obstacle_avoidance_hint,tc_route_msgs/msg/ObstacleAvoidanceHint.msg,front_blocked,
 障害物ビュー,余裕,obstacle_avoidance_hint,tc_route_msgs/msg/ObstacleAvoidanceHint.msg,front_clearance_m,
 障害物ビュー,左、右,obstacle_avoidance_hint,tc_route_msgs/msg/ObstacleAvoidanceHint.msg,"left_offset_m,right_offset_m",
