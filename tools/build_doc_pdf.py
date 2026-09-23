@@ -1,4 +1,15 @@
-"""参照ガイドをA5縦・日本語PDFへ変換する。依存: reportlab。"""
+"""Markdown 文書をA5縦・日本語PDFへ変換する。依存: reportlab。
+
+現地でオフライン閲覧する用途を想定する。PDF は生成物であり Git 管理対象にしないため、
+既定の出力先は Git 管理外の log/pdf/ とする。
+
+PDF 化は任意の運用のため reportlab は requirements.txt に含めない。使う場合は
+`python3 -m pip install reportlab` で個別に導入する。
+
+使い方:
+    python3 tools/build_doc_pdf.py [入力Markdown] [-o 出力PDF]
+"""
+import argparse
 from pathlib import Path
 from xml.sax.saxutils import escape
 import re
@@ -9,7 +20,18 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A5
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
-ROOT = Path(__file__).resolve().parent
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_INPUT = REPO_ROOT / 'docs/走行システムの機能と制約.md'
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('input', nargs='?', type=Path, default=DEFAULT_INPUT,
+                    help='変換する Markdown。既定は docs/走行システムの機能と制約.md')
+parser.add_argument('-o', '--output', type=Path, default=None,
+                    help='出力 PDF。既定は log/pdf/<入力名>.pdf')
+args = parser.parse_args()
+source = args.input.resolve()
+title = source.stem
+
 pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
 body = ParagraphStyle('body', fontName='HeiseiKakuGo-W5', fontSize=10, leading=16,
                       wordWrap='CJK', spaceAfter=6)
@@ -24,9 +46,9 @@ def rich(text):
     return text.replace('`','')
 def footer(canvas, doc):
     canvas.setFont('HeiseiKakuGo-W5',8)
-    canvas.drawString(30,18,'TC2026 / 走行システムの機能と制約')
+    canvas.drawString(30,18,f'TC2026 / {title}')
     canvas.drawRightString(A5[0]-30,18,str(doc.page))
-flow=[];lines=(ROOT/'README.md').read_text().splitlines();i=0
+flow=[];lines=source.read_text(encoding='utf-8').splitlines();i=0
 while i<len(lines):
     line=lines[i];i+=1
     if not line.strip():continue
@@ -47,7 +69,7 @@ while i<len(lines):
             paragraph.append(lines[i]);i+=1
         line=' '.join(paragraph)
     flow.append(Paragraph(rich(line),body))
-output=ROOT/'output/pdf/tc2026_software_review.pdf';output.parent.mkdir(parents=True,exist_ok=True)
+output=args.output or REPO_ROOT/'log/pdf'/f'{title}.pdf';output.parent.mkdir(parents=True,exist_ok=True)
 SimpleDocTemplate(str(output),pagesize=A5,rightMargin=30,leftMargin=30,topMargin=25,bottomMargin=35,
-                  title='走行システムの機能と制約',author='tc2026 repository').build(flow,onFirstPage=footer,onLaterPages=footer)
+                  title=title,author='tc2026 repository').build(flow,onFirstPage=footer,onLaterPages=footer)
 print(output)
