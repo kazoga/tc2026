@@ -155,10 +155,11 @@ NodeLaunchManagerがprofileごとのstdout/stderrを保存し、停止時はSIGI
 
 `tools/tests/` のpytestでCore・Snapshot・Qt表示・操作・HTTPを確認する。
 Qt WebEngineの試験にはpytest-forkedを使い、テスト間の状態を分離する。
-`tools/tests/`配下はconftest.pyが全テストへ`pytest.mark.forked`を付与するため、
-ROS contextの初期化はfork後の子プロセスで行われる。他パッケージのテストが親プロセスで
-ROSを初期化すると子プロセスがデッドロックするため、その規則はワークスペース直下の
-conftest.pyが検査する。
+`QWebEngineView`を生成するテストは`tools/tests/isolated/`へ置く。同一インタプリタで
+複数の`QWebEngineView`を跨ぐとQtWebEngineの状態が汚染されセグメンテーションフォルトを
+起こすため、`test_isolated_suite.py`が`subprocess`で別インタプリタとして実行する。
+`tools/tests/`直下のテストはfork不要である。スレッドを残したまま`os.fork()`すると
+子プロセスがデッドロックするため、その規則はワークスペース直下のconftest.pyが検査する。
 模擬ROSと正式入口の接続確認は `tools/check_qt_entry.py` を使用する。
 簡易route stackの補助ツールと実機の走行・帯域・停止距離の確認は分けて扱う。
 

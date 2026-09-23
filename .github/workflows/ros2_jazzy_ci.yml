@@ -36,10 +36,11 @@ jobs:
           source /opt/ros/jazzy/setup.bash
           colcon build --symlink-install
 
-      # robot_console/tools/tests は全テストを pytest-forked で子プロセスへ隔離する。
-      # fork() は呼び出しスレッドだけを複製するため、同じ pytest プロセスで先に
-      # 実行されたテストがスレッドを残していると、子プロセスがそのロックを引き継いで
-      # デッドロックする。実行を分けて、他パッケージの状態を持ち込まない。
+      # fork() は呼び出しスレッドだけを複製するため、先に実行されたテストがスレッドを
+      # 残していると、子プロセスがそのロックを引き継いでデッドロックする。現在 fork するのは
+      # robot_console/tools/tests/isolated だけで、それも test_isolated_suite.py が起こす
+      # 専用の子プロセスから行うため、分割しなくても停止しない。将来 tools/tests 直下へ
+      # forked テストが追加された場合に影響を 1 段目へ波及させないよう、実行は分けておく。
       # --ignore は pytest.ini の testpaths に明示されたディレクトリには効かないため、
       # --ignore-glob を使う。
       - name: Run pytest (robot_console 以外)

@@ -89,8 +89,8 @@ pytest src/<package_name>/tests
 
 - ROS context を初期化するテストは、pytest の親プロセスで実行しない。次のいずれかで
   別プロセスへ隔離する。
-  - `pytest.mark.forked` を付ける（`src/robot_console/tools/tests/` 配下は conftest.py が
-    一律で付与するため、個別の指定は不要）。
+  - `pytest.mark.forked` を付ける（`src/robot_console/tools/tests/isolated/` 配下は
+    conftest.py が付与するため、個別の指定は不要）。
   - `subprocess.run([sys.executable, '-c', script], env=..., timeout=...)` で起動する
     （`src/gnss_lio_fusion/tests/test_gravity_transport.py`、`test_gnss_dropout.py` が例）。
 - どちらの場合も `ROS_DOMAIN_ID` と `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` で
@@ -101,9 +101,13 @@ pytest src/<package_name>/tests
   - 親プロセスで ROS context が初期化済みなら、原因を名指しして失敗させる。
 - どちらの失敗が出た場合も、直前に実行されたテストのうちスレッドを残すものを探して
   別プロセスへ隔離する。デッドロックせずに失敗するため、停止を待つ必要はない。
-- ワークスペース全体を一度に実行すると `robot_console/tools/tests` の fork 元へ他
-  パッケージの状態が持ち込まれる。CI は 2 段に分けて実行しており、手元でも
+- fork する対象は最小限にする。`QWebEngineView` を生成するテストは
+  `src/robot_console/tools/tests/isolated/` へ置き、`test_isolated_suite.py` が
+  `subprocess` で別インタプリタとして実行する。fork 元となるその子プロセスは
+  `isolated/` しか収集しないため、他のテストのスレッドを持ち込まない。
+- CI は念のため 2 段に分けて実行する。将来 `tools/tests` 直下へ forked テストが
+  追加された場合に、影響を 1 段目へ波及させないためである。手元で分けて実行する場合は
   `pytest -q --ignore-glob="*robot_console/tools/tests*"` と
-  `pytest -q src/robot_console/tools/tests` に分けて実行する。`--ignore` は `testpaths` に
+  `pytest -q src/robot_console/tools/tests` を使う。`--ignore` は `testpaths` に
   明示されたディレクトリには効かないため `--ignore-glob` を使う。
 - テスト結果を報告する場合は、実行コマンド、成功/失敗、失敗時の原因、未確認範囲を明記する。

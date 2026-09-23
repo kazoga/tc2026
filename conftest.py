@@ -16,7 +16,7 @@
 そのため、ROS を起動するテストや背景スレッドを作るテストは次のいずれかを使う。
 
 - `pytest.mark.forked` で子プロセスへ隔離する
-  (`src/robot_console/tools/tests/` 配下は conftest.py が一律で付与する)
+  (`src/robot_console/tools/tests/isolated/` 配下は conftest.py が付与する)
 - `subprocess` で別プロセスを起動する
   (`src/gnss_lio_fusion/tests/` 配下で使用)
 
@@ -156,6 +156,9 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
     """
 
     if item.get_closest_marker('forked') is None:
+        return
+    # 診断時に fork を無効化して挙動を調べる場合だけ検査を外す。通常の実行では設定しない。
+    if os.environ.get('TC2026_SKIP_FORK_GUARD'):
         return
 
     if _ros_context_initialized_pid not in (None, os.getpid()):

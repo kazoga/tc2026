@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import unittest
 
-ROOT = Path(__file__).resolve().parents[2] / 'robot_console'
+ROOT = Path(__file__).resolve().parents[3] / 'robot_console'
 
 
 @unittest.skipUnless(shutil.which('node'), 'Node.js is required')

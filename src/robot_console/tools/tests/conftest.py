@@ -181,13 +181,29 @@ except ImportError:
 _THIS_DIR = Path(__file__).resolve().parent
 
 
+# isolated/ は通常の収集から外す。QWebEngineView を生成するテストを置いており、
+# 同じインタプリタで他のQtテストと混ぜるとセグメンテーションフォルトを起こす。
+# test_isolated_suite.py が TC2026_RUN_ISOLATED を設定して subprocess で実行する。
+# 本 conftest は isolated/ を直接指定した場合にも読み込まれるため、環境変数で分岐する。
+collect_ignore_glob = [] if os.environ.get('TC2026_RUN_ISOLATED') else ['isolated/*']
+
+
 def pytest_collection_modifyitems(items: list) -> None:
-    """本ディレクトリ配下の全テストを `pytest.mark.forked` 対象にする。
+    """`isolated/` 配下のテストだけを `pytest.mark.forked` 対象にする。
+
+    本ディレクトリ直下のテストは fork しない。`QWebEngineView` を生成するテストを
+    `isolated/` へ分けたことで、同一インタプリタ内で Qt の状態が汚染されなくなった。
+    fork する対象を減らすほど、親プロセスのスレッドを引き継いで停止する危険が減る。
+
+    `isolated/` 側は fork が要る。同一インタプリタで複数の `QWebEngineView` を
+    跨ぐとセグメンテーションフォルトを起こすためである。ただしその実行は
+    `test_isolated_suite.py` が起こす子プロセスであり、fork 元の親は 3 ファイルしか
+    収集していないため、他のテストのスレッドを持ち込まない。
 
     `pytest-forked` はルートの `pytest.ini` で必須プラグインとして宣言する。
     """
 
     for item in items:
         item_path = Path(str(item.fspath)).resolve()
-        if item_path.parent == _THIS_DIR:
+        if item_path.parent == _THIS_DIR / 'isolated':
             item.add_marker(pytest.mark.forked)
