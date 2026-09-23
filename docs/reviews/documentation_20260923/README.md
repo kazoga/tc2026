@@ -1,0 +1,186 @@
+# ドキュメント現状分析と統廃合案
+
+## 1. 実施日と対象
+
+調査日: 2026-09-23。対象: `main` ブランチ `e20e660` 時点の Markdown 文書。
+
+対象範囲は `README.md`、`docs/` 直下、`src/*/docs/`、`src/*/README.md` とする。
+`docs/references/`（メーカー資料）、`docs/reviews/`（過去の検証記録）、submodule
+（`FAST_LIO`、`livox_*`、`third_party/`）は対象外とする。
+
+| 区分 | ファイル数 |
+| --- | ---: |
+| `docs/` 直下 | 8 |
+| `src/*/docs/` | 47 |
+| README（ルート + パッケージ） | 30 |
+| **合計** | **85 ファイル / 19,048 行** |
+
+分類・章立て・記載方針の定義は [ドキュメント整備方針.md](../../ドキュメント整備方針.md) を正とする。
+本書はその方針に照らした現状の評価と、統廃合の具体案である。
+
+---
+
+## 2. 統廃合の必要性
+
+**必要と判断する。** 根拠は次の 3 点である。
+
+### 2.1 役目を終えた作業指示文書が残っている
+
+実装の入力として作られた文書が、実装完了後も成果物と並存している。
+
+| 文書 | 行数 | 冒頭の記述 | 現状 |
+| --- | ---: | --- | --- |
+| `src/robot_console/docs/robot_console_開発指示書.md` | 140 | 「Codex 指示プロンプト：robot_console パッケージ新規作成」 | パッケージは作成済み |
+| `src/robot_console/docs/robot_console_ui_renewal_input.md` | 1,529 | 「次期UIの設計および実装を行うチームへ渡すためのインプット文書」 | UI は実装済み。設計書 2 本が存在 |
+| `docs/obstacle_route_sim_migration_design_input.md` | 941 | 「既存の `lidar_obstacle_sim` を移植する」 | 移植完了済み |
+
+合計 2,610 行、対象全体の 13.7% を占める。これらは現状を書いた文書ではなく、過去のある時点の
+指示である。読み手が現行仕様と誤認する危険があり、実装が変わっても更新されない。
+
+### 2.2 同一対象の文書が phase 単位で分裂している
+
+| パッケージ | 文書 | 関係 |
+| --- | --- | --- |
+| `route_follower` | `詳細設計書_phase1.md`(244 行) / `詳細設計書_phase3_完全版.md`(310 行) / `phase3_検討記録_完全版.md`(215 行) | phase3 が「Phase1/Phase2 からの変更点を含めた完全設計情報」と自称 |
+| `route_manager` | `詳細設計書_phase1.md`(—) / `詳細設計書_phase3.md`(251 行) / `phase3_検討記録.md`(279 行) | 同上 |
+
+phase3 が完全版を名乗る以上、phase1 は現行仕様ではない。しかしファイル名からは
+どちらが正か判断できず、読み手は両方を読んで差分を取る必要がある。
+
+`_完全版` という接尾辞も、さらに完全な版があり得ることを示唆してしまう。
+
+### 2.3 機能単位の小文書が設計書から分離している
+
+`src/robot_console/docs/` には `gnss_station_ui.md`(63 行)、`html_ui_access.md`(81 行)、
+`rosbag_ui.md`(43 行) が、`robot_console_gui_screen_function_design.md`(879 行) と別に存在する。
+いずれも画面機能の説明であり、分離の基準が読み取れない。
+
+---
+
+## 3. 統廃合案
+
+### 3.1 削除（内容の移設後）
+
+| 対象 | 移設先 | 判断 |
+| --- | --- | --- |
+| `src/robot_console/docs/robot_console_開発指示書.md` | 未反映の要件があれば設計書へ | 作業指示。git 履歴から復元可能 |
+| `src/robot_console/docs/robot_console_ui_renewal_input.md` | 設計判断は検討記録へ、仕様は設計書 2 本へ | 1,529 行の精査が必要。単独タスクとして扱う |
+| `docs/obstacle_route_sim_migration_design_input.md` | `src/obstacle_route_sim/docs/obstacle_route_sim_詳細設計書.md` へ | 移植完了済み。配置も誤り（パッケージ固有文書が `docs/` 直下） |
+| `src/route_follower/docs/route_follower_詳細設計書_phase1.md` | phase3 に未収録の内容があれば移設 | phase3 が完全版 |
+| `src/route_manager/docs/route_manager詳細設計書_phase1.md` | 同上 | 同上 |
+
+削除前に **phase1 にしかない記述が無いことを確認する**。差分確認を省略しない。
+
+### 3.2 改名
+
+| 現在 | 変更後 | 理由 |
+| --- | --- | --- |
+| `route_follower_詳細設計書_phase3_完全版.md` | `route_follower_詳細設計書.md` | 作業単位を名前から外す |
+| `route_follower_phase3_検討記録_完全版.md` | `route_follower_検討記録.md` | 同上 |
+| `route_manager_詳細設計書_phase3.md` | `route_manager_詳細設計書.md` | 同上 |
+| `route_manager_phase3_検討記録.md` | `route_manager_検討記録.md` | 同上 |
+| `route_planner_詳細設計書_phase1.md` | `route_planner_詳細設計書.md` | 他 phase が存在しない |
+| `robot_console_phase1_検討記録.md` | `robot_console_検討記録.md` | 同上 |
+| `route_manager詳細設計書_phase1.md` | （削除対象） | 区切り文字が他と不統一でもある |
+
+### 3.3 統合
+
+| 統合するもの | 統合先 | 理由 |
+| --- | --- | --- |
+| `gnss_station_ui.md` / `html_ui_access.md` / `rosbag_ui.md` | `robot_console_gui_screen_function_design.md` | いずれも画面機能の説明。分離基準が無い |
+| `src/obstacle_route_sim/README.md` の設計記述（414 行） | `obstacle_route_sim_詳細設計書.md` | README に設計が混入している |
+
+統合後の `screen_function_design` は 1,000 行を超える見込みである。章で分割するか、
+機能領域ごとにファイルを分けるかは、統合作業時に構成を見て判断する。
+
+### 3.4 新規作成（欠落の補充）
+
+| 対象 | 不足 | 備考 |
+| --- | --- | --- |
+| `src/tc_diagnostics/` | README、詳細設計書 | 2026-09-23 追加のパッケージ。設計は `docs/ノード健全性監視設計.md` にあるため README のみで足りる可能性がある |
+| `src/tc_geo_msgs/` | README | `docs/` は存在する |
+| `docs/` | 索引 | 8 文書の一覧と、どれが規約・設計・検討記録かの区別が無い |
+
+### 3.5 配置の是正
+
+| 対象 | 現在 | 適正 |
+| --- | --- | --- |
+| `obstacle_route_sim_migration_design_input.md` | `docs/` | `src/obstacle_route_sim/docs/`（3.1 で削除対象） |
+| `docs/GNSS_FASTLIO時刻同期提案.md` | `docs/` | 複数パッケージにまたがるか要確認。単一パッケージなら移動 |
+| `docs/LLH系トピックメッセージ仕様検討レポート.md` | `docs/` | 複数パッケージにまたがるため現状維持で妥当 |
+
+---
+
+## 4. 経緯記載の検出結果
+
+`改版履歴` `指摘` `当初は` `従来は` `見直し` `修正した` `変更前` `レビュー結果` `対応済み`
+`今回の修正` `経緯` を含む行を機械的に抽出した。18 ファイルで該当がある。
+
+| 該当数 | ファイル |
+| ---: | --- |
+| 3 | `src/robot_console/docs/robot_console_ui_renewal_input.md` |
+| 3 | `src/gnss_lio_fusion/docs/方位実装評価.md` |
+| 2 | `src/route_follower/docs/route_follower_phase3_検討記録_完全版.md` |
+| 2 | `src/robot_navigator/docs/実装分析報告書.md` |
+| 2 | `src/obstacle_route_sim/docs/地理地図_GNSSシミュレーション検証.md` |
+| 2 | `src/obstacle_route_sim/docs/つくば2026全域デジタルツイン.md` |
+| 2 | `src/obstacle_route_sim/docs/obstacle_route_sim_詳細設計書.md` |
+| 2 | `src/geo_pose_converter/docs/geo_pose_converter_詳細設計書.md` |
+| 2 | `docs/次期システム_アーキテクチャ検討レポート.md` |
+| 2 | `docs/LLH系トピックメッセージ仕様検討レポート.md` |
+| 1 | 他 8 ファイル |
+
+### 4.1 判定時の注意
+
+**機械的な検出結果をそのまま削除対象としない。** 次の 2 つは字面が似ていても扱いが異なる。
+
+| 分類 | 例 | 扱い |
+| --- | --- | --- |
+| 経緯 | 「指摘を受けて修正した」「当初は A としていた」 | 削除、または検討記録の「採用しなかった案」へ変換 |
+| 理由 | 「A は〈制約〉により要件を満たさないため B を採用する」 | 残す。現在の仕様を支える情報である |
+
+検証記録（`docs/reviews/`、`*評価.md`、`*検証.md`）は凍結文書であり、**そこに書かれた
+時系列は観測記録そのものなので削除しない**。4 章の一覧に含まれる `方位実装評価.md`、
+`地理地図_GNSSシミュレーション検証.md` などがこれに当たる。
+
+変換の具体例は [ドキュメント整備方針.md](../../ドキュメント整備方針.md) 4.1 節を参照する。
+
+---
+
+## 5. 推奨する着手順序
+
+依存関係と手戻りの少なさから、次の順とする。
+
+1. **索引の作成**（`docs/README.md`）— 全体像を把握してから個別作業へ入る
+2. **配置の是正**（3.5）— ファイル移動のみ。内容に触れない
+3. **改名**（3.2）— 参照リンクの追随が必要
+4. **削除候補の差分確認と移設**（3.1）— 内容の精査を伴う。phase1 系から着手し、
+   `robot_console_ui_renewal_input.md`（1,529 行）は独立したタスクとする
+5. **統合**（3.3）— 4 の完了後。構成の再設計を伴う
+6. **経緯記載の除去**（4）— 全文書を対象とする横断作業
+7. **欠落の補充**（3.4）
+
+1 観点ごとに別コミットとする。2 と 3 を同一コミットにすると、移動と改名が git の rename
+検出を妨げ、差分が読めなくなる。
+
+---
+
+## 6. 作業時の検証
+
+- 一部パッケージの `setup.py` が `glob('docs/*.md')` で docs を install 対象にしている。
+  ファイル移動・改名・削除の後は `colcon build --symlink-install` を実行する
+- 文書を参照するテストがあるため pytest を実行する
+- 相対リンクとアンカーリンクの切れを確認する。検出スクリプトを `tools/` へ用意してもよい
+
+---
+
+## 7. 未確認事項
+
+- `route_follower` / `route_manager` の phase1 文書に、phase3 へ未収録の記述があるかは
+  **未確認**。削除前に差分を取る必要がある
+- `robot_console_ui_renewal_input.md` 1,529 行のうち、どれが設計書へ未反映かは **未確認**
+- `docs/GNSS_FASTLIO時刻同期提案.md` が単一パッケージに閉じるかは **未確認**
+- 各文書とコードの乖離（廃止済みトピック名・パラメータ名の残存）は、
+  `robot_console/docs/dashboard_topic_mapping.csv` の 1 件を除き **未調査**
+- `docs/トピック通信規約.md` と `docs/ノード健全性監視設計.md` は 2026-09-23 時点で
+  レビュー中（fork 元 PR #9）のため、本分析の対象外とした
