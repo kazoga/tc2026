@@ -73,7 +73,7 @@ def setup(context) -> list:
         # 接続先・デバイス設定は既存の実機launchへ委譲する。空なら別起動のドライバを使う。
         if data.get('hardware_launch'):
             actions.append(IncludeLaunchDescription(PythonLaunchDescriptionSource(data['hardware_launch']),
-                launch_arguments=({'hardware_config': data['hardware_config']}.items() if hardware else [])))
+                launch_arguments=({'hardware_config': data['hardware_config'], 'skip_clock_sensors': 'true'}.items() if hardware else [])))
         fastlio = data.get('fastlio_config') or str(
             Path(get_package_share_directory('fast_lio'))/'config/mid360.yaml')
     actions += [node('fast_lio', 'fastlio_mapping', [fastlio,
@@ -129,6 +129,24 @@ def setup(context) -> list:
     actions += [RegisterEventHandler(OnProcessExit(target_action=action,
                 on_exit=[EmitEvent(event=Shutdown(reason='共通走行プロセス終了'))]))
                 for action in list(actions) if isinstance(action, ExecuteProcess)]
+    if hardware:
+        # Only GNSS/LiDAR start before synchronization. Wheel drivers, LIO,
+        # fusion, navigator and joystick/mux wait for live raw-packet evidence.
+        waiter = ExecuteProcess(cmd=['python3', '-m', 'icart_bringup.clock_gate', 'wait'],
+                                output='screen')
+        watcher = ExecuteProcess(cmd=['python3', '-m', 'icart_bringup.clock_gate', 'watch'],
+                                 output='screen')
+        actions += [RegisterEventHandler(OnProcessExit(target_action=watcher,
+            on_exit=[EmitEvent(event=Shutdown(reason='時刻同期監視が終了'))])), watcher]
+        def after_clock(event, _context):
+            if event.returncode != 0:
+                return [EmitEvent(event=Shutdown(reason='時刻同期が成立しないため起動中止'))]
+            return actions
+        sensors = IncludeLaunchDescription(PythonLaunchDescriptionSource(str(
+            Path(get_package_share_directory('icart_bringup'))/'launch/clock_sensors.launch.py')),
+            launch_arguments={'session_directory': str(Path(data['hardware_config']).parent)}.items())
+        return [RegisterEventHandler(OnProcessExit(target_action=waiter, on_exit=after_clock)),
+                sensors, waiter]
     return actions
 
 

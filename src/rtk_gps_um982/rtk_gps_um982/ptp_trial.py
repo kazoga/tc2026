@@ -21,6 +21,8 @@ time_stamping software
 network_transport UDPv4
 delay_mechanism E2E
 domainNumber 0
+# MID360 IEEE1588-2008 interoperability; linuxptp 4 defaults to minor version 1.
+ptp_minor_version 0
 twoStepFlag 1
 BMCA noop
 serverOnly 1
@@ -71,14 +73,43 @@ def chrony_ready(sources: str, tracking: str, max_offset: float) -> bool:
     for line in sources.splitlines():
         fields = line.split()
         if len(fields) >= 6 and fields[:2] == ['#*', 'UM98']:
-            selected = fields[5].isdigit() and int(fields[5]) <= 5
+            selected = fields[5].isdigit() and int(fields[5]) <= 8
     offset = re.search(r'System time\s*:\s*([\d.eE+-]+) seconds', tracking)
     normal = re.search(r'Leap status\s*:\s*Normal\b', tracking)
     return bool(selected and offset and normal
                 and math.isfinite(float(offset[1])) and abs(float(offset[1])) <= max_offset)
 
 
-def check(interface: str, max_offset: float) -> dict:
+def ntp_ready(sources: str, tracking: str, max_offset: float) -> bool:
+    """NTP trial gate: fresh selected server and estimated total error <=20 ms.
+
+    This bound assumes the upstream clock is correct, not independent proof.
+    """
+    selected = False
+    for line in sources.splitlines():
+        fields = line.split()
+        if len(fields) >= 6 and fields[0] == '^*':
+            try:
+                poll, reach, age = int(fields[3]), int(fields[4], 8), int(fields[5])
+                selected = (reach & 1 != 0 and 0 <= age <= min(256, max(16, 2**(poll+1))))
+            except ValueError:
+                pass
+    values = []
+    for key in ('System time', 'Root delay', 'Root dispersion'):
+        match = re.search(re.escape(key)+r'\s*:\s*([\d.eE+-]+) seconds', tracking)
+        if not match:
+            return False
+        value = float(match[1])
+        if not math.isfinite(value):
+            return False
+        values.append(value)
+    offset, delay, dispersion = values
+    return bool(selected and re.search(r'Leap status\s*:\s*Normal\b', tracking)
+                and abs(offset) <= max_offset and delay >= 0 and dispersion >= 0
+                and abs(offset)+delay/2+dispersion <= .020)
+
+
+def check(interface: str, max_offset: float, clock_source: str = 'gnss') -> dict:
     """NICとchronyを読み取り、試験開始条件を返す。"""
     nic = Path('/sys/class/net')/interface
     tools = {name: shutil.which(name) is not None for name in ('ptp4l', 'chronyc', 'ethtool')}
@@ -88,7 +119,8 @@ def check(interface: str, max_offset: float) -> dict:
         result['timestamping'] = command(['ethtool', '-T', interface])
         result['sources'] = command(['chronyc', '-n', 'sources'])
         result['tracking'] = command(['chronyc', 'tracking'])
-        result['clock_ready'] = chrony_ready(result['sources'], result['tracking'], max_offset)
+        validator = ntp_ready if clock_source == 'ntp' else chrony_ready
+        result['clock_ready'] = validator(result['sources'], result['tracking'], max_offset)
     except (OSError, subprocess.SubprocessError) as exc:
         result['error'] = str(exc)
     result['ready'] = bool(all(tools.values()) and result['link'] and result['clock_ready'])

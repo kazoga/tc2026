@@ -51,7 +51,8 @@ def test_central_widget_is_scaled_canvas_with_logical_size(qt_app):
     canvas = window.centralWidget()
 
     assert isinstance(canvas, ScaledCanvas)
-    assert canvas.content is window.tab_widget
+    assert window.tab_widget.parent() is canvas.content
+    assert window.clock_sync_warning.parent() is canvas.content
     assert canvas.content.size().width() == LOGICAL_WIDTH
     assert canvas.content.size().height() == LOGICAL_HEIGHT
 
