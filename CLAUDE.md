@@ -10,7 +10,8 @@ GitHub リポジトリに登録し、開発メンバ間で共通利用するこ�
 - ROS 2 パッケージの新規作成・ファイル配置・命名に迷ったら `ros2-package-layout` スキル
 - `colcon build` の実行・ビルド失敗調査・pytest の追加/実行は `build-and-test` スキル
 - ローカルでの `ros2 run` / `ros2 launch` などの実行確認は `ros2-local-run` スキル
-- パッケージ詳細設計書や `docs/` 配下の技術文書の作成・更新は `design-doc-template` スキル
+- 規約・アーキテクチャ設計・詳細設計書・運用手順 (README)・検討資料の作成・更新は
+  `design-doc-template` スキル
 - GUI・フロントエンド実装は `frontend-design` スキル（Anthropic 公式プラグイン。導入方法は
   [README.md](README.md) の「Claude Code スキル設定」を参照）
 
