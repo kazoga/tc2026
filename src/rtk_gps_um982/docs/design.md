@@ -259,58 +259,29 @@ ros2 launch rtk_gps_um982 rtk_gps_um982.launch.py \
 
 ## 13. 時刻同期
 
-### 13.1 全体方針
+PCはchronyで外部NTPに同期し、icart-clock.serviceがsoftware PTPでMID360へPC時刻を配信する。
+GNSSドライバは受信機の測定UTCをROSメッセージへ保持する。RMC SOCKはnoselectでPC同期元から除外する。
+共通実機起動はtime_sync.enabled=true、stamp_source=gnss_utc、transport_delay_ms=0を強制する。
 
-MID-360への既存Ethernet配線を使うPTP案を第一候補とする。GNSSでPC時計を合わせ、
-PCをPTPマスター、MID-360をスレーブにする。追加配線が可能ならPPS＋RMC直接入力も選べる。
-PPS単独では日付・秒番号は確定しない。具体的な接続・設定・検証条件は
-[ワークスペースの同期提案](../../../docs/GNSS_FASTLIO時刻同期提案.md)を参照する。
+### GNSS時刻
 
-ROSメッセージは計測時刻をUTC由来のUnix epochで保持する。
-通常モードのGGA日付はPC時計から補われる。`time_sync.enabled=true`では有効RMCの日付で
-補い、アンカーが2秒より古い場合は位置配信を止める。方位と位置の計測epochは厳密には結合されていない。
-PC時計は融合の待機・鮮度判定にも使われるため、独立に同期と監視が必要である。
-PPSの仕様だけからアプリケーション全体のμs精度を保証しない。
+有効RMCから日付を確定し、GGAの測定時分秒と結合する。アンカーが2秒より古い場合は位置配信を止める。
+time_sync_coreはチェックサム・状態・暦日を検査する。単一のシリアル読み取りからRMCを分配し、
+chrony SOCK送信はnonblockingで再試行する。~/time_syncに鮮度・送信数・拒否数・SOCKエラーを出力する。
 
-### 13.2 stamp_sourceパラメータの現実装
+| stamp_source | 動作 |
+|---|---|
+| gnss_utc | PositionData.timestampにtransport_delay_msを加算する。共通起動は加算0 |
+| ros_time | clock.now()で受信処理時刻を付ける。共通起動では使わない |
+| pps_edge | PPS処理は未実装でclock.now()へフォールバック。共通起動では使わない |
 
-| 値 | 動作 |
-| --- | --- |
-| `gnss_utc` | `PositionData.timestamp`に`transport_delay_ms`を加算する |
-| `ros_time` | `clock.now()`で受信処理時刻を付ける |
-| `pps_edge` | 未実装。現状は`clock.now()`へフォールバックする |
+方位と位置の計測epochは厳密には結合されていない。独立基準での絶対時刻精度は未検証。
 
-`transport_delay_ms`は原則0とする。観測時刻が既にGNSS由来なら、シリアル通信遅延の
-減算は計測時刻を過去へずらす誤補正になる。非ゼロ値は観測epochの固定ずれを実測した場合に限る。
+### PTPサービスと起動監視
 
-### 13.3 PC時計の設定
-
-`scripts/chrony-gpsd.conf.sample`はNMEA SHM入力の手動設定例であり、自動導入しない。
-同じシリアルをdriverとgpsdで競合して読まない。専用ポートまたは単一所有者による分配を使う。
-`chronyc sources -v`の`*`、`chronyc tracking`のoffsetとLeap statusを確認する。
-`#?`は未選択・同期不能等を示し、同期成功とは判定しない。精度は実測する。
-
-### 13.4 PTP試験実装
-
-`time_sync_core.py`がRMCのチェックサム・状態・暦日を検証し、native ABIのchrony SOCKへ
-受信完了時刻とUTCとの差を渡す。`time_sync_client.py`は固定版外部ライブラリの
-`_readline`を拡張するアダプターであり、別のシリアル読み取りは行わない。
-送信はnonblockingで、chronyd再起動後も次のRMCから再試行する。
-`~/time_sync`のString JSONに鮮度・送信数・拒否数・SOCKエラーを出力する。
-
-`ptp_trial.py`はROS非依存のprepare/check/run/monitor CLIである。
-runはソフトウェアPTPのマスターを起動し、クロック準備条件喪失時に自身の子プロセスだけを停止する。
-monitorはAF_PACKETで点群・IMUを受動観測する。OS設定は自動適用しない。
-具体的なコマンドと終了条件は[PTP試験手順](PTP試験手順.md)を参照する。
-
-### 13.5 今後の実装
-
-位置/方位epoch結合、融合側での同期喪失の自動拒否、ハードウェアPTPの時系変換、
-再同期時の履歴リセットを追加する。実機時刻や配線はこの設計書では変更しない。
-
----
-
-参考:
-- ベースライブラリ: https://github.com/t-nakabayashi/UM982-RTK-GPS-Library
-- REP-103 (Coordinate Conventions): https://www.ros.org/reps/rep-0103.html
-- REP-105 (Coordinate Frames): https://www.ros.org/reps/rep-0105.html
+NTP選択・応答鮮度・残補正・推定誤差を確認してPTPを配信する。
+AF_PACKETで点群・IMUを受動監視し、PTP種別・受信継続・受信時刻差・逆行を判定する。
+0.1 ms以下の微小逆行は記録のみ。原時刻は書き換えない。
+共通bringupは同期成立後に車輪・FAST-LIO・融合・走行制御を起動し、運用中の条件喪失でshutdownする。
+PyQt5 GUIは未成立・喪失・監視更新停止を全タブ上部に警告する。
+設定・自動処理・起動操作・復旧・確認範囲は[時刻同期と確認手順](PTP試験手順.md)を参照する。

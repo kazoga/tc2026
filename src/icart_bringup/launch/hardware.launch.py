@@ -31,7 +31,9 @@ def setup(context):
              parameters=[{'serial_port': config['urg']['serial_port'],
                           'serial_baud': config['urg']['baud'], 'laser_frame_id': 'laser',
                           'ip_address': '', 'angle_min': config['urg']['angle_min'],
-                          'angle_max': config['urg']['angle_max']}], output='screen'),
+                          'angle_max': config['urg']['angle_max']}], output='screen')]
+    if context.launch_configurations.get('skip_clock_sensors', 'false') != 'true':
+        actions += [
         Node(package='rtk_gps_um982', executable='rtk_gps_um982_node', name='rtk_gps_um982_node',
              namespace='rtk_gps', parameters=[str(directory/'um982.yaml')], output='screen'),
         Node(package='livox_ros_driver2', executable='livox_ros_driver2_node', namespace='mid360',
@@ -68,4 +70,6 @@ def setup(context):
 
 
 def generate_launch_description():
-    return LaunchDescription([DeclareLaunchArgument('hardware_config'), OpaqueFunction(function=setup)])
+    return LaunchDescription([DeclareLaunchArgument('hardware_config'),
+        DeclareLaunchArgument('skip_clock_sensors', default_value='false'),
+        OpaqueFunction(function=setup)])

@@ -83,26 +83,19 @@ ros2 run rtk_gps_um982 rtk_gps_um982_node \
 
 ## 時刻同期
 
-既存Ethernetを使うPTP試験を[PTP試験手順](docs/PTP試験手順.md)にまとめている。
+共通実機起動は外部NTP→PC chrony→software PTP→MID360を使用する。
+GNSSメッセージには受信機の測定UTCを付ける。PCのUSB受信時刻への置き換えは行わない。
 
-| パラメータ | 既定値 | 動作 |
-| --- | --- | --- |
-| `time_sync.enabled` | `false` | 有効RMCをchrony SOCKへ配信し、GGAの日付をRMCに合わせる |
-| `time_sync.chrony_socket` | `/run/chrony/um982.sock` | chronydが作成するSOCKのパス |
+| パラメータ | ノード単独の既定 | 共通実機起動 |
+|---|---|---|
+| time_sync.enabled | false | true：RMC日付をGGAへ適用し、SOCKへ診断入力 |
+| time_sync.chrony_socket | /run/chrony/um982.sock | 同じ。chrony側はnoselect |
+| stamp_source | gnss_utc | gnss_utcを強制 |
+| transport_delay_ms | 0 | 0を強制 |
 
-```bash
-ros2 run rtk_gps_um982 ptp_trial prepare --output log/ptp_trial/setup
-ros2 run rtk_gps_um982 ptp_trial check --interface <有線NIC>
-```
-
-時刻配信にはchrony設定とSOCKへの書き込み権限が必要。単なるprepareだけではPC時計は変更しない。
-GNSS launchでは`time_sync:=true`で明示的に有効化する。
-PTPツールはソフトウェアタイムスタンプでUTCを配信し、開始条件の喪失時は配信を停止する。
-MID-360の点群・IMUの同期種別を確認する受動monitorも提供する。
-位置と方位のepoch結合は既存の課題であり、静止した状態の同期試験に用いる。
-
-全体方針は[時刻同期提案](../../docs/GNSS_FASTLIO時刻同期提案.md)、
-詳細は[`docs/design.md`](docs/design.md) §13を参照する。
+NTP同期とPTP配信はOSサービス、起動待機と同期喪失時の終了は共通bringupが担当する。
+GUIは実機モードで時刻同期警告を表示する。
+[構成・導入・確認手順](docs/PTP試験手順.md)を参照する。
 
 ## トラブルシューティング
 
