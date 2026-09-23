@@ -62,15 +62,6 @@ ros2 run obstacle_monitor obstacle_monitor
 | `viewer_window` | string | `"laserscan"` | OpenCV 表示ウィンドウ名（debug 用）。
 | `viewer_resize_px` | int | `500` | 配信画像のリサイズサイズ [px]。
 
-## 状態管理・処理フロー
-1. `/scan` を受信すると NaN/Inf・後方データを除外し、前方 ±90° の点群へ変換する。
-2. `max_obstacle_distance_m` 以下の点を左右に分割し、|y| 昇順で並べ替える。
-3. `calcAvoidanceOffset` でギャップ検出・外縁推定で左右オフセットを算出し、
-   `avoid_offset_min_m` の下限を適用する。
-4. `front_cone_half_deg` 内での距離分位点を計算し、`stop_dist_m` 以下で閉塞と判定する。
-5. 算出結果を `ObstacleAvoidanceHint` に格納し、`/sensor_viewer` へ可視化画像を出力する。
-6. `/localization/pose_enu`・`/active_target` を利用して viewer 上に目標矢印を描画し、状況把握を補助する。
-
 ## 動作確認手順
 1. `robot_simulator` などから `/localization/pose_enu`・`/active_target` を配信する。
 2. `laser_scan_simulator` を起動し、LiDAR の疑似データを `/scan` に配信する。
@@ -87,4 +78,9 @@ ros2 run obstacle_monitor obstacle_monitor
 
 点数不足では非閉塞・距離infを返すため、欠測と空き空間を区別できない。
 前方点の抽出上限は `max_obstacle_distance_m` であり、`hint_range_m` だけを増やしても
-遠方の検知範囲は広がらない。[判定と制約](docs/追加実装検討報告書.md)を参照する。
+遠方の検知範囲は広がらない。
+
+## 関連文書
+
+判定ロジックと制約の詳細は
+[obstacle_monitor 詳細設計書](docs/obstacle_monitor_詳細設計書.md) を参照する。
