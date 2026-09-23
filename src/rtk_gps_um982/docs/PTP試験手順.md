@@ -130,7 +130,7 @@ GUIからの全実機起動・走行、ネットワーク断を伴う長時間�
 
 ## 参照
 
-- [全体構成](../../../docs/GNSS_FASTLIO時刻同期提案.md)
+- [全体構成](../../../docs/時刻同期設計.md)
 - [共通起動設計](../../icart_bringup/docs/共通起動設計.md)
 - [chronyの監視値](https://chrony-project.org/doc/4.4/chronyc.html)
 - [LinuxPTP](https://www.linuxptp.org/documentation/ptp4l/)
