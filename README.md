@@ -4,7 +4,7 @@ ROS 2 Jazzy ワークスペース。初めて読む場合は[システム構成]
 
 ## つくばチャレンジ2026の公式情報
 
-[走行システムの機能と制約](docs/reviews/tc2026_software_20260922/README.md)
+[走行システムの機能と制約](docs/走行システムの機能と制約.md)
 
 [公式ルール・参加条件・日程の参照ガイド](docs/references/tsukuba_challenge_2026/README.md)
 に、出典URL、未公表事項、公式ページ間の記載差、実装確認事項をまとめています。
