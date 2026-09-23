@@ -1,4 +1,4 @@
-# GNSS/LIO 融合 詳細設計書
+# gnss_lio_fusion 詳細設計書
 
 ## 1. 目的・対象範囲
 

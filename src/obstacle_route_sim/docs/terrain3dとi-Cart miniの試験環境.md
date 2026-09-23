@@ -20,7 +20,7 @@ preview_terrain_trial.pyは記録した真値軌跡の閲覧HTMLを生成する�
 質量・慣性・接地・センサ特性は実搭載状態で校正した値ではない。
 
 基本試験は真値由来pose、--gnssは模擬GNSS由来pose、--fusionはGNSS/LIO融合を使う。
-FAST-LIO入力は[専用準備手順](FASTLIOシミュレータ接続検証.md)でIMU等を追加する。
+FAST-LIO入力は[専用準備手順](FAST-LIOの模擬入力と確認方法.md)でIMU等を追加する。
 
 ## 実行
 

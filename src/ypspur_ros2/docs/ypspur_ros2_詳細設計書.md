@@ -1,4 +1,4 @@
-# ypspur_ros2 設計書
+# ypspur_ros2 詳細設計書
 
 ## 1. 目的・スコープ
 
@@ -96,7 +96,7 @@ src/ypspur_ros2/
 ├── config/
 │   └── default.yaml               # パラメータ既定値
 ├── docs/
-│   └── design.md                  # 本書
+│   └── ypspur_ros2_詳細設計書.md                  # 本書
 └── third_party/
     ├── COLCON_IGNORE              # colcon にスキャンさせない
     ├── patches/

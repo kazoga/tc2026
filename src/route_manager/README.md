@@ -95,7 +95,7 @@ ros2 launch route_manager route_manager.launch.py \
 6. `offset_hint` には follower が採用すべき横方向オフセット量（m）を設定する。
 
 `ROAD_BLOCKED` は別分岐で、固定区間は現行経路を再配信し、可変区間はplanner再計画だけを試します。
-この場合はshift／skipを行いません。[詳細設計](docs/route_manager_詳細設計書_phase3.md)を参照してください。
+この場合はshift／skipを行いません。[詳細設計](docs/route_manager_詳細設計書.md)を参照してください。
 
 ## 動作確認手順
 1. `route_planner` を起動し、`/get_route` `/update_route` サービスが利用可能であることを確認する。

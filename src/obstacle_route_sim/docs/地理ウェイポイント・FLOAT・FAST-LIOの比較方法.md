@@ -15,8 +15,8 @@ GNSSで制御してLIOを記録する比較と、融合による閉ループ走�
 
 建物近傍のFLOATは誤差仮説であり、実受信機のmultipathを再現した保証はない。
 FINISHED、真値の終点、経路横ずれ、障害物回避・接触、各推定の誤差を別に評価する。
-[FAST-LIO接続](FASTLIOシミュレータ接続検証.md)、
-[誤差モデル](FASTLIOセンサ誤差モデル評価.md)、[融合確認](../../gnss_lio_fusion/docs/実装評価.md)を参照する。
+[FAST-LIO接続](FAST-LIOの模擬入力と確認方法.md)、
+[誤差モデル](FAST-LIOのセンサ誤差モデル.md)、[融合確認](../../gnss_lio_fusion/docs/実装評価.md)を参照する。
 
 模擬GNSSは `/rtk_gps/ntrip_status` に1 Hzで `state=DISABLED` の診断JSONを配信する。
 NTRIP接続を模擬せず、基地局UIで構成上の不使用と診断途絶を区別する。

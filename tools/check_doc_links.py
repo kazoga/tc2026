@@ -75,7 +75,21 @@ def collect_markdown_files(root: Path, targets: list[Path]) -> list[Path]:
             files.append(target)
             continue
         files.extend(target.rglob("*.md"))
-    return sorted({f.resolve() for f in files if not is_excluded(f.resolve(), root)})
+
+    collected: set[Path] = set()
+    for path in files:
+        # colcon --symlink-install が作る install/ 配下の symlink は、解決後のパスが
+        # 除外対象に見えなくなる。走査で見つけた位置と解決後の位置の両方で判定する。
+        if is_excluded(path, root):
+            continue
+        resolved = path.resolve()
+        if is_excluded(resolved, root):
+            continue
+        # 改名・削除の直後は install/ 配下に解決先を失った symlink が残る。
+        if not resolved.is_file():
+            continue
+        collected.add(resolved)
+    return sorted(collected)
 
 
 def to_anchor(heading_text: str) -> str:

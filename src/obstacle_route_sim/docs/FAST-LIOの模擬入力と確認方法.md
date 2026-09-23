@@ -22,7 +22,7 @@ ros2 launch obstacle_route_sim fastlio_sim.launch.py \
 ```
 
 車体・センサ設定は生成SDFとtrial.json、推定設定はparamsの専用FAST-LIO YAMLを参照する。
-`noise_profile`とseedは起動時に選ぶ。[誤差モデル](FASTLIOセンサ誤差モデル評価.md)を参照する。
+`noise_profile`とseedは起動時に選ぶ。[誤差モデル](FAST-LIOのセンサ誤差モデル.md)を参照する。
 
 ## 走行評価の選択
 

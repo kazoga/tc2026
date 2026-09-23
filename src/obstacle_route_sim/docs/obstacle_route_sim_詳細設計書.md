@@ -196,17 +196,17 @@ pylon world 生成を確認する。
 
 ### 10.4 地理地形とGNSS/LIO融合
 
-terrain3dの生成・車体前提は[試験環境](terrain3d_icart_mini検証.md)、
-地理入力は[全域モデル](つくば2026全域デジタルツイン.md)、
-LiDAR/IMU接続は[FAST-LIO入力](FASTLIOシミュレータ接続検証.md)を参照する。
+terrain3dの生成・車体前提は[試験環境](terrain3dとi-Cart miniの試験環境.md)、
+地理入力は[全域モデル](つくば2026の地理モデル.md)、
+LiDAR/IMU接続は[FAST-LIO入力](FAST-LIOの模擬入力と確認方法.md)を参照する。
 GNSS単独・FAST-LIO比較・融合走行は異なる構成で、--fusion指定時に融合を制御へ使う。
 通常の実機／模擬共通起動はicart_bringupが担当する。
 
 ### 10.5 地図とセンサ誤差
 
 --record-lio-mapで登録済み点群を分割保存する。
-[地図評価](全域FASTLIO点群地図評価.md)は推定地図の整合、
-[誤差モデル](FASTLIOセンサ誤差モデル評価.md)はLIOへの雑音・欠測・bias注入を説明する。
+[地図評価](FAST-LIO点群地図の保存と評価.md)は推定地図の整合、
+[誤差モデル](FAST-LIOのセンサ誤差モデル.md)はLIOへの雑音・欠測・bias注入を説明する。
 共通デジタルツインは歩行者の模擬と開始地点のFIX区域も設定できる。
 
 ## 11. 制約

@@ -142,7 +142,7 @@ colcon test-result --verbose
 
 ## 設計
 
-詳細は [`docs/design.md`](docs/design.md) を参照。
+詳細は [`docs/rtk_gps_um982_詳細設計書.md`](docs/rtk_gps_um982_詳細設計書.md) を参照。
 
 ## ライセンス
 
