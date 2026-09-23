@@ -113,6 +113,11 @@ def apply_diagnostics(
 
     if not entries:
         return (status, health, '')
+    if status == 'STOPPED':
+        # 停止と判定した profile に、停止前の申告内容を残さない。診断は配信が
+        # 途絶えても最後の値が残るため、「STOPPED / 稼働中」のような矛盾した
+        # 表示になる。
+        return (status, health, '')
     worst = max(entries, key=lambda entry: _diagnostic_severity(entry.level))
     if worst.level == DIAGNOSTIC_ERROR:
         return ('ERROR', FreshnessLevel.LOST, worst.message)

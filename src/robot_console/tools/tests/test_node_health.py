@@ -78,6 +78,13 @@ def test_diagnostic_warning_does_not_upgrade_a_worse_health() -> None:
     assert apply_diagnostics('ERROR', F.LOST, entries) == ('ERROR', F.LOST, '縮退中')
 
 
+def test_stopped_profile_does_not_keep_the_last_diagnostic_message() -> None:
+    """診断は配信が途絶えても最後の値が残るため、停止判定時は表示しない."""
+
+    entries = [DiagnosticEntry('mux', 'liveness', DIAGNOSTIC_OK, '稼働中')]
+    assert apply_diagnostics('STOPPED', F.UNKNOWN, entries) == ('STOPPED', F.UNKNOWN, '')
+
+
 def test_worst_diagnostic_message_is_selected() -> None:
     entries = [
         DiagnosticEntry('fusion', 'liveness', DIAGNOSTIC_OK, '稼働中'),
