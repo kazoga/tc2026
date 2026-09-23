@@ -1,8 +1,8 @@
-# route_manager パッケージ README (phase3正式版)
+# route_manager パッケージ README
 
 ## 概要
 `route_manager` は `route_planner` が提供する `/get_route`・`/update_route` サービスを利用し、
-経路データの取得・配信・状態管理を統括する経路管理ノードです。Phase2 では ROS2 ノード層
+経路データの取得・配信・状態管理を統括する経路管理ノードです。ROS 2 ノード層
 (`route_manager_node.py`) とコアロジック (`manager_core.py` / `manager_fsm.py`) を分割し、
 非同期 FSM で経路要求と再計画を制御します。
 
@@ -31,7 +31,7 @@ ros2 launch route_manager route_manager.launch.py \
 ### Publisher
 | 名称 | 型 | 説明 | QoS |
 |------|----|------|-----|
-| `/active_route` | `tc_route_msgs/Route` | 現在有効なルート。`Route.version` は major*100 + minor で管理。 | RELIABLE / TRANSIENT_LOCAL / depth=1 |
+| `/active_route` | `tc_route_msgs/Route` | 現在有効なルート。`Route.version` は `(major % 100) * 100 + (minor % 100)` で管理。 | RELIABLE / TRANSIENT_LOCAL / depth=1 |
 | `/route_state` | `tc_route_msgs/RouteState` | 現在 index・ラベル・ステータスを通知。 | RELIABLE / VOLATILE / depth=10 |
 | `/mission_info` | `tc_route_msgs/MissionInfo` | 現在の start / goal / checkpoint を配信。 | RELIABLE / TRANSIENT_LOCAL / depth=1 |
 | `/manager_status` | `tc_route_msgs/ManagerStatus` | FSM 状態と再計画判断結果を通知。 | RELIABLE / VOLATILE / depth=10 |
@@ -39,7 +39,7 @@ ros2 launch route_manager route_manager.launch.py \
 ### Service Client
 | 名称 | 型 | 説明 |
 |------|----|------|
-| `/get_route` | `tc_route_msgs/srv/GetRoute` | 初期ルート取得。成功時は `Route.version=1` で保存。 |
+| `/get_route` | `tc_route_msgs/srv/GetRoute` | 初期ルート取得。plannerのmajor版を受け取り、managerのmajor/minor表現へ変換。 |
 | `/update_route` | `tc_route_msgs/srv/UpdateRoute` | 滞留時の再計画。成功時に部分ルートを差し替え、`Route.version` を進める。 |
 
 ### Service Server
@@ -47,7 +47,10 @@ ros2 launch route_manager route_manager.launch.py \
 |------|----|------|
 | `/report_stuck` | `tc_route_msgs/srv/ReportStuck` | `route_follower` からの滞留通報を受け付け、再計画方針と `offset_hint` を返す。 |
 
-> 本ノードは購読トピックを持たず、滞留状況は `/report_stuck` 要求に含まれる情報を利用します。
+### Subscription
+
+`/follower_state`（tc_route_msgs/FollowerState）を購読し、世代を照合して現在index・label・完了状態を反映します。
+滞留の詳細は `/report_stuck` 要求から取得します。
 
 ## パラメータ
 | 名称 | 型 | 既定値 | 概要 |
@@ -58,8 +61,8 @@ ros2 launch route_manager route_manager.launch.py \
 | `planner_timeout_sec` | double | `5.0` | `/update_route` 呼び出し時のサービス待機タイムアウト。 |
 | `planner_retry_count` | int | `2` | `/update_route` が失敗した場合の再試行回数。 |
 | `planner_connect_timeout_sec` | double | `10.0` | `/get_route` 接続待ちの打ち切り時間。 |
-| `state_publish_rate_hz` | double | `1.0` | `/route_state` 再送タイマーの周期（再送実装補完用）。 |
-| `image_encoding_check` | bool | `false` | 受信画像の encoding を検証するか（将来拡張用）。 |
+| `state_publish_rate_hz` | double | `1.0` | `/route_state` 再送タイマーの周期。 |
+| `image_encoding_check` | bool | `false` | 予約パラメータ。現行処理には使わない。 |
 | `report_stuck_timeout_sec` | double | `5.0` | `/report_stuck` 処理の許容待ち時間（拡張用）。 |
 | `offset_step_max_m` | double | `1.0` | Shift 回避で適用する横方向オフセットの上限値[m]。 |
 
@@ -79,27 +82,30 @@ ros2 launch route_manager route_manager.launch.py \
 
 `/manager_status` には `state`（上表）と `decision`（replan / shift / skip / failed）を出力します。
 
-> Phase2 では走行開始タイミングの制御を `route_follower` の `start_immediately` パラメータに統一し、
+> 走行開始タイミングの制御を `route_follower` の `start_immediately` パラメータに統一し、
 > `route_manager` は起動直後に必ず初期ルートを要求します。`start_immediately=false` の場合は
 > `/manual_start` メッセージを受信した時点で `route_follower` が走行を開始します。
 
 ### `/report_stuck` に対する再計画フロー
 1. Core が滞留報告を受理し、ルートバージョン・現在 index・滞留理由を検証する。
-2. `/update_route` を呼び出し、新ルートが得られればそのまま適用する。
+2. 通常の可変区間では `/update_route` を試す。固定区間ではplanner更新を省略する。
 3. `/update_route` が失敗した場合は `offset_step_max_m` を上限とした左右オフセット提示（shift）を試みる。
 4. それでも走行不能な場合は次ウェイポイントのスキップ（skip）を試行し、部分ルートを再配信する。
 5. すべて失敗した場合は `decision_code=FAILED` とし、`note` に原因を格納する。
 6. `offset_hint` には follower が採用すべき横方向オフセット量（m）を設定する。
 
+`ROAD_BLOCKED` は別分岐で、固定区間は現行経路を再配信し、可変区間はplanner再計画だけを試します。
+この場合はshift／skipを行いません。[詳細設計](docs/route_manager_詳細設計書_phase3.md)を参照してください。
+
 ## 動作確認手順
 1. `route_planner` を起動し、`/get_route` `/update_route` サービスが利用可能であることを確認する。
 2. 上記コマンドで `route_manager` を起動し、初期ルート取得後に `/active_route` が Publish されることを確認する。
-3. 滞留状況を模擬する場合は以下のように `/report_stuck` を呼び出す。
+3. 隔離した模擬環境で、実際のroute_version・index・labelに合わせて `/report_stuck` を呼び出す。
    ```bash
    ros2 service call /report_stuck tc_route_msgs/srv/ReportStuck \
-     "{route_version: 1, current_index: 5, current_wp_label: 'W5',
-        current_pose_map: {header: {frame_id: 'map'}, pose: {position: {x: 0.0, y: 0.0}}},
-        reason: 'front_blocked', avoid_trial_count: 2, last_hint_blocked: true,
+     "{route_version: 100, current_index: 5, current_wp_label: 'W5',
+        current_pose: {header: {frame_id: 'map'}, pose: {position: {x: 0.0, y: 0.0}}},
+        reason_code: 1, reason_detail: 'front_blocked', avoid_trial_count: 2, last_hint_blocked: true,
         last_applied_offset_m: 0.5}"
    ```
    応答の `decision_code` や `offset_hint` を `/manager_status` と合わせて確認する。
@@ -109,7 +115,3 @@ ros2 launch route_manager route_manager.launch.py \
 - `/manager_status` の `decision` が `skip` の場合、Core がローカルに経路をスライスして再配信している。
 - `/update_route` が連続で失敗する場合は、`route_planner` 側の閉塞ノード指定や YAML 設定を確認する。
 - `planner_connect_timeout_sec` を短く設定すると、`/get_route` サービスが未起動のまま一定時間経過した場合に `ERROR` へ遷移する。
-
-## 将来拡張メモ
-- `image_encoding_check` および `report_stuck_timeout_sec` は将来的な検証ロジック追加のためのパラメータ。
-- `/route_state` の再送タイマ（`state_publish_rate_hz`）は今後再送実装を補完する予定。

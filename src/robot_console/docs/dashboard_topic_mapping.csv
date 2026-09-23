@@ -1,28 +1,21 @@
 カード名,項目名,対応するトピック/サービス名,トピック/サービス定義ファイル,パラメータ名,備考
-ルート進捗,マネージャ状態,manager_status,tc_route_msgs/msg/ManagerStatus.msg,status / state,ManagerStatus.stateを表示
-ルート進捗,ルート状態,route_state,tc_route_msgs/msg/RouteState.msg,status / state,RouteState.statusを表示
-ルート進捗,バージョン,route_state / active_route,tc_route_msgs/msg/RouteState.msg,route_version / version,RouteState.route_versionを表示
-ルート進捗,進捗率,route_state,tc_route_msgs/msg/RouteState.msg,"current_index,total_waypoints",current_index/total_waypoints×100で進捗バーに反映
-ルート進捗,進捗カウンタ,follower_state / route_state,tc_route_msgs/msg/FollowerState.msg; tc_route_msgs/msg/RouteState.msg,"active_waypoint_index,total_waypoints",active_waypoint_index+1とtotal_waypointsで「n / total」を表示。active_waypoint_indexはfollower_stateから取得
-ルート進捗,詳細ラベル,route_state / manager_status,tc_route_msgs/msg/RouteState.msg; tc_route_msgs/msg/ManagerStatus.msg,"message,decision,last_cause","RouteState.messageをEv:, ManagerStatus.decision/last_causeをMgr:として1行表示"
-フォロワ状態,フォロワ状態,follower_state,tc_route_msgs/msg/FollowerState.msg,state,特になし
-フォロワ状態,目標ウェイポイント,follower_state / active_route,tc_route_msgs/msg/FollowerState.msg; tc_route_msgs/msg/Route.msg,active_waypoint_label / current_label,active_waypoint_labelが空のときはRoute.current_labelを利用
-フォロワ状態,滞留要因,follower_state,tc_route_msgs/msg/FollowerState.msg,last_stagnation_reason,空の場合は「滞留なし」を表示
-フォロワ状態,左右オフセット,follower_state,tc_route_msgs/msg/FollowerState.msg,"left_offset_m,right_offset_m",左:+x / 右:+yの文字列で表示
-ロボット速度,並進速度,cmd_vel,geometry_msgs/msg/Twist.msg,linear.x,m/sに変換して小数第2位まで表示
-ロボット速度,角速度,cmd_vel,geometry_msgs/msg/Twist.msg,angular.z,rad/sをdeg/sへ換算し小数第1位表示
-目標までの距離,目標ウェイポイントまでの距離,follower_state,tc_route_msgs/msg/FollowerState.msg,active_target_distance_m,active_target_distance_mを表示
-目標までの距離,進捗,pose_enu,geometry_msgs/msg/PoseWithCovarianceStamped.msg,"current_distance_m,baseline_distance_m",baseline_distance_m>0のときcurrent_distance_m/baseline_distance_m×100を進捗バーに反映。follower_state.segment_length_mで更新
-手動・信号・封鎖イベント,バナーテキスト,manual_start / sig_recog / road_blocked / follower_state / active_route,std_msgs/msg/Bool.msg; std_msgs/msg/Int32.msg; tc_route_msgs/msg/FollowerState.msg; tc_route_msgs/msg/Route.msg,data / state / signal_stop_active / line_stop_active,manual_startで手動開始、road_blockedで道路封鎖、WAITING_STOP時は信号・停止線フラグで文言を決定
-手動・信号・封鎖イベント,詳細行,ー,ー,updated_at,JSTの更新時刻のみを表示
-制御コマンド(manual_start),送信状況,manual_start,std_msgs/msg/Bool.msg,"data,manual_timestamp",現在値と最終送信時刻を表示（GUI送信時は即時反映）
-制御コマンド(sig_recog),送信状況,sig_recog,std_msgs/msg/Int32.msg,"data,sig_timestamp",GO/STOPの最終送信値と時刻を表示
-制御コマンド(obstacle_hint),受信状態,obstacle_avoidance_hint,tc_route_msgs/msg/ObstacleAvoidanceHint.msg,"front_blocked,front_clearance_m,left_offset_m,right_offset_m,updated_at",front_blocked状態とfront_clearance_mと、左右オフセットと更新時刻(now)を表示
-制御コマンド(road_blocked),送信状況,road_blocked,std_msgs/msg/Bool.msg,"data,road_blocked_timestamp,road_blocked_source",現在値と最終送信時刻を表示し、外部入力かGUI送信かをsourceで保持
-画像パネル,ルート地図,active_route,tc_route_msgs/msg/Route.msg,route_image,640x360へリサイズし、画像なしの場合はプレースホルダ表示
-画像パネル,障害物ビュー,sensor_viewer,sensor_msgs/msg/Image.msg,data,400x400へletterboxし、障害物ヒントのオーバレイを重畳
-画像パネル,障害物オーバレイ,obstacle_avoidance_hint,tc_route_msgs/msg/ObstacleAvoidanceHint.msg,"front_blocked,front_clearance_m,left_offset_m,right_offset_m",遮蔽状況・余裕距離・左右オフセットをオーバレイ表示
-画像パネル,外部カメラ,perception/road_blockage/decision_image / perception/traffic_signal/decision_image,sensor_msgs/msg/Image.msg,data,信号停止waypoint待機中のみsignalフレームを選択し、それ以外はdriveフレームを480x360に調整
-障害物ビュー,遮蔽,obstacle_avoidance_hint,tc_route_msgs/msg/ObstacleAvoidanceHint.msg,front_blocked,
-障害物ビュー,余裕,obstacle_avoidance_hint,tc_route_msgs/msg/ObstacleAvoidanceHint.msg,front_clearance_m,
-障害物ビュー,左、右,obstacle_avoidance_hint,tc_route_msgs/msg/ObstacleAvoidanceHint.msg,"left_offset_m,right_offset_m",
+Route/Follower,経路状態,/route_state,tc_route_msgs/msg/RouteState.msg,status,状態の鮮度とともに表示
+Route/Follower,再計画状態,/manager_status,tc_route_msgs/msg/ManagerStatus.msg,state,manager内部状態を表示
+Route/Follower,追従状態,/follower_state,tc_route_msgs/msg/FollowerState.msg,state,開始待ち・走行・停止待ち等を表示
+Route/Follower,目標,/follower_state,tc_route_msgs/msg/FollowerState.msg,active_waypoint_index / active_waypoint_label,経路のindex・labelを表示
+Drive/CmdVel,走行モード,/drive_mode_status,tc_route_msgs/msg/DriveModeStatus.msg,mode,入力鮮度・手動介入・指令を表示
+Drive/CmdVel,速度指令,/cmd_vel,geometry_msgs/msg/Twist.msg,linear.x / angular.z,最終指令。車輪実速度とは区別
+Drive/CmdVel,車輪速度,/ypspur_ros/odom,nav_msgs/msg/Odometry.msg,twist.twist,実測または模擬車輪速度
+GPS/Pose,自己位置,/localization/pose_llh,tc_geo_msgs/msg/GeoPoseWithQuality.msg,pose / fix_quality / fusion_status,LLHと品質の表示
+GNSS・基地局,GNSS品質,rtk_gps/rtk_status,rtk_gps_um982_msgs/msg/RtkStatus.msg,rtk_state / num_satellites / hdop,相対名。起動側で実機private名または模擬公開名へremap
+GNSS・基地局,補正通信,rtk_gps/ntrip_status,std_msgs/msg/String.msg,data,診断JSON。模擬GNSSはDISABLEDを配信
+Manual Ops,開始・再開,/manual_start,std_msgs/msg/Bool.msg,data,falseは走行停止指令ではない
+Manual Ops,信号判定入力,/sig_recog,std_msgs/msg/Int32.msg,data,手動入力は実トピックへ配信
+Manual Ops,封鎖判定入力,/road_blocked,std_msgs/msg/Bool.msg,data,手動入力は実トピックへ配信
+Manual Ops,固定障害物ヒント,/obstacle_avoidance_hint,tc_route_msgs/msg/ObstacleAvoidanceHint.msg,front_blocked / front_clearance_m / left_offset_m / right_offset_m,解除して通常の監視入力へ戻す
+地図,経路,/active_route,tc_route_msgs/msg/Route.msg,waypoints / projection,MapViewでLLH経路を表示
+地図,表示用目標,/route/active_target_llh,tc_route_msgs/msg/ActiveTargetLlh.msg,target_pose,制御目標はENUのactive_target
+画像パネル,Sensor Viewer,/sensor_viewer,sensor_msgs/msg/Image.msg,data,カメラの下に表示
+画像パネル,Front Camera,/usb_cam/image_raw,sensor_msgs/msg/Image.msg,data,ConsoleCoreで認識枠を重畳してQtとHTMLへ共通配信
+カメラ・判定チップ,信号,/perception/traffic_signal/overlay,tc_perception_msgs/msg/PerceptionOverlay.msg,detections / decision / decision_text / status_note,枠はカメラ上・判定は画像直下に表示
+カメラ・判定チップ,道路封鎖,/perception/road_blockage/overlay,tc_perception_msgs/msg/PerceptionOverlay.msg,detections / decision / decision_text / status_note,未受信でも判定枠を残す

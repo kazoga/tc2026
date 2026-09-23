@@ -12,7 +12,9 @@ Unicore UM982 デュアルアンテナ RTK GNSS 受信機を ROS 2 (Jazzy) で�
 | `~/heading`                 | `sensor_msgs/Imu`                   | デュアルアンテナの orientation (REP-103 ENU) |
 | `~/rtk_status`              | `rtk_gps_um982_msgs/RtkStatus`      | RTK 種別・衛星数・baseline・RTCM 累計バイト等 |
 
-デフォルト namespace は `rtk_gps` なので、外から見える名前は `/rtk_gps/fix` などになる。
+launchの既定namespaceは `rtk_gps`、ノード名は `rtk_gps_um982_node`。
+`~` はノードのprivate名なので、完全名は `/rtk_gps/rtk_gps_um982_node/fix` などになる。
+`~/ntrip_status` は常時、`~/time_sync` は時刻配信有効時に、診断JSONを `std_msgs/String` で配信する。
 
 ## 必要環境
 
@@ -54,16 +56,18 @@ ros2 launch rtk_gps_um982 rtk_gps_um982.launch.py \
 
 ```bash
 ros2 run rtk_gps_um982 rtk_gps_um982_node \
-    --ros-args -p serial.port:=/dev/ttyACM0 -p output_rate_hz:=20
+    --ros-args -p serial.port:=/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0 -p output_rate_hz:=20
 ```
 
 ## パラメータ
 
-`config/default.yaml` がデフォルト。主なもの:
+`config/default.yaml` がlaunchで使う設定。ノードをYAMLなしで直接起動した場合の
+`serial.port` は `/dev/ttyUSB0` なので、直接起動ではデバイスを明示する。
+パラメータは起動時に読み取り、接続先などの変更にはノードの再起動が必要。主なもの:
 
 | パラメータ            | 型     | 既定値          | 説明                                                  |
 | --------------------- | ------ | --------------- | ----------------------------------------------------- |
-| `serial.port`         | string | `/dev/ttyUSB0`  | UM982 のシリアルデバイス                              |
+| `serial.port`         | string | `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0` | YAMLのシリアル設定                              |
 | `serial.baud`         | int    | `115200`        | ボーレート                                            |
 | `output_rate_hz`      | int    | `10`            | UM982 の出力レート                                    |
 | `frame_id`            | string | `gps_link`      | 全 publish の `header.frame_id`                       |
@@ -74,7 +78,7 @@ ros2 run rtk_gps_um982 rtk_gps_um982_node \
 | `ntrip.port`          | int    | `2101`          | caster ポート                                         |
 | `ntrip.mountpoint`    | string | `""`            | mountpoint                                            |
 | `ntrip.user`          | string | `""`            | ユーザ名                                              |
-| `ntrip.password`      | string | `""`            | パスワード (平文。実運用は env 経由で渡すこと)        |
+| `ntrip.password`      | string | `""`            | パスワード。共有・Git管理対象外の設定で管理する        |
 | `publish.navsatfix`   | bool   | `true`          | `~/fix` を publish するか                             |
 | `publish.imu_heading` | bool   | `true`          | `~/heading` を publish するか                         |
 | `publish.rtk_status`  | bool   | `true`          | `~/rtk_status` を publish するか                      |
@@ -133,7 +137,8 @@ colcon test --packages-select rtk_gps_um982
 colcon test-result --verbose
 ```
 
-純関数テストのみ (`test/test_converters.py`、16 ケース)。実機テストは手動。
+`test/` でメッセージ変換、NTRIPの受信処理・診断、時刻処理を確認する。
+受信機・基地局・実アンテナを含む動作確認は別途行う。
 
 ## 設計
 
@@ -148,7 +153,7 @@ MIT
 icart_bringupの地域別設定で稲城・つくばの公開局、補正なし、独自局を選択できる。
 NTRIP v1受信はワークスペース側アダプターでTCP分割と先頭データ保持を処理し、
 CRC一致のRTCM3のみシリアルへ渡す。無効なHTTP応答やSOURCETABLEを成功と扱わない。
-15秒有効RTCMが来ない接続は再接続する。ライブラリsubmoduleは変更しない。
+15秒有効RTCMが来ない接続は再接続する。ライブラリsubmoduleにはワークスペース側の変更を加えず、アダプターを使用する。
 TLS・HTTP chunked必須のサービスは非対応。実機FIXは別途確認する。
 
 ### 基地局診断
@@ -157,4 +162,4 @@ TLS・HTTP chunked必須のサービスは非対応。実機FIXは別途確認�
 NTRIP接続状態、CRC確認済みRTCM量・速度・最終受信経過、再接続回数、通信エラー種別を
 位置コールバックとは独立して送る。認証情報は含めない。
 `ntrip.station_id`, `ntrip.station_label`, `ntrip.site` はUI向けの表示名（任意）。
-UI詳細は `robot_console/docs/gnss_station_ui.md` を参照。
+UI詳細は [基地局表示](../robot_console/docs/gnss_station_ui.md)を参照。

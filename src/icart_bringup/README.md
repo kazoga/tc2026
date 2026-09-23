@@ -24,13 +24,13 @@ ros2 run icart_bringup run_session --session <設定ディレクトリ>/session.
 UI起動管理から操作する別手順は設計書に記載する。
 
 実機では全停止後、--environment realに変更する。run_sessionがDDS domainも設定する。実機のドライバはsession.yamlのhardware_launchで
-既存の起動ファイルを指定するか、従来どおり別に起動する。実機固有のIPやポートを自動推測しない。
+既存の起動ファイルを指定するか、別に起動する。実機固有のIPやポートを自動推測しない。
 [構成・確認手順](docs/共通起動設計.md)を参照する。
 
 ウェイポイント保存はroute_plannerのCSV仕様に合わせる。
 prepare_sessionは`routes/fixed/waypoints.csv`をLLH正本（高度空欄）として保存し、
 `routes/route_config.yaml`を生成する。ENUはroute_plannerが投影設定から生成する。
-既存sessionは書き換えず、新規出力先へprepare_sessionを再実行して移行する。
+セッション生成の出力先は新規ディレクトリとする。
 全周の検証用正本は`route_planner/routes/tsukuba2026_digital_twin/`に配置した。
 本番経路としての現地確認は未実施である。
 
@@ -79,34 +79,18 @@ ROS_DOMAIN_ID=86 ros2 param set /pedestrian_simulator density 0.5
 
 開始地点は安定したGNSS区域として、最初の有効な真値位置を中心とする半径10mを
 FIX条件にする。`session.yaml` の `gnss_start_fix_radius_m` で半径[m]を変更できる。
-0で無効。区域外は従来の建物によるFLOAT・誤差モデルを維持し、区域はロボットに追従しない。
+0で無効。区域外は建物によるFLOAT・誤差モデルを使用し、区域はロボットに追従しない。
 明示的な受信途絶の試験設定はFIX区域内でも有効。
 
-## ROS 2実機統合・稲城／つくばの補正局選択
+## 実機の準備と保存経路の走行
 
-[実機ハードウェア統合](docs/実機ハードウェア統合.md)に構成・設定・検証範囲をまとめた。
-`prepare_real_session --site inagi|tsukuba --station <選択局> --output <新規出力先>`で、
-MID-360は車軸上0.414m、roll −0.6°・pitch +26.9°。主アンテナはLiDARの鉛直上15cm、
-副アンテナはメインの後50cm（既存値）を共通設定へ反映する。2026-09-22の実測配置を基準とする。
-車軸中央x=0は確認済み。高さは昨年度値を引き継ぐ。
-`check_rtk_station --site inagi --list`で候補一覧、`--station <選択局>`でRTCM受信を検査する。
-採取時は手動固定。新しい実機profileはJoy・手動介入・カメラ・URG・GNSS・Livox・車輪を共通起動する。
-既存の外部hardware_launch方式は維持する。実機用YP-Spurパラメータは別途必要。
+[実機ハードウェア統合](docs/実機ハードウェア統合.md)に接続・操作・設定生成をまとめる。
+`prepare_real_session --site inagi|tsukuba --station <局> --output <新規出力先>`で準備する。
+同梱設定はMID-360のroll −0.6°・pitch +26.9°・車軸上0.414 m、
+主アンテナは車軸後方0.30 m、副アンテナは主アンテナ後方0.15 mとする。
+設定の正本は `params/hardware.yaml` で、生成済みsessionは独立コピーである。
 
-GUIの「実機／自律走行」は `recorded_route.launch.py` を使用し、`route_directory`
-で終了済みの採取フォルダを指定する。隣接する `session/` から実機設定と場所を引き継ぎ、
-選んだCSV・projectionを新しい走行設定へコピーする。起動後はmanual_start待ち。
-GUIから起動する際に別GUIは起動しない。
-
-2026-09-22現地で主・副GNSSアンテナ間隔を30 cmへ変更。
-共通実機設定とGUIの「現在のアンテナ間隔［m］」を0.30へ更新。
-基線長の広域許容範囲は実機の設定間隔の0.7〜1.3倍で生成する（30 cmなら21〜39 cm）。
-実観測の安定性・FIX・方位精度の判定は維持する。
-記録後に間隔を変更した場合、GUIの値を今回の走行設定に適用し、記録時の原本は書き換えない。
-
-同日追記：アンテナ間隔を15 cm、主アンテナを車輪中心から後方30 cmへ再配置。
-現行値は `slave_behind_master_m=0.15`、`master_forward_m=-0.30`。
-副アンテナは主アンテナ後方15 cm（車輪中心から後方45 cm）、左右・高さは従来値を維持。
-GNSSの主アンテナ位置補正とTFへ同じ値を反映する。
-GUIの記録ルート設定にも「主アンテナ前後位置［m］（後方−）」を追加した。
-基線長の広域許容範囲は10.5〜19.5 cm。配置変更後は起動し直して適用する。
+GUIの「実機／自律走行」は `recorded_route.launch.py` を使う。
+`route_directory` に終了済みの採取フォルダを指定し、経路と投影原点を走行用設定へコピーする。
+実機共通起動は時刻同期ゲート成立後に走行系を起動し、manual_startを待つ。
+詳しい条件は[共通起動設計](docs/共通起動設計.md)を参照する。
