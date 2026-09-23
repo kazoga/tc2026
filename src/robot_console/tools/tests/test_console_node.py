@@ -77,9 +77,12 @@ def test_obstacle_hint_subscription_uses_best_effort_reliability():
         rclpy.init()
     node = RobotConsoleNode(_make_core(), node_name='test_obstacle_hint_qos_node')
     try:
+        # 表示用と健全性監視用の2本が張られる。いずれも BEST_EFFORT である必要がある。
         infos = node.get_subscriptions_info_by_topic('obstacle_avoidance_hint')
-        assert len(infos) == 1
-        assert infos[0].qos_profile.reliability == ReliabilityPolicy.BEST_EFFORT
+        assert infos
+        assert all(
+            info.qos_profile.reliability == ReliabilityPolicy.BEST_EFFORT for info in infos
+        )
     finally:
         node.destroy_node()
 
@@ -103,8 +106,10 @@ def test_image_subscriptions_use_best_effort_reliability():
             'perception/traffic_signal/overlay',
         ):
             infos = node.get_subscriptions_info_by_topic(topic)
-            assert len(infos) == 1, topic
-            assert infos[0].qos_profile.reliability == ReliabilityPolicy.BEST_EFFORT, topic
+            assert infos, topic
+            assert all(
+                info.qos_profile.reliability == ReliabilityPolicy.BEST_EFFORT for info in infos
+            ), topic
     finally:
         node.destroy_node()
 
