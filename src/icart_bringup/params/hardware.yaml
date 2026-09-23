@@ -17,7 +17,7 @@ gnss:
   slave_behind_master_m: 0.15  # 2026-09-22 現地で15cmへ変更
   master_forward_m: -0.3  # 車輪中心から後方30cm
   heading_offset_deg: 180.0
-  time_sync_enabled: false
+  time_sync_enabled: true
 urg:
   serial_port: /dev/serial/by-id/usb-Hokuyo_Data_Flex_for_USB_URG-Series_USB_Driver-if00
   baud: 115200

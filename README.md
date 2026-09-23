@@ -1,13 +1,13 @@
 # tc2026
 
-ROS 2 Jazzy ワークスペース。
+ROS 2 Jazzy ワークスペース。初めて読む場合は[システム構成](docs/次期システム_アーキテクチャ検討レポート.md)から参照する。
 
 ## つくばチャレンジ2026の公式情報
 
-[最新のソフトウェア評価と不足点（2026-09-22、HW対象外）](docs/reviews/tc2026_software_20260922/README.md)
+[走行システムの機能と制約](docs/reviews/tc2026_software_20260922/README.md)
 
 [公式ルール・参加条件・日程の参照ガイド](docs/references/tsukuba_challenge_2026/README.md)
-（2026-09-22確認）に、出典URL、未公表事項、公式ページ間の記載差、実装確認事項をまとめています。
+に、出典URL、未公表事項、公式ページ間の記載差、実装確認事項をまとめています。
 大会条件に関係する設計・設定・走行準備では、この資料とリンク先の最新公式情報を参照してください。
 
 ## パッケージ一覧
@@ -32,6 +32,9 @@ ROS 2 Jazzy ワークスペース。
 | ----------------------------------------------------------- | -------------------------------------------------------------------- |
 | [`src/tc_geo_msgs`](src/tc_geo_msgs/)                       | LLH位置、品質、地図投影条件を共有する msg 定義                       |
 | [`src/geo_pose_converter`](src/geo_pose_converter/README.md) | LLH/ENU相互変換、経路の地理座標投影、OSM経路表示を提供               |
+| [`src/gnss_lio_fusion`](src/gnss_lio_fusion/README.md) | GNSSと水平化したFAST-LIOを融合し、車輪odomによる退避と自律速度制限を行う |
+| [`src/route_survey`](src/route_survey/README.md) | 手動走行の融合位置からLLH経路を採取し、観測した路面の横移動余裕を記録・編集する |
+| [`src/icart_bringup`](src/icart_bringup/README.md) | 実機・デジタルツイン・手動採取・保存経路走行の共通セッションを準備・起動する |
 
 ### 走行制御・障害物
 | パッケージ                                                  | 役割                                                                 |
@@ -48,9 +51,10 @@ ROS 2 Jazzy ワークスペース。
 ### 認識・監視
 | パッケージ                                                  | 役割                                                                 |
 | ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| [`src/tc_perception_msgs`](src/tc_perception_msgs/README.md) | 検出矩形・判定状態を表示側へ渡す認識結果の共通メッセージ |
 | [`src/yolo_detector`](src/yolo_detector/README.md)          | USB カメラ画像を YOLO (PyTorch / NCNN) で物体検出し、検出画像・`Detection2DArray` を配信 |
-| [`src/traffic_signal_recognizer`](src/traffic_signal_recognizer/README.md) | YOLO検出結果から信号のGO/STOPを判定し、判定画像を配信 |
-| [`src/road_blockage_detector`](src/road_blockage_detector/README.md) | YOLO検出結果と自己位置から道路封鎖を判定し、判定画像を配信 |
+| [`src/traffic_signal_recognizer`](src/traffic_signal_recognizer/README.md) | YOLO検出結果から信号のGO/STOPを判定し、検出矩形と判定データを配信 |
+| [`src/road_blockage_detector`](src/road_blockage_detector/README.md) | YOLO検出結果と自己位置から道路封鎖を判定し、検出矩形と判定データを配信 |
 | [`src/robot_console`](src/robot_console/README.md)          | 走行状態・障害物回避・経路進捗・ノード起動を一画面で監視する PyQt5 GUI ダッシュボードとHTML遠隔観測UI |
 
 ワークスペース横断の仕様書は [`docs/`](docs/)、パッケージ固有の設計書は各パッケージ
@@ -66,9 +70,10 @@ ROSパッケージは `src/`、センサのメーカー資料は `docs/reference
 
 - `robot_console` の正式UIは PyQt5 版（`robot_console_qt`）である。遠隔観測用の
   HTML UI（`robot_console_web`）も同じ `ConsoleCore` の状態を表示する。
-  旧 tkinter 版は削除済みで、entry point は `robot_console_qt` と `robot_console_web` の 2 つである。
-- `localization_fusion` 実装前の暫定構成では、GNSS入力がある場合に
-  `geo_pose_converter` のENU出力を `/localization/pose_enu` として使用する。
+- 共通起動では `gnss_lio_fusion` が `/localization/pose_enu` を配信する。
+  FAST-LIOの `/lio/odometry_raw` を重力方向に水平化し、`/lio/odometry` を融合・採取で共用する。
+  GNSS単独の変換結果は `/gnss/pose_enu` に分離し、融合出力と競合させない。
+  GNSS単独や真値poseを使う単体試験構成もあるため、共通起動と同時に起動しない。
 - 走行制御はENU、OSM・GUI表示はLLHを使用し、`geo_pose_converter` が両者を変換する。
 
 ## 必要環境
@@ -120,8 +125,12 @@ Python パッケージ群で使用する pip 依存モジュールは、[`requir
 `obstacle_route_sim` の Gazebo / ros_gz 依存は pip ではなく apt / rosdep で導入する。
 
 ROS 2 の環境を読み込んだうえで、ワークスペース直下で以下を実行する。
+Ubuntu 24.04ではROSのaptパッケージを参照できるvenvを作成し、その中へpip依存を導入する。
+`<venv>` は開発者が選んだ仮想環境のパスとする。
 
 ```bash
+python3 -m venv --system-site-packages <venv>
+source <venv>/bin/activate
 python3 -m pip install -r requirements.txt
 ```
 
@@ -134,6 +143,8 @@ git clone --recursive https://github.com/t-nakabayashi/tc2026.git ~/colcon_ws
 
 cd ~/colcon_ws
 source /opt/ros/jazzy/setup.bash
+# 上記で準備したvenvを有効化する
+source <venv>/bin/activate
 python3 -m pip install -r requirements.txt
 colcon build --symlink-install
 source install/setup.bash
@@ -158,85 +169,28 @@ route 設定は各パッケージ README を参照する。
 
 ### 実機
 
-実機では `ypspur-coordinator` と `ypspur_ros2` が `/cmd_vel` を車体へ渡す。
-`drive_mode_manager` または `robot_console` から起動した走行 stack が最終 `/cmd_vel` を publish する。
-
-#### 手動走行のみ
-
-手動走行だけを行う場合は、`drive_mode_manager` が Joy 入力から最終 `/cmd_vel` を publish し、
-`ypspur_ros2` が `/cmd_vel` を車体へ渡す構成にする。
-
-coordinator を別端末で手動起動する場合:
+センサ一式・時刻同期監視・融合・経路採取・保存済み経路での走行は
+[`icart_bringup`](src/icart_bringup/README.md) の共通起動を使う。
+操作画面は次のコマンドで起動する。
 
 ```bash
-# 端末 1: yp-spur coordinator
-ypspur-coordinator -d /dev/ttyACM0 -p ~/spur/my_robot.param
-
-# 端末 2: /cmd_vel を購読して車体へ速度指令を渡す
-ros2 launch ypspur_ros2 ypspur_ros2.launch.py cmd_vel_topic:=/cmd_vel
-
-# 端末 3: joy_node を起動し、Joy 入力から最終 /cmd_vel を publish
-ros2 launch drive_mode_manager drive_mode_manager.launch.py
-```
-
-coordinator も `ypspur_ros2.launch.py` から起動する場合:
-
-```bash
-# 端末 1: coordinator と ypspur_node を起動
-ros2 launch ypspur_ros2 ypspur_ros2.launch.py \
-  start_coordinator:=true \
-  coordinator_device:=/dev/ttyACM0 \
-  coordinator_param:=<robot_param_file> \
-  cmd_vel_topic:=/cmd_vel
-
-# 端末 2: joy_node を起動し、Joy 入力から最終 /cmd_vel を publish
-ros2 launch drive_mode_manager drive_mode_manager.launch.py
-```
-
-起動直後は `drive_mode_manager` の既定モードが `autonomous` のため、Joy 入力で L1 と PS button
-を長押しして手動走行へ切り替える。GUI が不要な端末では
-`ros2 launch drive_mode_manager drive_mode_manager.launch.py start_gui:=false` を使う。
-開発用 Joy simulator を使う場合は `joy_input:=ps3_joy_sim` を追加する。
-
-#### 自律走行 / 手動走行
-
-自律走行と手動走行を切り替えて運用する場合は、先に実機 driver 側を起動し、
-別端末で `robot_console` を起動する。`robot_console` から route stack と
-`drive_mode_manager` を起動し、必要に応じて Joy 入力で手動介入する。
-
-coordinator を別端末で手動起動する場合:
-
-```bash
-# 端末 1: yp-spur coordinator
-ypspur-coordinator -d /dev/ttyACM0 -p ~/spur/my_robot.param
-
-# 端末 2: /cmd_vel を購読して車体へ速度指令を渡す
-ros2 launch ypspur_ros2 ypspur_ros2.launch.py cmd_vel_topic:=/cmd_vel
-
-# 端末 3: 運用 GUI ダッシュボード
 ros2 launch robot_console robot_console.launch.py
 ```
 
-coordinator も `ypspur_ros2.launch.py` から起動する場合:
+GUIで実機モードを選び、手動採取または保存経路走行のセッションを準備する。
+[操作手順](src/robot_console/README.md)と
+[実機設定・時計・Joyの割当](src/icart_bringup/docs/実機ハードウェア統合.md)を確認する。
+ハードウェア設定の正本は `src/icart_bringup/params/hardware.yaml` である。
+生成済みセッションには設定のコピーが入るため、ソース変更後はセッションを再生成する。
 
-```bash
-# 端末 1: coordinator と ypspur_node を起動
-ros2 launch ypspur_ros2 ypspur_ros2.launch.py \
-  start_coordinator:=true \
-  coordinator_device:=/dev/ttyACM0 \
-  coordinator_param:=<robot_param_file> \
-  cmd_vel_topic:=/cmd_vel
+共通起動では同期成立後に車輪・FAST-LIO・融合・走行制御が起動する。
+`robot_navigator` の `/cmd_vel/autonomous` を融合側の速度制限と
+`drive_mode_manager` の自律／手動切替に通し、最終 `/cmd_vel` を車輪へ渡す。
+手動採取は手動モードを固定し、L1を押して操作する。R1はGNSS途絶模擬、ターボ割当は無効。
 
-# 端末 2: 運用 GUI ダッシュボード
-ros2 launch robot_console robot_console.launch.py
-```
-
-`robot_console` からは、`route_planner`、`route_manager`、`route_follower`、
-`obstacle_monitor`、`drive_mode_manager`、`robot_navigator` などを起動する。
-`robot_navigator` は自律走行指令を `/cmd_vel/autonomous` へ publish し、
-`drive_mode_manager` が自律走行指令と Joy 由来の手動走行指令を切り替えて最終 `/cmd_vel` を publish する。
-実機運用時の起動カード、パラメータ、操作手順の詳細は
-[`src/robot_console/README.md`](src/robot_console/README.md) を参照する。
+個別の診断起動は [車輪ドライバ](src/ypspur_ros2/README.md)、
+[手動切替](src/drive_mode_manager/README.md)、[GNSS](src/rtk_gps_um982/README.md)を参照する。
+共通起動と同じドライバや `/cmd_vel` の配信元を二重に起動しない。
 
 ### シミュレーション
 
@@ -315,7 +269,7 @@ ros2 run icart_bringup run_digital_twin --output log/digital_twin/session01 --st
 - [シミュレーション](src/obstacle_route_sim/README.md): 地形・センサ生成と評価
 - [検証用経路](src/route_planner/routes/tsukuba2026_digital_twin/README.md): 未測量の試験データ
 
-新規パッケージのテストもルートの `pytest` に含まれる。ROS 環境とビルド済み
+各パッケージのテストはルートの `pytest` に含まれる。ROS 環境とビルド済み
 `install/setup.bash` を読み込み、有効な venv で実行する。
 GUI テストには Qt WebEngine と pytest-forked、地形生成には Node.js が必要。
 地理地形の生成には `src/obstacle_route_sim/tools/terrain3d` で `npm ci` も実行する。
@@ -330,4 +284,6 @@ GUI テストには Qt WebEngine と pytest-forked、地形生成には Node.js 
 
 実機用の一括設定・稲城／つくばのRTK局選択は
 [実機ハードウェア統合](src/icart_bringup/docs/実機ハードウェア統合.md)を参照。
-昨年度構成のROS 2化、MID-360下向き25度とアンテナ位置、採取時の手動固定を含む。
+MID-360の実機取付角・アンテナ位置、採取時の手動固定を含む。
+現行の実機設定は `src/icart_bringup/params/hardware.yaml` を正とし、
+既存sessionの設定コピーへソースの変更が自動反映されるとは扱わない。

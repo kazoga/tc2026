@@ -30,14 +30,9 @@ UIの通常終了・SIGINT/SIGTERM終了時にも停止処理を行う。
 開始時に空き1 GiB未満なら開始せず、記録中512 MiB未満になったら停止する。
 停止・エラーで保存済みファイルを自動削除しない。
 
-## 検証
+## 確認方法
 
-関連100テストに合格。ROS_DOMAIN_ID=193の隔離した模擬topicを実際のrosbag2で記録し、
-停止後metadata.yamlとSQLite内のメッセージ存在を確認した。
-二重開始、別UIとの競合、空き不足、ros2未導入、UIボタン状態も確認した。
-実機センサ一式の帯域・長時間保存は未検証。
-画面の静止画像は `log/codex/rosbag_ui_20260920/` に保存（表示例は模擬値）。
-これらPC内パスはiPhone向け共有URLではない。
-
-実装はcore/bag_recorder.py、Qt表示はui_qt/widgets/bag_card.py、試験はtools/testsに置き、
-既存の状態管理・表示・テストの分離に合わせた。
+`tools/tests/` で二重開始、別UIとの競合、空き容量不足、起動失敗、停止・保存状態を確認する。
+記録後はmetadata.yamlと必要トピックのメッセージを確認する。
+実機センサ一式の帯域・保存媒体性能・長時間保存は実構成で検証する。
+実装はcore/bag_recorder.py、Qt表示はui_qt/widgets/bag_card.pyに配置する。

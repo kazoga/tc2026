@@ -24,7 +24,7 @@ def rich(text):
     return text.replace('`','')
 def footer(canvas, doc):
     canvas.setFont('HeiseiKakuGo-W5',8)
-    canvas.drawString(30,18,'TC2026 / ソフトウェア評価 / 2026-09-22')
+    canvas.drawString(30,18,'TC2026 / 走行システムの機能と制約')
     canvas.drawRightString(A5[0]-30,18,str(doc.page))
 flow=[];lines=(ROOT/'README.md').read_text().splitlines();i=0
 while i<len(lines):
@@ -38,9 +38,16 @@ while i<len(lines):
         t.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('BACKGROUND',(0,0),(-1,0),colors.HexColor('#e5eef4')),('GRID',(0,0),(-1,-1),.3,colors.HexColor('#c1ccd3')),('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]));flow.extend([t,Spacer(1,8)]);continue
     if line.startswith('#'):
         flow.append(Paragraph(rich(line.lstrip('# ')),heading));continue
-    if line.startswith('- '):line='・'+line[2:]
+    if line.startswith('- '):
+        line='・'+line[2:]
+    else:
+        # Markdownのソフト改行を段落内でつなぎ、紙幅に合わせて折り返す。
+        paragraph=[line]
+        while i<len(lines) and lines[i].strip() and not lines[i].startswith(('#','|','- ')):
+            paragraph.append(lines[i]);i+=1
+        line=' '.join(paragraph)
     flow.append(Paragraph(rich(line),body))
 output=ROOT/'output/pdf/tc2026_software_review.pdf';output.parent.mkdir(parents=True,exist_ok=True)
 SimpleDocTemplate(str(output),pagesize=A5,rightMargin=30,leftMargin=30,topMargin=25,bottomMargin=35,
-                  title='つくばチャレンジ2026 ソフトウェア評価',author='tc2026 repository').build(flow,onFirstPage=footer,onLaterPages=footer)
+                  title='走行システムの機能と制約',author='tc2026 repository').build(flow,onFirstPage=footer,onLaterPages=footer)
 print(output)

@@ -17,7 +17,6 @@ tc2026 の認識系では、本パッケージは画像推論層に責務を限�
 | `yolo_ncnn_node` | `yolo_detector/yolo_ncnn_node.py` | NCNN 形式モデルを用いた YOLO 推論。経路封鎖看板など、CPU 推論を軽量化したい用途を想定する。 |
 | `camera_simulator_node` | `yolo_detector/camera_simulator_node.py` | 静止画を `sensor_msgs/msg/Image` として publish する検証補助ノード。 |
 
-`road_blockage_detector` の実行 entry point と旧実装ファイルは本パッケージから削除する。
 経路封鎖判定ノード本体は `road_blockage_detector` パッケージから起動する。
 
 ## 3. 外部 I/F
@@ -69,9 +68,7 @@ tc2026 の認識系では、本パッケージは画像推論層に責務を限�
 | 経路封鎖看板 | `yolo_ncnn_node` | `/perception/road_blockage/detections` | `road_blockage_detector` |
 | 信号認識 | `yolo_node` | `/perception/traffic_signal/detections` | `traffic_signal_recognizer` |
 
-信号認識インスタンスは `/recog_flag` により推論有効状態を制御する。これにより、
-tc2025 で `ros1_bridge` 越しに使用していた「信号停止地点だけ推論する」運用契約を
-ROS 2 内で維持する。
+信号認識インスタンスは `/recog_flag` により推論有効状態を制御し、信号停止地点で推論する。
 
 ## 6. 起動構成
 
@@ -80,7 +77,7 @@ ROS 2 内で維持する。
 | `yolo_node.launch.py` | PyTorch 版 YOLO ノード単体を起動する。 |
 | `yolo_ncnn_node.launch.py` | NCNN 版 YOLO ノード単体を起動する。 |
 
-新規構成では、経路封鎖検知全体は `road_blockage_detector` パッケージの
+経路封鎖検知全体は `road_blockage_detector` パッケージの
 `road_blockage_perception.launch.py` または `road_blockage_perception_yolo.launch.py`、
 信号認識全体は `traffic_signal_recognizer` パッケージの `traffic_signal_perception.launch.py`
 から起動する。
@@ -91,9 +88,3 @@ ROS 2 内で維持する。
 - 画像変換に失敗した場合は `error` ログを出し、そのフレームの処理をスキップする。
 - 推論 timer は非ブロッキング lock で多重実行を抑止する。
 - 推論無効時は timer callback の先頭で return し、最新画像の保持だけを継続する。
-
-## 8. 今後の検討事項
-
-- `Detection2D.results` に class name を含める独自 msg の必要性を検討する。
-- 用途別インスタンスの推論周期と CPU 負荷を実機で測定し、既定値を調整する。
-- `traffic_signal_best.pt` のモデル来歴、学習データ、クラス定義を別資料で管理する。

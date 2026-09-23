@@ -1,6 +1,5 @@
 # PS3 Joy Simulator 設計書
 
-作成日: 2026-05-21
 
 ## 1. 文書目的・対象範囲
 
@@ -162,17 +161,3 @@ ROS 2 実行確認では、`ros2-local-run` スキルに従い、`ypspur_ros2` �
 ## 15. 互換性・移行・影響範囲
 
 既存 topic、msg、service、`drive_mode_manager.launch.py` の起動構成は変更しない。`ps3_joy_sim_node` は代替 Joy 入力源として追加されるだけであり、通常運用へは影響しない。
-
-## 16. 未決事項・今後の拡張
-
-- 実 controller の L1 / PS index と stick 符号は実機で別途確認する。
-- PS ボタンが実機 `/joy` で安定取得できない場合は、mux 側の手動遷移 trigger を別操作へ変更する。
-- Start / Select の模擬は現行運用で使わないため追加しない。
-- GUI から `/drive_mode_status` を補助表示する拡張は、必要になった時点で検討する。
-
-## 17. 改版履歴
-
-| 版 | 日付 | 変更概要 |
-| --- | --- | --- |
-| 0.2 | 2026-05-22 | stick 累積入力、reset neutral、GUI の予測 `cmd_vel` 表示、斜め正規化既定有効を反映した |
-| 0.1 | 2026-05-21 | 初版。tmp 設計インプットを正式設計へ反映し、実装仕様を定義した |

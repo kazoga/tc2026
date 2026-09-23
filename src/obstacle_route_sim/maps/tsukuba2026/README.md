@@ -78,7 +78,7 @@ session内の地図・経路参照はすべて展開先からの相対パス。
   [国土地理院コンテンツ利用規約](https://www.gsi.go.jp/kikakuchousei/kikakuchousei40182.html)に従う。
 - 概略経路：つくばチャレンジ2026公式コース図を参照した図上トレース。
   [経路README](../../../route_planner/routes/tsukuba2026_digital_twin/README.md)を参照。
-- 車両・植栽等の位置候補は従来の写真解析結果を保持する。
+- 車両・植栽等の位置候補は写真解析結果を使う。
   解析時の写真出典は Esri, Vantor, Earthstar Geographics, GIS User Community。
   航空写真タイル・画像・写真テクスチャ自体はこの同梱版に含めない。
   地面の表示は無地とし、LiDARと衝突に使うメッシュ座標は保持する。
@@ -90,13 +90,7 @@ session内の地図・経路参照はすべて展開先からの相対パス。
 更新時には本README、manifest、閲覧版、静止画像も合わせて更新する。
 `tools/render_full_course_views.py --no-photo` で写真を使わない静止画像を作成できる。
 
-## 検証範囲（2026-09-14）
+## 使用時の確認
 
-- ワークスペースのpytestは565件成功。archiveの破損・親参照・symlink拒否を含む。
-- obstacle_route_sim・icart_bringup・robot_consoleは通常／symlink両installでビルド成功。
-- 同梱地図の起動試験はDDS domain 88で45秒実行した。LiDAR 377件、GNSS 185件、
-  LIO位置135件、融合位置136件を受信し、最終状態はGPS_LIOだった。
-  開始前の速度指令はゼロを維持し、終了通知後にQt・Gazeboを含む起動群が正常終了した。
-- 閲覧版は外部画像・script参照がないことと埋め込みJavaScriptの構文を検査した。
-  静止画像は全域と4局所を用意した。ブラウザでの操作とiPhone実機表示は未検証。
-- 全周走行、実地精度、実機の動作はこの固定版の起動検証の対象外とする。
+manifestとハッシュを確認して展開する。地図は検証用で、現地の通行可否や停止位置を保証しない。
+実行は[共通起動](../../../icart_bringup/README.md)、精度の扱いは[地理モデル](../../docs/つくば2026全域デジタルツイン.md)を参照する。

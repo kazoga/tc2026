@@ -1,8 +1,8 @@
-# route_follower パッケージ README (phase2正式版)
+# route_follower パッケージ README
 
 ## 概要
 `route_follower` は `route_manager` から配信される `/active_route` を追従し、
-現在のターゲット Pose を `/active_target` に Publish する経路追従ノードです。Phase2 では ROS2
+現在のターゲット Pose を `/active_target` に Publish する経路追従ノードです。ROS 2
 ラッパ層 (`route_follower_node.py`) とロジック中核 (`follower_core.py`) を分離し、滞留検知と
 `/report_stuck` サービス呼び出しを統合しています。
 
@@ -33,6 +33,7 @@ ros2 launch route_follower route_follower.launch.py \
 | `/active_route` | `tc_route_msgs/Route` | 追従対象ルート。`Route.version` と `start_index` を `FollowerCore` に転送。 | RELIABLE / TRANSIENT_LOCAL |
 | `/localization/pose_enu` | `geometry_msgs/PoseWithCovarianceStamped` | 現在姿勢。2D yaw を算出して `FollowerCore` へ投入。 | RELIABLE / VOLATILE |
 | `/obstacle_avoidance_hint` | `tc_route_msgs/ObstacleAvoidanceHint` | 障害物回避ヒント。最新値を統計化し滞留判定に利用。 | BEST_EFFORT / VOLATILE |
+| `/road_blocked` | `std_msgs/Bool` | 道路封鎖入力。Coreで最新状態を保持する。 | RELIABLE / VOLATILE |
 | `/manual_start` | `std_msgs/Bool` | TRUE 受信で手動再開。 | RELIABLE / VOLATILE |
 | `/sig_recog` | `std_msgs/Int32` | 信号認識結果（1=GO, 2=NOGO 等）。 | RELIABLE / VOLATILE |
 
@@ -40,6 +41,7 @@ ros2 launch route_follower route_follower.launch.py \
 | 名称 | 型 | 説明 | QoS |
 |------|----|------|-----|
 | `/active_target` | `geometry_msgs/PoseStamped` | 現在向かうべきターゲット Pose。`target_frame` を frame_id に設定。 | RELIABLE / VOLATILE |
+| `/recog_flag` | `std_msgs/Int32` | 信号認識の実行制御。 | RELIABLE / VOLATILE |
 | `/follower_state` | `tc_route_msgs/FollowerState` | 状態・route_version・滞留統計を Publish。 | RELIABLE / VOLATILE |
 
 ### サービスクライアント
@@ -64,7 +66,7 @@ ros2 launch route_follower route_follower.launch.py \
 |------|------|
 | `IDLE` | ルート未適用。`start_immediately=false` で manual_start 待ち。 |
 | `RUNNING` | 通常追従中。 |
-| `WAITING_STOP` | line_stop に到達し手動再開待ち。`/manual_start` で RUNNING へ復帰。 |
+| `WAITING_STOP` | 停止属性のある点に到達して待機。manual_startで再開し、信号停止はsig_recog=1でも再開。 |
 | `STAGNATION_DETECTED` | 滞留を検知し、局所回避や待機準備を実施。 |
 | `AVOIDING` | 回避サブゴール（横オフセットなど）を実行中。 |
 | `WAITING_REROUTE` | `/report_stuck` 応答待ち。サービス結果に応じて再開または失敗判定。 |
@@ -88,6 +90,10 @@ ros2 launch route_follower route_follower.launch.py \
 - `/obstacle_avoidance_hint` が届かない場合は滞留判定統計が十分に貯まらず、`front_blocked_majority` が False のままになる。
 - `/report_stuck` が利用できない状態で滞留するとリトライ待ちとなり、ログに "not ready" が出力される。サービス起動順を確認する。
 
-## 将来拡張メモ
-- `FollowerCore` には信号判定・横オフセット試行回数などの内部パラメータが多数定義されており、必要に応じて ROS パラメータ化を検討している。
-- `WAITING_REROUTE` 中のタイムアウト（`reroute_timeout_sec`）は Core 内部で管理しており、ノード側で警告を出す機能追加を予定。
+
+## 停止・回避の制約
+
+WAITING_STOPやFINISHEDは位置・状態の判定であり、実測速度ゼロの確認結果ではありません。
+目標の再送停止だけでnavigatorの保持目標は消えません。manual_start=falseも走行停止ではありません。
+停止・ERROR・終了と下位の指令失効の結合を別途確認する必要があります。
+回避目標の最低オフセットが小さい許可幅を上回る場合があり、左右幅を厳密な境界保証として使えません。

@@ -12,9 +12,11 @@ def test_host_setup_is_explicit_and_scripts_parse(tmp_path):
     script=(p/'apply-host.sh').read_text()
     assert 'pgrep' in script and 'makestep' in script and '/var/backups/' in script
     assert 'chrony.service.d' in script
-    assert 'prefer' in (p/'chrony.conf').read_text()
+    assert 'noselect' in (p/'chrony.conf').read_text()
     assert 'allow ' not in (p/'chrony.conf').read_text()
+    assert 'RuntimeDirectoryMode=0750' in (p/'chrony-acl.conf').read_text()
     assert 'u:nkb:rw' in (p/'chrony-acl.conf').read_text()
+    assert (p/'chrony-acl.conf').read_text().count('ExecStartPost=!/usr/bin/setfacl') == 2
     assert 'ptp4l' not in script  # Apply does not broadcast a clock before convergence.
     with pytest.raises(FileExistsError):prepare_host(p,'nkb')
     with pytest.raises(ValueError):prepare_host(tmp_path/'bad','nkb;reboot')

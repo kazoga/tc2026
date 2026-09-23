@@ -21,10 +21,14 @@ GNSS driver 由来 topic を購読し、GNSS 単独の LLH pose と ENU pose を
 | Subscribe | `/rtk_gps/fix` | `sensor_msgs/msg/NavSatFix` | GNSS 測位結果。 |
 | Subscribe | `/rtk_gps/rtk_status` | `rtk_gps_um982_msgs/msg/RtkStatus` | fix quality、衛星数、heading など。 |
 | Publish | `/gnss/pose_llh` | `tc_geo_msgs/msg/GeoPoseWithQuality` | GNSS 単独 LLH pose。 |
-| Publish | `/localization/pose_enu` | `geometry_msgs/msg/PoseWithCovarianceStamped` | localization_fusion 実装前の暫定 ENU pose。 |
+| Publish | `/localization/pose_enu` | `geometry_msgs/msg/PoseWithCovarianceStamped` | 単体launch既定のGNSS単独ENU pose。 |
 | Publish | `/geo/map_projection` | `tc_geo_msgs/msg/MapProjection` | ENU/LLH 変換条件。 |
 
-localization_fusion 実装後は、`/gnss/pose_enu` を fusion 入力、`/localization/pose_enu` を fusion 後の走行系自己位置として扱う想定です。
+共通実機起動ではGNSS入力を `/rtk_gps/rtk_gps_um982_node/fix` と
+`/rtk_gps/rtk_gps_um982_node/rtk_status` に接続します。
+共通起動ではGNSS単独出力を `/gnss/pose_enu` へ分離し、`/localization/pose_enu` は
+`gnss_lio_fusion` が配信します。融合はNavSatFixとRtkStatusを直接購読します。
+この単体launchを融合と併用するときは `gnss_pose_enu_topic:=/gnss/pose_enu` を指定してください。
 
 ### `route_geo_projector_node`
 ENU topic を表示用 LLH topic へ変換します。
@@ -42,7 +46,7 @@ ENU topic を表示用 LLH topic へ変換します。
 ### `llh_osm_viewer_node`
 `/localization/pose_llh`、`/active_route`、`/route/active_target_llh` を購読し、ローカル HTTP サーバで OpenStreetMap ビューアを提供します。自己位置は赤い二等辺三角形で表示され、三角形の向きは `heading_deg` を表します。active route は `Waypoint.geo_pose` を持つ点だけを青い線と点で重畳し、active target は橙色の点で重畳します。
 
-このノードは `geo_pose_converter` の診断・統合確認用ビューアです。正式な `robot_console` HTML遠隔観測UIでは、運行サマリ、センサ画像、node health、読み取り専用Snapshot APIを `robot_console` 側で扱う想定です。
+このノードは `geo_pose_converter` の診断・統合確認用ビューアです。正式な `robot_console` HTML遠隔観測UIでは、運行サマリ、センサ画像、node health、読み取り専用Snapshot APIを `robot_console` 側で扱います。
 
 起動例:
 
@@ -55,7 +59,7 @@ ros2 run geo_pose_converter llh_osm_viewer_node --ros-args \
   -p open_browser:=false
 ```
 
-ブラウザで次を開きます。
+同じPCのブラウザで次を開きます。localhostはiPhoneからの共有先ではありません。
 
 ```text
 http://127.0.0.1:18765/

@@ -16,6 +16,8 @@ TRACKING = 'System time     : 0.002 seconds slow of NTP time\nLeap status     : 
 
 def test_clock_requires_selected_fresh_gnss():
     assert trial.chrony_ready(SOURCES, TRACKING, .05)
+    # filter=4 timestamps represent the sample window, not its publish time.
+    assert trial.chrony_ready(SOURCES.replace('377 1', '377 6'), TRACKING, .05)
     for sources in [SOURCES.replace('#*', '#?'), SOURCES.replace('UM98', 'GPS'),
                     SOURCES.replace('377 1', '377 9'), SOURCES.replace('377 1', '377 1m')]:
         assert not trial.chrony_ready(sources, TRACKING, .05)
@@ -27,6 +29,7 @@ def test_prepare_no_overwrite_and_no_phc_servo(tmp_path):
     output = tmp_path/'session'
     trial.prepare(output, '/run/chrony/um982.sock')
     assert 'time_stamping software' in (output/'ptp4l.conf').read_text()
+    assert 'ptp_minor_version 0' in (output/'ptp4l.conf').read_text()
     assert 'serverOnly 1' in (output/'ptp4l.conf').read_text()
     assert 'refid UM98' in (output/'chrony.conf').read_text()
     with pytest.raises(FileExistsError):
@@ -91,3 +94,16 @@ def test_packet_ignores_other_lidar_truncated_and_fragmented():
     damaged = bytearray(frame)
     damaged[20] = 0x20
     assert trial.mid360_packet(damaged, '192.168.1.123') is None
+
+
+def test_ntp_trial_requires_selected_fresh_server_and_error_bound():
+    sources = '^* 192.0.2.1 2 6 377 12 +2ms[+2ms] +/- 7ms'
+    tracking = TRACKING + 'Root delay : 0.010 seconds\nRoot dispersion : 0.002 seconds\n'
+    assert trial.ntp_ready(sources, tracking, .005)
+    assert not trial.ntp_ready(SOURCES, tracking, .005)
+    for bad in [sources.replace('^*','^?'), sources.replace('377 12','376 12'),
+                sources.replace('377 12','377 129'), sources.replace('377 12','377 2m')]:
+        assert not trial.ntp_ready(bad, tracking, .005)
+    for bad in [tracking.replace('0.010','0.100'), tracking.replace('0.002','0.030'),
+                tracking.replace('Normal','Not synchronised'), TRACKING]:
+        assert not trial.ntp_ready(sources, bad, .005)

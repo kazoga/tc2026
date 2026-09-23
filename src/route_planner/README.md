@@ -1,8 +1,8 @@
-# route_planner パッケージ README (phase2正式版)
+# route_planner パッケージ README
 
 ## 概要
 `route_planner` は固定ブロックと可変ブロックを組み合わせてルートを生成し、
-`route_manager` からの `/get_route`・`/update_route` サービス要求に応答する経路計画ノードです。Phase2 では
+`route_manager` からの `/get_route`・`/update_route` サービス要求に応答する経路計画ノードです。
 YAML 設定、CSV キャッシュ、グラフ探索を組み合わせて再計画に対応します。
 
 ## 主な機能
@@ -20,7 +20,8 @@ YAML 設定、CSV キャッシュ、グラフ探索を組み合わせて再計�
    ros2 run route_planner route_planner
    ```
 
-> CSV をビルド後に変更した場合は再度 `colcon build` を実行してください。`package.xml` の install 設定により再配置されます。
+> 通常installではCSV変更後に再ビルドします。symlink-installの既存ファイルは内容変更が反映されますが、
+> 読込済みCSVはキャッシュされるため、走行停止後にノードを再起動してください。
 
 ## 外部インタフェース
 ### Service Server
@@ -126,7 +127,3 @@ LLH/ENU 変換式、heading/yaw 変換、投影原点は `geo_pose_converter` �
 - エラー発生時はスタックトレースを出力するため、`GetRoute` / `UpdateRoute` 失敗時は YAML や CSV の記述ミスを確認する。
 - 再探索で閉塞が多発する場合は `GetRoute` を再呼び出しし、`closed_edges` をリセットして最新ルートを取得する。
 - 出力される PNG パスは `solve_variable_route` の戻り値 `route_image_path` に含まれる。ファイルが無い場合はダミー画像が生成される。
-
-## 将来拡張メモ
-- タイムアウト管理（`planner_timeout_sec` など）は `route_manager` が担当し、本ノードは計算とファイル入出力に特化している。
-- 可変ブロック単位の統計情報や可視化 API の追加余地がある。

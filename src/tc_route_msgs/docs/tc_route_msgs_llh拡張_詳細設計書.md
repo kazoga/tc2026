@@ -2,13 +2,12 @@
 
 ## 1. 文書目的・対象範囲
 
-本書は `tc_route_msgs` の LLH 拡張仕様を定義する。対象は `Waypoint.msg`、`Route.msg`、`ActiveTargetLlh.msg` である。今回の実装 phase では package 名を `tc_route_msgs` に統一し、旧 package 名への alias や fallback は残さない。
+本書は `tc_route_msgs` の LLH 拡張仕様を定義する。対象は `Waypoint.msg`、`Route.msg`、`ActiveTargetLlh.msg` である。
 
 ## 2. 背景・要求・スコープ
 
-route CSV には LLH 情報を持つ waypoint が存在する一方、従来の `/active_route` は ENU pose のみを公開していた。そのため、GUI や HTML UI は route の地理座標を正本 topic から取得できず、別変換や別ファイル参照が必要になっていた。
-
-本拡張では `/active_route` を route 正本として、走行制御に使う ENU pose と、表示・ログ・将来編集に使う LLH pose を同時に保持する。`/active_target` は走行制御用の ENU pose として維持し、LLH 表示用には `/route/active_target_llh` を追加する。
+`/active_route`を経路の正本とし、走行用ENUと表示・保存用LLHを保持する。
+表示用目標は `/route/active_target_llh`、制御用目標は `/active_target` を使う。
 
 ## 3. 全体構成・アーキテクチャ
 
@@ -28,12 +27,12 @@ src/tc_route_msgs/
 
 ## 4. パッケージ構成・ファイル配置
 
-| ファイル | 変更内容 |
+| ファイル | 内容 |
 | --- | --- |
-| `msg/Waypoint.msg` | ENU pose 有効フラグ、LLH pose、LLH 由来種別を追加 |
-| `msg/Route.msg` | route id、frame id、投影条件を追加 |
-| `msg/ActiveTargetLlh.msg` | active target の LLH 派生情報を追加 |
-| `package.xml` | `tc_geo_msgs` 依存を追加 |
+| `msg/Waypoint.msg` | ENU pose 有効フラグ、LLH pose、LLH 由来種別を定義 |
+| `msg/Route.msg` | route id、frame id、投影条件を定義 |
+| `msg/ActiveTargetLlh.msg` | active target の LLH 派生情報を定義 |
+| `package.xml` | `tc_geo_msgs` 依存を定義 |
 | `CMakeLists.txt` | `tc_geo_msgs` を rosidl 依存へ追加 |
 
 ## 5. 外部インタフェース仕様
@@ -54,7 +53,7 @@ src/tc_route_msgs/
 
 ### `Waypoint.msg`
 
-`pose` は既存互換のため維持する。`has_pose_enu` は pose が走行制御用に有効かどうかを表す。通常の route waypoint では `true` とする。
+`pose` は走行制御用の位置・姿勢を保持する。`has_pose_enu` は pose が走行制御用に有効かどうかを表す。通常の route waypoint では `true` とする。
 
 `geo_pose` は LLH pose を保持する。route CSV に LLH がある場合は `has_geo_pose=true` とし、`geo_pose_source=GEO_SOURCE_ROUTE_FILE` とする。LLH がない waypoint では `has_geo_pose=false` とし、GUI は projection による推定表示と区別する。
 
@@ -70,8 +69,8 @@ src/tc_route_msgs/
 
 1. `route_planner` が route CSV を読み込み、`Waypoint.pose` と `Waypoint.geo_pose` を埋める。
 2. `route_manager` が `/active_route` を publish する。この際、LLH field と projection を落とさず再配信する。
-3. `route_follower` は既存どおり ENU pose のみを参照して `/active_target` を publish する。
-4. `route_geo_projector` が `/active_route`、`/active_target`、自己位置 LLH を購読し、`/route/active_target_llh` を publish する。
+3. `route_follower` はENU pose のみを参照して `/active_target` を publish する。
+4. `route_geo_projector` が `/active_route`、`/active_target`、自己位置 ENU を購読し、`/route/active_target_llh` を publish する。
 
 ## 9. 主要アルゴリズム・判定ロジック
 
@@ -79,7 +78,7 @@ LLH 変換は message package では実装しない。`route_geo_projector` は 
 
 ## 10. QoS・並行性・タイミング設計
 
-`/active_route` は既存運用どおり transient local とする。`/route/active_target_llh` は active target と自己位置の更新に追従する揮発性 stream とし、古い target を後続 subscriber に残さない。
+`/active_route` はtransient local とする。`/route/active_target_llh` は active target と自己位置の更新に追従する揮発性 stream とし、古い target を後続 subscriber に残さない。
 
 ## 11. 起動・終了・launch 設計
 
@@ -102,20 +101,9 @@ GUI と HTML UI は `/active_route` の `Waypoint.geo_pose` と `/route/active_t
 - `tc_route_msgs` が `tc_geo_msgs` と共に build できる。
 - `route_planner` が route CSV の LLH を `Waypoint.geo_pose` に保持する。
 - `route_manager` の local shift / skip / reissue で LLH field が失われない。
-- `route_follower` と `robot_navigator` の ENU 制御 topic は従来どおり動作する。
+- `route_follower` と `robot_navigator` の ENU 制御 topic は動作する。
 
-## 16. 互換性・移行・影響範囲
+## 16. 定義変更時のビルド
 
-既存 `Waypoint` と `Route` に field を追加するため、生成済み message を利用する downstream package は再ビルドが必要である。topic 名は維持するが、package 名は `route_msgs` から `tc_route_msgs` へ変更したため、downstream package は import、`package.xml`、`CMakeLists.txt` または `setup.py` を更新する必要がある。旧 package 名への互換 alias は提供しない。
-
-## 17. 未決事項・今後の拡張
-
-- 旧 package 名への alias や fallback は設けない。
-- route editor 実装時に `geo_pose_source` の手動編集値と route file 値の扱いを追加定義する。
-
-## 18. 改版履歴
-
-| 日付 | 版 | 変更概要 |
-| --- | --- | --- |
-| 2026-05-30 | 1.1 | package 名を `tc_route_msgs` に完全移行し、旧 package 名を廃止 |
-| 2026-05-28 | 1.0 | 初版。LLH 拡張仕様を定義 |
+`Waypoint` と `Route` は `tc_route_msgs` のinterfaceである。定義を変更した場合は、
+利用するパッケージも再ビルドする。

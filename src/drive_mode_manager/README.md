@@ -54,7 +54,7 @@ coordinator を別端末で手動起動する場合:
 端末 1:
 
 ```bash
-ypspur-coordinator -d /dev/ttyACM0 -p ~/spur/my_robot.param
+ypspur-coordinator -d /dev/serial/by-id/usb-T-frog_project_T-frog_Driver-if00 -p "$(ros2 pkg prefix ypspur_ros2)/share/ypspur_ros2/config/icart-middle.param"
 ```
 
 端末 2:
@@ -75,7 +75,7 @@ coordinator も `ypspur_ros2.launch.py` から起動する場合:
 # 端末 1: coordinator と ypspur_node を起動
 ros2 launch ypspur_ros2 ypspur_ros2.launch.py \
   start_coordinator:=true \
-  coordinator_device:=/dev/ttyACM0 \
+  coordinator_device:=/dev/serial/by-id/usb-T-frog_project_T-frog_Driver-if00 \
   coordinator_param:=<robot_param_file> \
   cmd_vel_topic:=/cmd_vel
 
@@ -116,6 +116,10 @@ ros2 launch drive_mode_manager ps3_joy_sim.launch.py
 `w`/`s`/`a`/`d` は押すたびに左 stick の保持値へ `0.1` ずつ加算または減算されます。GUI には現在の stick 値に対して `manual_teleop_node` の既定 scale と deadzone を適用した予測 `cmd_vel` の `v` と `w` を表示します。`space` は stick を neutral に戻します。
 
 ## 外部インタフェース
+
+以下は単体起動の既定名です。共通起動のmuxは自律入力を `/cmd_vel/fusion_limited` へremapします。
+実機UM982の状態の完全名は `/rtk_gps/rtk_gps_um982_node/rtk_status` であり、
+単体の `drive_status_gui_node` を接続する場合も入力名を合わせてください。
 
 ### Subscriber
 
@@ -175,8 +179,11 @@ GUI 表示、Joy 入力、実機走行の確認はローカル環境で行いま
 manualモードからのL1解放による自律復帰を禁止する。採取用共通launchで使用する。
 手動中のL1 deadmanと入力timeoutは維持し、通常の自律起動の既定動作は変えない。
 
-### その場旋回の操作（2026-09-22）
+### その場旋回の操作
 
 前後速度と角速度は独立。L1を押しながらスティックを横へ倒すとその場旋回する。
 旋回入力がある場合、前後軸の微小入力は `in_place_turn_deadzone`（既定0.12）まで
-ゼロとする。直進時の微速操作は従来のdeadzoneを使い、大きな前後入力との旋回は維持する。
+ゼロとする。直進時の微速操作は`deadzone`を使い、大きな前後入力との旋回は維持する。
+
+実機共通起動はPSボタン10、単体設定・Joy simulatorは16を使います。
+採取起動ではallow_auto_resume=falseで手動を保持します。

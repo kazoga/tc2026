@@ -8,6 +8,8 @@
 <exec_depend>geo_pose_converter</exec_depend><exec_depend>gnss_lio_fusion</exec_depend><exec_depend>tc_geo_msgs</exec_depend><exec_depend>python3-numpy</exec_depend><exec_depend>python3-yaml</exec_depend>
 <exec_depend>rosgraph_msgs</exec_depend><exec_depend>launch_ros</exec_depend><exec_depend>ament_index_python</exec_depend>
 <exec_depend>launch</exec_depend>
+<exec_depend>python3-scipy</exec_depend><exec_depend>python3-matplotlib</exec_depend>
+<exec_depend>python3-opencv</exec_depend><exec_depend>rosidl_runtime_py</exec_depend>
 <test_depend>python3-pytest</test_depend><test_depend>route_planner</test_depend>
 <export><build_type>ament_python</build_type></export>
 </package>

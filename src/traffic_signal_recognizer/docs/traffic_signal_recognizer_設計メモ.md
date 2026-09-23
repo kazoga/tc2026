@@ -1,8 +1,6 @@
 # traffic_signal_recognizer 設計メモ
 
-`traffic_signal_recognizer` は、tc2025 まで ROS 1 ノード
-`tc2023_signal_detector.py` が担っていた信号横断可否判定を ROS 2 に移行するための
-パッケージである。
+`traffic_signal_recognizer` はROS 2の信号横断可否判定パッケージである。
 
 YOLO モデルのロードと推論は `yolo_detector` に任せ、本パッケージは
 `vision_msgs/msg/Detection2DArray` から GO/STOP を判定する。

@@ -1,11 +1,11 @@
-# tc_route_msgs パッケージ README (phase3正式版)
+# tc_route_msgs パッケージ README
 
 ## 概要
 `tc_route_msgs` は経路計画・走行系で共通利用するメッセージ／サービス型を定義する
-インタフェース専用パッケージです。Phase3 ではルートバージョン管理、滞留報告の
-理由コード化（`reason_code` / `reason_detail`）、経路封鎖判定用フラグなどのフィールドを拡張し、
+インタフェース専用パッケージです。ルートバージョン管理、滞留理由（`reason_code` / `reason_detail`）、
+経路封鎖判定用フラグなどを定義し、
 `route_manager`・`route_planner`・`route_follower`・`obstacle_monitor`・`robot_navigator` など
-複数ノード間のデータ交換を統一しました。
+複数ノード間のデータ交換を統一します。
 
 ## 主な機能
 - 経路データ (`Route`・`Waypoint`) と状態通知 (`RouteState`・`ManagerStatus`) のメッセージ定義。
@@ -35,11 +35,14 @@ ros2 interface show tc_route_msgs/srv/ReportStuck
 | `MissionInfo` | start/goal/チェックポイントの情報。 | `route_manager`, ダッシュボード |
 | `FollowerState` | フォロワの状態・滞留統計を報告。 | `route_follower`, ログ収集 |
 | `ObstacleAvoidanceHint` | 前方閉塞・左右オフセットのヒント。 | `obstacle_monitor`, `robot_navigator`, `route_follower` |
+| `DriveModeStatus` | 自律/手動モード、入力鮮度、出力元、復帰待ち状態。 | `drive_mode_manager`, `robot_console` |
+| `ActiveTargetLlh` | 現在の目標のLLH表示情報。 | `geo_pose_converter`, `robot_console` |
+| `MotionLimits` | ドライバが確認した速度・加減速度上限とstamp。 | `ypspur_ros2`, `robot_navigator` |
 
 ### サービス定義
 | 名称 | 概要 | リクエスト主要項目 | 主な利用ノード |
 |------|------|------------------|---------------|
-| `GetRoute` | 初期ルートを取得。応答で `Route` を返す。 | `mission_id` 相当フィールドは無し。 | `route_manager` → `route_planner` |
+| `GetRoute` | 初期ルートを取得。応答で `Route` を返す。 | `start_label`・`goal_label`・`checkpoint_labels`。 | `route_manager` → `route_planner` |
 | `UpdateRoute` | 滞留時の部分ルート差し替え。 | `prev_index`・`current_index`・`route_version`・`reason`。 | `route_manager` ↔ `route_planner` |
 | `ReportStuck` | 滞留報告と再計画結果返却。 | `route_version`・`current_index`・`reason_code`・`reason_detail`・`avoid_trial_count`。 | `route_follower` → `route_manager` |
 
@@ -47,11 +50,15 @@ ros2 interface show tc_route_msgs/srv/ReportStuck
 - 本パッケージが公開するパラメータはありません。
 
 ## 状態管理・処理フロー
-- `Route.version` は `route_manager` が major/minor を 100 倍で符号化し、`/active_route` 配信の世代管理に利用します。
-- `RouteState.status` は Phase3 の FSM (`STATUS_IDLE`～`STATUS_ERROR`) と 1 対 1 に対応します。
+- `Route.version` は `route_manager` が `(major % 100) * 100 + (minor % 100)` で符号化し、`/active_route` 配信の世代管理に利用します。
+- `RouteState.status` は `STATUS_IDLE`～`STATUS_ERROR` の定数で表します。manager内部FSMの状態文字列とは表現が異なります。
 - `ReportStuck.Response.decision_code` は `route_manager` の再計画・シフト・スキップ判断に一致し、
   `offset_hint` が `route_follower` への横オフセット指示となります。
 - `ObstacleAvoidanceHint.front_clearance_m` は `robot_navigator`・`route_follower` の減速／停止条件に利用されます。
+- `MotionLimits`は`header`と、線/角速度上限、線加速度、線減速度、角加速度を保持します。
+  既定の`/motion_limits`はRELIABLE / VOLATILE / depth=1の継続配信で、latchedな設定通知ではありません。
+  `robot_navigator`はドライバの能力が要求値以上で、stampと受信がともに新しい場合だけ採用します。
+  詳細は[ナビゲータの制動と入力監視](../robot_navigator/README.md)を参照してください。
 
 ## 動作確認手順
 1. `colcon build` 後、`ros2 interface show tc_route_msgs/msg/ManagerStatus` などで定義内容を確認する。
@@ -59,10 +66,6 @@ ros2 interface show tc_route_msgs/srv/ReportStuck
 3. `route_manager`・`route_planner`・`route_follower` 間で通信ログを収集し、定義どおりのフィールドが送受信されているか検証する。
 
 ## デバッグのヒント
-- `ros2 interface check` を用いて独自に生成した YAML が型に適合しているかを確認してください。
+- `ros2 interface show` で実際の定義を確認し、生成コードと送受信側の型を揃えてください。
 - メッセージ拡張時は `route_manager`・`route_planner` など関連パッケージの README と docs を同時に更新すること。
-- `ObstacleAvoidanceHint` の `front_clearance_m` が `inf` になりやすい場合は、送信側で距離上限を再確認します。
-
-## 将来拡張メモ
-- Phase3 では `Route` の属性にレーン種別や速度プロファイルを追加予定です。
-- `ReportStuck` に `recovery_command` を追加し、フォロワ側への直接指示を可能にする構想があります。
+- `front_clearance_m=inf` は送信側の点数不足でも生じます。観測正常を意味する値ではないため、入力scanと前方抽出条件を確認します。

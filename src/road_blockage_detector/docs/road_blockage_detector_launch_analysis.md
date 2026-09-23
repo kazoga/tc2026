@@ -1,20 +1,26 @@
-# road_blockage_detector launch 時の挙動差分調査メモ
+# 経路封鎖検知の起動と時刻の前提
 
-## 1. 事象の概要
-- road_blockage_detector は自己位置を取得できないと判定処理をスキップする実装のため、起動直後に `/localization/pose_enu` が未受信だと仮封鎖解除や多重検知抑止が動かずに見えることがあった。
-- 過去には TF とシミュレーション時間のずれが主因だったが、自己位置源を `/localization/pose_enu` のみに絞り、launch から `use_sim_time` を外したことで時間軸の不整合を排除した。
+## 自己位置入力
 
-## 2. 確認事項
-### 2.1 自己位置取得の前提
-- ノードは Detection2DArray のヘッダー時刻をもとに `/localization/pose_enu` のキャッシュを参照し、取得できない場合は警告を出して処理を終了する。検知時刻と `/localization/pose_enu` のヘッダーに 3 秒以上の差がある場合にも警告を発行する。
-- `/localization/pose_enu` の取得と時刻管理に一本化したため、TF ルックアップ失敗が原因で処理が止まるケースはなくなった。
+`road_blockage_detector` は `/localization/pose_enu` の最新値をキャッシュし、
+YOLOの `Detection2DArray` を受けたときに参照する。TFによる自己位置検索や
+検知時刻への補間は行わない。
 
-### 2.2 launch の時間設定
-- `use_sim_time` の引数を `road_blockage_detector.launch.py` と統合版 launch から削除し、ノード側でも同パラメータを参照しないようにした。これにより `/clock` 有無に関わらず `/localization/pose_enu` に合わせた時間軸で動作する。
-- tc2026 の 3 パッケージ構成では、`road_blockage_perception.launch.py` が `yolo_detector`
-  の NCNN インスタンスと `road_blockage_detector` を起動する。PyTorch 版で検証する場合は
-  `road_blockage_perception_yolo.launch.py` を使用する。
+位置が未受信の場合は警告を出し、当該時刻の検知数を0として記録して、通常の封鎖判定をスキップする。
+検知と位置のstamp差が3秒以上でも警告のみで、最新位置を用いた処理を継続する。
+時刻差の警告がある状態を、同期済み・正しい検知位置として扱わない。
 
-## 3. 対応方針と修正内容
-- 自己位置は `/localization/pose_enu` のみを使用し、Detection と `/localization/pose_enu` のヘッダー時刻差が 3 秒以上なら警告ログを出す。
-- launch ファイルでは `use_sim_time` を受け付けず、パラメータファイルの指定だけで起動する構成とする。
+## 起動方法
+
+| launch | 構成 |
+|---|---|
+| `road_blockage_detector.launch.py` | 判定ノードのみ |
+| `road_blockage_perception.launch.py` | NCNNのYOLO推論と判定 |
+| `road_blockage_perception_yolo.launch.py` | PyTorchのYOLO推論と判定 |
+
+設定YAMLを指定して起動する。これらのlaunchは `use_sim_time` 引数を提供しない。
+判定には入力メッセージのstampを使うため、検知と位置の時刻基準を一致させる必要がある。
+launchの選択だけで入力の時刻不整合が補正されるわけではない。
+
+トピックとパラメータは [README](../README.md)、
+判定・多重検知抑止は [詳細設計](road_blockage_detector_詳細設計書.md)を参照する。

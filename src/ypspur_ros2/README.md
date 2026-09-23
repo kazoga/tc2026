@@ -9,6 +9,7 @@
 | --- | --- | --- | --- |
 | `cmd_vel` | `geometry_msgs/msg/Twist` | sub | `YPSpur_vel(linear.x, angular.z)` を呼ぶ。既定では `drive_mode_manager` が publish する `/cmd_vel` と接続する |
 | `odom` | `nav_msgs/msg/Odometry` | pub | `YPSpur_get_pos` / `YPSpur_get_vel` を 50Hz で配信 |
+| `motion_limits` | `tc_route_msgs/msg/MotionLimits` | pub | 確認した実効上限を正常な制御周期ごとに配信。namespaceなしでは`/motion_limits` |
 
 `ypspur_node` は相対 topic `cmd_vel` を購読し、相対 topic `odom` を publish します。launch の既定では `odom` を `/ypspur_ros/odom` へ remap します（`robot_navigator`、`obstacle_route_sim` の Gazebo bridge、`robot_simulator` がいずれもこの topic 名を前提とするため）。namespace なしで `drive_mode_manager.launch.py` と同時起動した場合、`drive_cmd_mux_node` の最終出力 `/cmd_vel` がそのまま `ypspur_node` に入ります。topic 名を変える場合は launch 引数 `cmd_vel_topic` と `odom_topic` を指定します。
 
@@ -59,7 +60,8 @@ source install/setup.bash
 ### 1. ypspur-coordinator を起動 (別端末)
 
 ```bash
-ypspur-coordinator -d /dev/ttyACM0 -p ~/spur/my_robot.param
+ypspur-coordinator -d /dev/serial/by-id/usb-T-frog_project_T-frog_Driver-if00 \
+  -p "$(ros2 pkg prefix --share ypspur_ros2)/config/icart-middle.param"
 ```
 
 ロボットによっては `--without-device-watchdog` 等のオプションが必要。詳細は yp-spur
@@ -67,7 +69,7 @@ ypspur-coordinator -d /dev/ttyACM0 -p ~/spur/my_robot.param
 
 ### 2. ROS ノードを起動
 
-coordinator を別端末で手動起動している場合は、従来通り `ypspur_node` だけを起動します。
+coordinator を別端末で手動起動している場合は、`ypspur_node` だけを起動します。
 
 ```bash
 ros2 launch ypspur_ros2 ypspur_ros2.launch.py
@@ -78,7 +80,7 @@ ros2 launch ypspur_ros2 ypspur_ros2.launch.py
 ```bash
 ros2 launch ypspur_ros2 ypspur_ros2.launch.py \
   start_coordinator:=true \
-  coordinator_device:=/dev/ttyACM0 \
+  coordinator_device:=/dev/serial/by-id/usb-T-frog_project_T-frog_Driver-if00 \
   coordinator_param:=<robot_param_file>
 ```
 
@@ -105,7 +107,7 @@ cmd_vel が `cmd_vel_timeout_s` (既定 0.5 秒) 入らないとロボットは�
 | パラメータ              | 型      | 既定値      | 説明                                                |
 | ----------------------- | ------- | ----------- | --------------------------------------------------- |
 | `cmd_vel_timeout_s`     | double  | `0.5`       | 自動停止までのタイムアウト                          |
-| `odom_publish_hz`       | double  | `50.0`      | `/odom` 配信レート                                  |
+| `odom_publish_hz`       | double  | `50.0`      | launch既定の`/ypspur_ros/odom`配信レート              |
 | `odom_frame_id`         | string  | `odom`      | Odometry header.frame_id                            |
 | `base_frame_id`         | string  | `base_link` | Odometry child_frame_id                             |
 | `coordinate_system`     | int     | `2` (CS_GL) | 0=BS, 1=SP, 2=GL, 3=LC, 4=FS, 5=BL                  |
@@ -113,12 +115,15 @@ cmd_vel が `cmd_vel_timeout_s` (既定 0.5 秒) 入らないとロボットは�
 | `ipc.ip`                | string  | `127.0.0.1` | socket モード時のホスト                             |
 | `ipc.port`              | int     | `54321`     | socket モード時のポート                             |
 | `velocity_max.linear`   | double  | `1.0`       | 受信 linear.x のクリップ閾値 (m/s, ±対称)           |
-| `velocity_max.angular`  | double  | `1.5`       | 受信 angular.z のクリップ閾値 (rad/s, ±対称)        |
+| `velocity_max.angular`  | double  | `1.0`       | 受信 angular.z のクリップ閾値 (rad/s, ±対称)        |
+| `acceleration_max.linear` | double | `0.7` | 線加速度上限 [m/s²] |
+| `deceleration_max.linear` | double | `1.5` | 線減速度上限 [m/s²] |
+| `acceleration_max.angular` | double | `1.5` | 角加速度上限 [rad/s²] |
 | launch `cmd_vel_topic` | string | `cmd_vel` | `cmd_vel` の remap 先。`drive_mode_manager` と接続する場合は既定または `/cmd_vel` |
 | launch `odom_topic` | string | `/ypspur_ros/odom` | `odom` の remap 先。robot_navigator 等が前提とする既定値 |
 | launch `start_coordinator` | bool | `false` | true の場合、launch から `ypspur-coordinator` を同時起動 |
-| launch `coordinator_device` | string | `/dev/ttyACM0` | `ypspur-coordinator -d` に渡す device path |
-| launch `coordinator_param` | string | `""` | `ypspur-coordinator -p` に渡す robot parameter file path |
+| launch `coordinator_device` | string | `/dev/serial/by-id/usb-T-frog_project_T-frog_Driver-if00` | `ypspur-coordinator -d` に渡すdevice path |
+| launch `coordinator_param` | string | package share内の`config/icart-middle.param` | `ypspur-coordinator -p` に渡すrobot parameter file |
 
 ## トラブルシューティング
 
@@ -147,10 +152,10 @@ ypspur-coordinator が起動していないか、別ユーザで起動してい�
 
 MIT (yp-spur 本体も MIT)
 
-## このPCのi-Cart middle（2026-09-22）
+## i-Cart middleの同梱設定
 
-提供された `ダウンロード/icart-middle.param` を内容変更せず
-`config/icart-middle.param` に格納。colcon buildでshare配下にも配置される。
+実車用パラメータを`config/icart-middle.param`に格納し、colcon buildでshare配下にも配置する。
+直進の`MAX_ACC_V`は1.5 m/s²を設定する。別車体へ転用する場合は同じ値を前提にしない。
 車輪単体の起動は次のコマンドで行う（車輪制御が有効になる）。
 
 ```bash
@@ -160,17 +165,21 @@ ros2 launch ypspur_ros2 ypspur_ros2.launch.py start_coordinator:=true
 
 既定のデバイスはT-frogのUSB固定名、パラメータは同梱ファイル。
 `icart_bringup/params/hardware.yaml` も同じファイルをpackage URIで参照する。
-以前に生成済みのsessionは `wheel.coordinator_param` を
-`package://ypspur_ros2/config/icart-middle.param` に更新するか再生成する。
+sessionの `wheel.coordinator_param` は使用する車体のパラメータファイルを指す。
+i-Cart middleでは `package://ypspur_ros2/config/icart-middle.param` を使用する。
 走行時は既存のdrive_mode_managerを通し、停止監視を有効にする。
 
 ### 速度・加速度の初期化
 
-車輪ノードは接続後にゼロ速度を送り、`velocity_max` と `acceleration_max` を
-YP-Spurへ設定する。coordinatorのユーザー上限は初期値ゼロのため、この設定なしでは
-`cmd_vel` を受信しても走行しない。加速度の既定値は直進0.3 m/s²、旋回0.6 rad/s²。
-これらの上限は正の有限値が必要。
+車輪ノードは接続後にゼロ速度を送り、coordinatorが実際に読み込んだ速度・加速度の上限を取得する。
+要求値がその上限を超える場合、読み取りに失敗した場合、非正値・非有限値の場合は起動を失敗させる。
+確認後に`velocity_max`、`acceleration_max`、`deceleration_max`を設定する。
+coordinatorのユーザー上限は初期値ゼロのため、この設定なしでは`cmd_vel`だけで走行しない。
 
-2026-09-22: 旋回の角加速度を0.6から1.5 rad/s²へ調整。
-角速度上限1.0 rad/sは維持し、静止から上限に達する指令上の時間は約1.67秒から0.67秒へ短縮する。
+20 ms周期でcoordinatorの平滑化済み速度参照を読み、加速には0.7 m/s²、減速には1.5 m/s²を使う。
+反転要求は一度ゼロへ制動してから逆方向へ加速する。角加速度は1.5 rad/s²、角速度上限は1.0 rad/s。
+正常に速度指令と加速度設定を適用できた周期だけ`MotionLimits`を配信する。
+取得・設定に失敗した周期は停止指令を出して配信せず、navigator側も鮮度監視で停止する。
+cmd_velの期限監視は単調時計を使う。これらはソフトウェアの制動契約であり、
+路面条件を含む実車の制動距離を測定済みとするものではない。
 実車パラメータのMAX_ACC_W=3.28 rad/s²以下。角加速度は起動時設定のため反映には再起動が必要。

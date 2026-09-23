@@ -21,7 +21,8 @@ ROS 2 パッケージです。YOLO モデルのロードと画像推論は行わ
 
 ## 起動方法
 ### 判定ノード単体
-すでに `/perception/traffic_signal/detections` と `/usb_cam/image_raw` が publish されている場合に使用します。
+すでに `/perception/traffic_signal/detections` が publish されている場合に使用します。
+生画像は表示側で使用し、判定ノードは購読しません。
 
 ```bash
 ros2 launch traffic_signal_recognizer traffic_signal_recognizer.launch.py

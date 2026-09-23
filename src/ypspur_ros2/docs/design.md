@@ -6,18 +6,18 @@
 制御ライブラリ) を ROS 2 Jazzy から扱うためのドライバパッケージ。
 
 `geometry_msgs/Twist` の `/cmd_vel` 1 本でロボットを走らせ、`nav_msgs/Odometry`
-を `/odom` に publish する。
+をlaunch既定の `/ypspur_ros/odom` にpublishする（ノード内の相対名は`odom`）。
 
 **スコープ内**
 - `/cmd_vel` → `YPSpur_vel(v, w)` 変換
-- `YPSpur_get_pos` / `YPSpur_get_vel` を用いた `/odom` 配信
+- `YPSpur_get_pos` / `YPSpur_get_vel` を用いた車輪Odometry配信
+- coordinatorの実効上限確認、加減速の切替、`/motion_limits`の継続配信
 - cmd_vel タイムアウト時の自動停止 (デッドマンスイッチ)
 - yp-spur 本体の取り込み + Issue #245 ワークアラウンドパッチ適用
 
-**スコープ外 (今回は実装しない)**
+**提供しない機能**
 - TF (`odom→base_link`) の broadcast
 - `joint_states` 配信
-- `ypspur-coordinator` プロセスの自動起動・監視 (ユーザが手動起動)
 - 高度な走行制御 (`YPSpur_circle`, `YPSpur_line` 等の経路指令)
 - Lifecycle node 化
 
@@ -80,7 +80,7 @@ if(can_apply EQUAL 0)
 endif()
 ```
 
-将来 upstream にマージされたら patch を削除する。
+パッチ適用先はビルド用コピーであり、submoduleを直接変更しない。
 
 ## 3. パッケージ構成
 
@@ -138,10 +138,11 @@ src/ypspur_ros2/
                    Motor Driver
 ```
 
-`ypspur-coordinator` の起動はユーザ責任。例:
+`start_coordinator:=true`ではlaunchがcoordinatorを起動し、2秒後に車輪ノードを開始する。
+既定のfalseでは外部起動したcoordinatorへ接続する。別端末での起動例:
 
 ```bash
-ypspur-coordinator -d /dev/ttyACM0 -p ~/spur/my_robot.param --without-device-watchdog
+ypspur-coordinator -d /dev/serial/by-id/usb-T-frog_project_T-frog_Driver-if00 -p "$(ros2 pkg prefix ypspur_ros2)/share/ypspur_ros2/config/icart-middle.param" --without-device-watchdog
 ```
 
 ## 5. ノード設計
@@ -150,36 +151,51 @@ ypspur-coordinator -d /dev/ttyACM0 -p ~/spur/my_robot.param --without-device-wat
 
 | Topic       | Type                       | QoS       | 処理                                   |
 | ----------- | -------------------------- | --------- | -------------------------------------- |
-| `cmd_vel`   | `geometry_msgs/msg/Twist`  | KeepLast 10 | `YPSpur_vel(msg.linear.x, msg.angular.z)` を呼び、最終受信時刻を更新 |
+| `cmd_vel`   | `geometry_msgs/msg/Twist`  | KeepLast 10 | 有限値を検査し、上限でclipした目標速度と単調時計の受信時刻を更新する |
 
 ### 5.2 パブリッシャ
 
 | Topic       | Type                          | 頻度        | 内容                                 |
 | ----------- | ----------------------------- | ----------- | ------------------------------------ |
 | `odom`      | `nav_msgs/msg/Odometry`       | パラメータ (既定 50Hz) | pose, twist; orientation は yaw のみ (roll/pitch=0) |
+| `motion_limits` | `tc_route_msgs/msg/MotionLimits` | 正常な20 ms制御周期ごと | 実効の線/角速度上限、線加速・線減速・角加速上限。RELIABLE / VOLATILE / depth=1 |
+
+launchは`odom`を`/ypspur_ros/odom`へremapする。`motion_limits`はnamespaceなしで
+`/motion_limits`となり、navigatorはこの絶対名を購読する。
 
 ### 5.3 ROS パラメータ
 
 | パラメータ              | 型      | 既定値        | 説明                                                     |
 | ----------------------- | ------- | ------------- | -------------------------------------------------------- |
 | `cmd_vel_timeout_s`     | double  | `0.5`         | これ以上 `cmd_vel` が無ければ自動で `YPSpur_vel(0, 0)`   |
-| `odom_publish_hz`       | double  | `50.0`        | `/odom` 配信レート                                       |
+| `odom_publish_hz`       | double  | `50.0`        | 車輪Odometry配信レート                                   |
 | `odom_frame_id`         | string  | `odom`        | Odometry header.frame_id                                 |
 | `base_frame_id`         | string  | `base_link`   | Odometry child_frame_id                                  |
-| `coordinate_system`     | int     | `0` (CS_BS)   | `YPSpur_get_pos` に渡す座標系。0=BS, 1=GL, 2=LC          |
+| `coordinate_system`     | int     | `2` (CS_GL)   | 0=BS, 1=SP, 2=GL, 3=LC, 4=FS, 5=BL                     |
 | `ipc.use_socket`        | bool    | `false`       | true なら `YPSpur_init_socket()`、false なら `YPSpur_init()` |
 | `ipc.ip`                | string  | `127.0.0.1`   | socket モード時のホスト                                  |
 | `ipc.port`              | int     | `54321`       | socket モード時のポート                                  |
 | `velocity_max.linear`   | double  | `1.0`         | 受信した linear.x のクリップ閾値 (m/s, ±対称)            |
-| `velocity_max.angular`  | double  | `1.5`         | 受信した angular.z のクリップ閾値 (rad/s, ±対称)         |
+| `velocity_max.angular`  | double  | `1.0`         | 受信した angular.z のクリップ閾値 (rad/s, ±対称)         |
+| `acceleration_max.linear` | double | `0.7` | 加速時の線加速度 [m/s²] |
+| `deceleration_max.linear` | double | `1.5` | 制動時の線減速度 [m/s²] |
+| `acceleration_max.angular` | double | `1.5` | 角加速度 [rad/s²] |
+
+速度・加減速の上限はread-onlyパラメータであり、正の有限値を要求する。
 
 ### 5.4 起動シーケンス
 
 1. パラメータ宣言・取得
-2. `YPSpur_init()` / `YPSpur_init_socket()` を呼ぶ。失敗時はノードを `FATAL` で終了
-3. publisher / subscriber を生成
-4. `wall_timer` で odom 配信タイマーを起動
-5. `wall_timer` で deadman watchdog を起動 (cmd_vel 受信時刻を監視)
+2. `YPSpur_initex(ipc.key)` / `YPSpur_init_socket()`で接続する。失敗時は終了する
+3. ゼロ速度を送り、coordinatorのMAX_VEL / MAX_W / MAX_ACC_V / MAX_ACC_Wを読み、要求値が上限以内か確認する
+4. 速度・線減速度・角加速度を初期設定する。取得・設定失敗時は起動を中止する
+5. publisher / subscriber、20 ms制御タイマー、odom配信タイマー、100 ms期限監視タイマーを開始する
+
+制御周期ごとに`YP_get_vref`の線速度参照と要求値から加速/減速を選ぶ。
+減速時は目標を下げてから減速度を設定し、加速時は加速度を設定してから目標を上げる。
+反転時はゼロへ制動する。正常に適用した場合だけ`motion_limits`を発行する。
+取得・設定失敗時はゼロを送り、この周期のheartbeatを出さない。
+cmd_vel途絶は単調時計で判定し、`cmd_vel_timeout_s`超でゼロ速度と線減速度を設定する。
 
 ### 5.5 終了シーケンス
 
@@ -192,7 +208,7 @@ ypspur-coordinator -d /dev/ttyACM0 -p ~/spur/my_robot.param --without-device-wat
 ```cpp
 auto t_now = this->now();
 double x, y, th;
-double t_pose = YPSpur_get_pos(CS_BS, &x, &y, &th);
+double t_pose = YPSpur_get_pos(static_cast<YPSpur_cs>(coordinate_system_), &x, &y, &th);
 double v, w;
 double t_vel  = YPSpur_get_vel(&v, &w);
 
@@ -212,27 +228,23 @@ odom.twist.twist.angular.z = w;
 odom_pub_->publish(odom);
 ```
 
-`YPSpur_get_pos` の戻り値は **取得時刻** (秒) なので、本来は header.stamp に
-これを使う方が正確だが、今回は ROS 時計で十分とする。将来 §7 で言及。
+`YPSpur_get_pos`の戻り値は取得時刻だが、odomのheader.stampにはROSの現在時刻を使う。
+取得時刻とROS時計の対応を推定する処理はない。
 
-## 7. 将来拡張
+## 7. 制約
 
-- TF (`odom→base_link`) broadcast (パラメータで切替)
-- `joint_states` 配信 (`YP_get_wheel_vel()` から積分)
-- `ypspur-coordinator` のサブプロセス管理化 (`launch` から起動 → 終了時 kill)
-- Stamp ソースを `YPSpur_get_pos()` の返却時刻に切替 (system clock との対応に注意)
-- `YPSpur_set_accel` / `YPSpur_set_angaccel` 等の加速度上限パラメータ化
-- Lifecycle node 化 (Nav2 と同様の状態遷移)
-- ホットプラグ/再接続 (coordinator 落ち時の自動 reinit)
+TF・joint_states・Lifecycle・coordinatorへの自動再接続は提供しない。
+coordinatorはlaunchのstart_coordinator=trueで起動できる。
+起動待ち時間は準備完了の保証ではなく、IPCや能力照合が失敗した場合は起動を中止する。
 
 ## 8. 受け入れ条件 (Definition of Done)
 
-- [ ] `colcon build` がエラー無く通る (yp-spur 本体も同時にビルドされる)
-- [ ] `cmake` の出力に「yp-spur patch applied」または「already applied」が出る
-- [ ] `ypspur-coordinator` 起動済の状態で `ros2 launch ypspur_ros2 ypspur_ros2.launch.py`
+- `colcon build` がエラー無く通る (yp-spur 本体も同時にビルドされる)
+- `cmake` の出力に「yp-spur patch applied」または「already applied」が出る
+- `ypspur-coordinator` 起動済の状態で `ros2 launch ypspur_ros2 ypspur_ros2.launch.py`
       が起動でき、`ros2 topic pub /cmd_vel ...` で実機が反応する
-- [ ] `ros2 topic echo /ypspur_ros/odom` で姿勢/速度が出る（launch既定のremap先）
-- [ ] cmd_vel を止めると `cmd_vel_timeout_s` 後にロボットが停止する
+- `ros2 topic echo /ypspur_ros/odom` で姿勢/速度が出る（launch既定のremap先）
+- cmd_vel を止めると `cmd_vel_timeout_s` 後にロボットが停止する
 
 ## 9. 依存関係
 
@@ -255,7 +267,7 @@ colcon build --packages-select ypspur_ros2
 source install/setup.bash
 
 # 端末 1: coordinator
-ypspur-coordinator -d /dev/ttyACM0 -p ~/spur/my_robot.param
+ypspur-coordinator -d /dev/serial/by-id/usb-T-frog_project_T-frog_Driver-if00 -p "$(ros2 pkg prefix ypspur_ros2)/share/ypspur_ros2/config/icart-middle.param"
 
 # 端末 2: ROS ノード
 ros2 launch ypspur_ros2 ypspur_ros2.launch.py

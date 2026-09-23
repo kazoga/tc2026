@@ -1,10 +1,9 @@
-# obstacle_monitor パッケージ README (phase2正式版)
+# obstacle_monitor パッケージ README
 
 ## 概要
 `obstacle_monitor` は `/scan`（LiDAR）から前方障害物を解析し、
 `tc_route_msgs/ObstacleAvoidanceHint` を `/obstacle_avoidance_hint` として配信するノードです。
-Phase2 では legacy の避障ロジックを ROS2 へ移植し、`/sensor_viewer`
-（`sensor_msgs/Image`）で LaserScan の可視化も提供します。動作確認用に
+`/sensor_viewer`（`sensor_msgs/Image`）で LaserScan と判定結果の可視化も提供します。動作確認用に
 `laser_scan_simulator` ノードも同梱しています。
 
 ## 主な機能
@@ -35,7 +34,7 @@ ros2 run obstacle_monitor obstacle_monitor
 ### Subscriber
 | 名称 | 型 | 説明 | QoS |
 |------|----|------|-----|
-| `/scan` | `sensor_msgs/LaserScan` | LiDAR 入力。SensorDataQoS（BEST_EFFORT / VOLATILE / depth=1）。 |
+| `/scan` | `sensor_msgs/LaserScan` | LiDAR入力。 | BEST_EFFORT / VOLATILE / depth=1 |
 | `/localization/pose_enu` | `geometry_msgs/PoseWithCovarianceStamped` | 現在姿勢。viewer で目標線を描画するために利用。 | RELIABLE / VOLATILE / depth=10 |
 | `/active_target` | `geometry_msgs/PoseStamped` | 現在の目標位置。viewer の矢印描画に利用。 | RELIABLE / VOLATILE / depth=10 |
 
@@ -66,7 +65,7 @@ ros2 run obstacle_monitor obstacle_monitor
 ## 状態管理・処理フロー
 1. `/scan` を受信すると NaN/Inf・後方データを除外し、前方 ±90° の点群へ変換する。
 2. `max_obstacle_distance_m` 以下の点を左右に分割し、|y| 昇順で並べ替える。
-3. legacy `calcAvoidanceOffset` に基づきギャップ検出・外縁推定で左右オフセットを算出し、
+3. `calcAvoidanceOffset` でギャップ検出・外縁推定で左右オフセットを算出し、
    `avoid_offset_min_m` の下限を適用する。
 4. `front_cone_half_deg` 内での距離分位点を計算し、`stop_dist_m` 以下で閉塞と判定する。
 5. 算出結果を `ObstacleAvoidanceHint` に格納し、`/sensor_viewer` へ可視化画像を出力する。
@@ -84,6 +83,8 @@ ros2 run obstacle_monitor obstacle_monitor
 - viewer 画像が真っ白な場合は `/scan` の距離が範囲外になっていないか確認してください。
 - `front_blocked` が常に `False` の場合は `front_cone_half_deg` と `stop_dist_m` の組み合わせを見直します。
 
-## 将来拡張メモ
-- `ObstacleAvoidanceHint` に左右独立の clearance を追加し、偏った障害物への指示精度向上を検討中。
-- `laser_scan_simulator` の地図入力を launch から指定できるよう改善予定です。
+## 制約
+
+点数不足では非閉塞・距離infを返すため、欠測と空き空間を区別できない。
+前方点の抽出上限は `max_obstacle_distance_m` であり、`hint_range_m` だけを増やしても
+遠方の検知範囲は広がらない。[判定と制約](docs/追加実装検討報告書.md)を参照する。

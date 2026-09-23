@@ -2,17 +2,13 @@
 
 ## 1. 目的とスコープ
 
-`traffic_signal_recognizer` は、tc2025 まで ROS 1 ノード `tc2023_signal_detector.py` が
-担っていた信号横断可否判定を ROS 2 に移行するパッケージである。
+`traffic_signal_recognizer` はROS 2の信号横断可否判定パッケージである。
 
 YOLO モデルのロードと画像推論は `yolo_detector` に任せ、本パッケージは
-`vision_msgs/msg/Detection2DArray` から GO/STOP を判定する。ROS 1 資産をそのまま持ち込むのではなく、
-外部 interface と判定仕様を維持したうえで、ROS 通信と判定ロジックを分離する。
+`vision_msgs/msg/Detection2DArray` から GO/STOP を判定する。ROS通信と判定ロジックは分離する。
 
 ## 2. 外部 interface と topic 方針
 
-tc2025 では、ROS 2 側の `route_follower` と ROS 1 側の信号認識ノードが `ros1_bridge` を介して
-連携していた。tc2026 では ROS 2 に一本化するが、route stack との接続契約は維持する。
 認識ノードは画像を配信せず、`road_blockage_detector` と対になる形で認識結果のみを
 `tc_perception_msgs/msg/PerceptionOverlay` として配信する。画像への重畳は表示側
 （`robot_console` の `ConsoleCore`）が行う。
@@ -26,8 +22,8 @@ tc2025 では、ROS 2 側の `route_follower` と ROS 1 側の信号認識ノー
 `route_follower` は signal stop ウェイポイントで `/recog_flag=1` を publish し、`/sig_recog==1`
 を受信すると停止解除可能と判断する。本ノードはこの運用契約を ROS 2 内で満たす。
 フロントカメラは 1 台のみであり、認識ノードごとに重畳画像を配信すると同一フレームの
-画像が複数系統流れる。tc2026 では認識ノードから画像配信を廃し、ネットワークを流れる
-カメラ画像を `/usb_cam/image_raw` の 1 本に限定する。
+画像が複数系統流れる。判定ノードは認識データを送り、表示側は `/usb_cam/image_raw` を共用する。
+YOLO自体の確認用detection_imageは別途配信される。
 
 ## 3. ノード構成
 
@@ -107,8 +103,6 @@ tc2025 では、ROS 2 側の `route_follower` と ROS 1 側の信号認識ノー
 6. 直近 `judge_count` 回がすべて green の場合に `go_status` を publish する。
 7. それ以外は `stop_status` を publish する。
 
-この仕様は、ROS 1 実装の「3 回連続 green で GO、それ以外は STOP」という運用を維持する。
-ただし ROS 1 実装にあった DataFrame 依存や `rospy.wait_for_message` 中心のループ構造は採用しない。
 
 ## 7. 認識結果の出力
 
@@ -161,9 +155,3 @@ ROS 非依存の `TrafficSignalRecognitionCore` を pytest で優先的に確認
 
 ROS 通信、画像描画、実モデル推論は実機・rosbag・GUI に依存するため、通常の自動確認では
 `colcon build` と core test までを対象とする。
-
-## 11. 今後の検討事項
-
-- 信号モデルの class id と class name の正式定義をモデル管理資料に記録する。
-- 実機で `detection_interval` と `judge_count` の組み合わせを評価する。
-- `PerceptionOverlay` に載せる項目が robot_console の表示要件を満たすか実機で評価する。
