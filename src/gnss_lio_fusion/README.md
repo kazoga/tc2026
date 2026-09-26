@@ -5,7 +5,7 @@ FIX/FLOAT 以外の状態では位置・方位を補正しない。方位精度�
 低信頼時はLIO優先で減速して継続する。実機の校正・完走保証を意味するものではない。
 
 [詳細設計書](docs/詳細設計書.md)に設定、QoS、座標、時刻、異常系、残課題を記載する。
-[実装評価](docs/実装評価.md)に閉ループ試験、全周記録再生、成功・未達事項を記載する。
+[実装評価](docs/実装評価.md)に評価方法と判定範囲を記載する。
 
 ```bash
 colcon build --symlink-install --packages-select gnss_lio_fusion
@@ -13,7 +13,7 @@ ros2 launch gnss_lio_fusion fusion.launch.py projection_params:=<ENU原点YAML>
 ```
 
 既存の/localization/pose_enu配信元は停止またはremapして、融合出力と競合させない。
-FAST-LIOのOdometryを/lio/odometryへremapする。GPSのfix/statusは同じ観測時刻で配信する。
+FAST-LIOのOdometryを/lio/odometry_rawへremapし、水平化後の/lio/odometryを購読する。GPSのfix/statusは同じ観測時刻で配信する。
 自律muxの入力cmd_vel/autonomousを/cmd_vel/fusion_limitedへremapすると減速が有効になる。
 融合launchは実機ドライバ・自律モードを起動しない。実機確認は別途行う。
 
@@ -23,7 +23,7 @@ review_fusion_trial.pyは同一融合走行のGPS/LIO観測比較と経路横ず
 
 
 方位更新は位置観測と分離し、角度の折返し・反転・LIO異常後の再取得を扱う。
-[方位実装評価](docs/方位実装評価.md)に修正と再試験を記録する。
+[方位実装評価](docs/方位実装評価.md)に方位の品質判定と確認方法を記載する。
 実機と模擬環境の共通起動は[icart_bringup](../icart_bringup/README.md)を使う。
 前master・後slaveのUM982生方位は後方を向くため、共通起動が180度補正する。
 単体launchを使う場合は、受信機側の補正有無と取付方向に合わせて明示設定する。
@@ -74,4 +74,4 @@ child座標のtwistは回さない。ルート記録は水平化後の車体姿�
 する（手動移動は可能だが、基準確定には停止が必要）。LIO publisherの再起動、
 時刻逆行、frame変更、1.5秒超のLIO断で基準を破棄する。融合は準備状態の解除や
 heartbeat途絶で履歴を捨て、新しい基準とFIXを待つ。古いルートの数値は自動修正しない。
-本変更はGNSS/PCの時計同期そのものは変更しない。
+重力整列は時計同期とは別の処理である。

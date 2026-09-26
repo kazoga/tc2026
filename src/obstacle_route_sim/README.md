@@ -313,102 +313,31 @@ pgrep -af "gz sim|ros_gz|run_session|gnss_lio_fusion|route_manager|route_followe
   区別がつかない。`ros2 node list` が空のときは最初にこれを疑う。
 - 並行して別の試験を行う場合は `run_digital_twin --domain-id 87` のように分ける。
 
-## 確認済み結果
+## 地形・センサ・融合の確認
 
-2026-05-26 時点で、Gazebo GUI と robot_console 実 GUI 自動操作を使い、以下を確認済みである。
+同梱のつくば地図で操作UIを使う場合は[icart_bringup](../icart_bringup/README.md)から起動する。
+基本の道路worldによる真値pose試験と、センサから推定する融合試験を区別する。
 
-| world | 条件 | 結果 |
-| --- | --- | --- |
-| `straight_w5` | `enable_pylons:=false` | `/route_state.current_label='20'` 到達 |
-| `scurve_w5` | `enable_pylons:=false` | `/route_state.current_label='27'` 到達 |
-| `crank_w5` | `enable_pylons:=false` | `/route_state.current_label='32'` 到達 |
-| `straight_w5` | `enable_route_blocker:=true` | `front_blocked=true`、`AVOIDING` 遷移、`RUNNING` 復帰を確認 |
-
-`w2` / `w3` の route/config は生成済みだが、GUI 走行確認は代表ケースとして `w5` を実施している。
-
-つくばチャレンジ 2026 デジタルツインでは、2026-09-23 時点で以下を確認済みである。
-
-| 項目 | 結果 |
+| 対象 | 説明 |
 | --- | --- |
-| 地図展開（SHA-256 照合） | 成功 |
-| 対象ノード起動 | 15 ノードが `ros2 node list` に出現 |
-| `/route_state` | `total=1142`、`status=running`、`label='0'` |
-| `/fusion/status` | `mode=GPS_LIO`、`has_estimate=true`、`baseline_ready=true` |
-| `/diagnostics` | 4 ノードから `<ノード名>/<観点>` 形式で受信 |
-| Node Health | `run_session` 起動分を `GUI外で起動` の `RUNNING` として検出 |
-| 停止処理 | プロセスグループ `SIGINT` で残存なし |
+| [terrain3d / i-Cart mini](docs/terrain3d_icart_mini検証.md) | 地形生成・模擬車体・期限付き試験・真値軌跡 |
+| [地理地図・GNSS](docs/地理地図_GNSSシミュレーション検証.md) | LLH、品質、欠測の入力 |
+| [つくば全域モデル](docs/つくば2026全域デジタルツイン.md) | 入力データ・精度・人為的な通路確保 |
+| [地理経路とFLOAT](docs/地理ウェイポイント_FLOAT_FASTLIO評価.md) | 経路・建物近傍誤差の比較 |
+| [FAST-LIO接続](docs/FASTLIOシミュレータ接続検証.md) | IMU・点群adapter、比較と融合走行の選択 |
+| [点群地図](docs/全域FASTLIO点群地図評価.md) | 分割保存、PCD、SDF表面との比較 |
+| [センサ誤差モデル](docs/FASTLIOセンサ誤差モデル評価.md) | reference／field_assumed／conservativeの仮定 |
+| [融合](../gnss_lio_fusion/docs/実装評価.md) | 品質・方位・車輪退避・閉ループ確認 |
 
-全区間の走行完走は未確認である。
+`evaluate_terrain_trial.py --gnss --fusion --fastlio <実行ファイル>`で融合位置による走行を選ぶ。
+`--building-gnss`、`--baseline-shift`、`--baseline-shift-after`で品質・基線長変化を試験できる。
+センサ誤差は--lio-noise-profileと--lio-noise-seedで指定する。
+fastlio_sim.launchの既定はfield_assumed、共通デジタルツインはconservativeである。
 
-## terrain3d と i-Cart mini の追加検証
+## 運用上の注意
 
-添付 terrain3d の正規地形を Gazebo に変換し、i-Cart mini の駆動諸元と
-指定された GNSS / Top-URG / Mid-360 の高さを反映した合成通路試験を追加した。
-生成、期限付き走行、真値軌跡再生、自己位置途絶試験の手順と確認範囲は
-[terrain3d / i-Cart mini 検証](docs/terrain3d_icart_mini検証.md) を参照する。
-これは現地測量に基づく 2026 コース全体のモデルではない。
-
-## 注意事項
-
-- `robot_console` から起動する場合、Gazebo 側は先に `sim_obstacle_route.launch.py` で起動しておく。
-- `robot_navigator` は `/cmd_vel/autonomous` に出力し、`drive_cmd_mux_node` が最終 `/cmd_vel` を publish する構成にする。
-- Gazebo GUI 付き確認では GPU デバイス権限が必要になる場合がある。`render` / `video` group 追加後はログアウト・ログインしてから確認する。
-- `LIBGL_ALWAYS_SOFTWARE=1` は Gazebo/Ogre2 の安定性を落とす場合があるため、既定では使用しない。
-- 停止時に SIGINT 由来の `Traceback` が表示されることがある。profile が `STOPPED` に遷移し、新しい crash report が出ていなければ停止処理として扱う。
-
-## 公開地理地図と仮想 GNSS
-
-提供版 terrain3d の地理データ処理で市役所付近の地形・建物を構成し、
-仮想 NavSatFix / Imu / RtkStatus を既存の geo_pose_converter に接続した。
-[確認結果・再現手順・制限事項](docs/地理地図_GNSSシミュレーション検証.md)を参照する。
-
-## つくばチャレンジ 2026 全域モデル
-
-公式必須ルート約 2.224 km を含む地形・建物・航空写真由来の特徴物を生成する。
-生成方法、表示操作、25 秒の起動走行確認、未校正箇所は
-[全域デジタルツイン生成・レビュー](docs/つくば2026全域デジタルツイン.md) を参照する。
-全区間の完走は未確認である。
-
-このモデルを使った結合動作確認の手順は
-[つくばチャレンジ 2026 デジタルツインでの結合動作確認](#つくばチャレンジ-2026-デジタルツインでの結合動作確認)
-を参照する。ノード追加・トピック契約変更・起動構成変更を伴う実装では必須の確認である。
-
-## 地理ウェイポイント・建物近傍 GNSS・FAST-LIO
-
-調整地図の局所経路追従、固定障害物回避、建物近傍 FLOAT の比較結果と
-FAST-LIO 併用の前提は [評価記録](docs/地理ウェイポイント_FLOAT_FASTLIO評価.md) を参照する。
-
-## FAST-LIO のシミュレーション入力
-
-Gazebo IMU・有限点群・専用 FAST-LIO 設定と起動 launch を追加した。
-[接続・精度検証](docs/FASTLIOシミュレータ接続検証.md) に利用手順、試験結果、未再現範囲を記載する。
-
-## 全域点群地図の評価
-
-FAST-LIO 登録済み点群の分割保存、PCD 地図、航空写真・SDF 表面との比較は
-[全域 FAST-LIO 点群地図評価](docs/全域FASTLIO点群地図評価.md) を参照する。
-
-## FAST-LIO のセンサ誤差条件
-
-標準起動は field_assumed（測距・欠測・IMU bias・時刻差の仮定）を使用する。
-過去の理想寄りの条件は noise_profile:=reference、厳しい条件は conservative を指定する。
-評価ツールでは --lio-noise-profile と --lio-noise-seed を指定する。
-[誤差モデルと比較評価](docs/FASTLIOセンサ誤差モデル評価.md) に根拠と未再現範囲を記載する。
-conservative・seed=1で全周を実行した結果も同文書8章に記載した。
-GNSS制御は完走したが、FAST-LIOは剛体整合後も大きな内部変形が残った。
-review_full_lio_trial.pyで全経路照合・相対精度・剛体整合後の点群を再評価できる。
-
-## GNSS/LIO 融合の評価
-
-gnss_lio_fusionを用い、evaluate_terrain_trial.pyの--fusion --gnss --fastlio指定で
-融合位置による閉ループ走行を選択できる。--building-gnssで建物近傍FLOATを併用する。
-融合試験はbaseline観測のFIX標準偏差2 mm、FLOAT標準偏差40 mmを追加し、
---baseline-shiftと--baseline-shift-afterで取付距離変化を試験できる。
-review_fusion_trial.pyで同一走行のセンサ比較と最大横ずれを画像化する。
-独立パッケージgnss_lio_fusionの詳細設計書に設定と制限を記載する。
-
-## 融合方位と既存UIによる走行検証
-
-実機と模擬環境の共通起動は[icart_bringup](../icart_bringup/README.md)に置く。
-[方位実装評価](../gnss_lio_fusion/docs/方位実装評価.md)に故障注入、
-修正再試験、全周記録再生と閉ループ試験の区別を記録する。
+Gazebo・UI・走行系のdomainと時計を揃え、同じprofileを二重に起動しない。
+MotionLimitsを配信しないGazebo構成ではnavigatorのrequire_motion_limitsをfalseにする。
+robot_navigator同梱のrobot_simulatorはMotionLimitsを配信するため、監視を有効にできる。
+GPUデバイスの権限とGazebo依存を準備する。生成地図やログはGitに追加しない。
+FINISHED、真値停止、接触、横ずれ、推定誤差を分け、模擬結果を実機の性能保証として扱わない。

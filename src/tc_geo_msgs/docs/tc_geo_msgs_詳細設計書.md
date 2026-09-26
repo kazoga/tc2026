@@ -2,11 +2,11 @@
 
 ## 1. 文書目的・対象範囲
 
-本書は `tc_geo_msgs` パッケージの詳細設計を定義する。対象は LLH 系座標、LLH pose、測位品質、地図投影条件を表す ROS 2 interface である。実装対象 phase では `tc_geo_msgs` を地理系共通 interface とし、`tc_route_msgs`、`geo_pose_converter`、将来の `localization_fusion` から共有する。
+本書は `tc_geo_msgs` パッケージの詳細設計を定義する。対象は LLH 系座標、LLH pose、測位品質、地図投影条件を表す ROS 2 interface である。`tc_geo_msgs` は `tc_route_msgs`、`geo_pose_converter`、`gnss_lio_fusion`、経路採取とGUIで共有する地理系interfaceである。
 
 ## 2. 背景・要求・スコープ
 
-既存 route CSV は緯度経度を持つ場合があるが、公開される route topic では LLH 情報が失われていた。GUI、HTML 遠隔観測 UI、ログ、将来の route editor が同じ地理座標を参照できるよう、route に依存しない地理系 interface を分離する。
+GUI、HTML遠隔観測UI、ログ、経路編集が同じ地理座標を参照するため、routeに依存しない地理系interfaceを定義する。
 
 本パッケージの責務は message 定義のみである。座標変換、GNSS 受信、route 生成、localization fusion は本パッケージの責務外とする。
 
@@ -72,7 +72,7 @@ src/tc_geo_msgs/
 
 ### `MapProjection`
 
-`projection_type=PROJECTION_LOCAL_TANGENT_PLANE` を初期実装の標準とする。`origin_latitude`、`origin_longitude`、`origin_altitude` は map frame の原点に対応する LLH である。`map_yaw_offset_rad` は ENU east/north 軸から map x/y 軸への回転角である。
+`projection_type=PROJECTION_LOCAL_TANGENT_PLANE` を標準とする。`origin_latitude`、`origin_longitude`、`origin_altitude` は map frame の原点に対応する LLH である。`map_yaw_offset_rad` は ENU east/north 軸から map x/y 軸への回転角である。
 
 ## 8. 処理フロー・状態遷移
 
@@ -105,20 +105,10 @@ src/tc_geo_msgs/
 ## 15. テスト計画・受け入れ条件
 
 - `colcon build --packages-select tc_geo_msgs` が成功する。
-- `ros2 interface show` 相当の確認はローカル ROS 実行確認が許可された場合に実施する。
+- `ros2 interface show tc_geo_msgs/msg/GeoPoseWithQuality` で生成された定義を確認する。
 - downstream の `tc_route_msgs` と `geo_pose_converter` が同時に build できる。
 
-## 16. 互換性・移行・影響範囲
+## 16. 定義変更時のビルド
 
-新規 package のため既存 topic 互換性への直接影響はない。ただし `tc_route_msgs/Waypoint` と `tc_route_msgs/Route` が本パッケージの message を参照するため、route stack の再ビルドが必要である。
-
-## 17. 未決事項・今後の拡張
-
-- `localization_fusion` 実装時に `GeoPoseWithQuality` の `fusion_status` と covariance 表現を追加拡張するか確認する。
-- UTM 投影を正式採用する場合、`MapProjection` の UTM field の運用規則を追記する。
-
-## 18. 改版履歴
-
-| 日付 | 版 | 変更概要 |
-| --- | --- | --- |
-| 2026-05-28 | 1.0 | 初版。LLH 共通 message package として新規作成 |
+`tc_route_msgs/Waypoint` と `tc_route_msgs/Route` は本パッケージのmessageを参照する。
+interface定義を変更する場合は、利用するroute stackも再ビルドする。

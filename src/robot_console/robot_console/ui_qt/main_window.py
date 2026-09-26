@@ -14,6 +14,7 @@ from .gnss_tab import GnssTab
 from .launch_settings_tab import LaunchSettingsTab
 from .localization_sensor_tab import LocalizationSensorTab
 from .widgets.scaled_canvas import ScaledCanvas
+from .widgets.clock_sync_warning import ClockSyncWarning
 from .widgets.typography import BASE_FONT_POINT_SIZE
 
 WINDOW_TITLE = 'robot_console (PyQt5)'
@@ -30,7 +31,7 @@ class MainWindow(QtWidgets.QMainWindow):
     """5タブ構成のPyQt5メインウィンドウ。
 
     robot_console_gui_screen_function_design.md 2章の方針に従い、全タブ共通の
-    上部ステータスバーは設けない。タブ内容はダッシュボードタブを既定表示とし、
+    常設の上部ステータスバーは設けない。時刻同期警告は異常時のみ全タブ上部に表示する。タブ内容はダッシュボードタブを既定表示とし、
     アプリ内コンテンツ領域全体を16:9の論理キャンバスとして拡縮する。
     """
 
@@ -75,7 +76,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tab_widget.addTab(self.recording_tab, 'ルート記録')
         self.tab_widget.setCurrentWidget(self.dashboard_tab)
 
-        self.setCentralWidget(ScaledCanvas(self.tab_widget))
+        self.clock_sync_warning = ClockSyncWarning()
+        self.clock_sync_warning.set_environment(self.launch_settings_tab.environment)
+        content = QtWidgets.QWidget()
+        content_layout = QtWidgets.QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+        content_layout.addWidget(self.clock_sync_warning)
+        content_layout.addWidget(self.tab_widget, 1)
+        self.setCentralWidget(ScaledCanvas(content))
 
         self.dashboard_tab.node_health_card.profile_selected.connect(
             self._on_node_health_profile_selected
@@ -177,6 +186,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_business_mode_changed(self, environment: str, drive_mode: str) -> None:
         """起動・設定タブの業務モード選択を、ConsoleCoreと起動操作カードへ反映する。"""
 
+        self.clock_sync_warning.set_environment(environment)
         if self._core is not None:
             self._core.update_business_mode(environment, drive_mode)
         self._on_launch_plan_changed()

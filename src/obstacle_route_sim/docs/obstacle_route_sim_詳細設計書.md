@@ -85,8 +85,8 @@ Gazebo dynamic pose info は ROS 側で `/gazebo/dynamic_pose_info` へ remap �
 | `generated_world_dir` | `/tmp/obstacle_route_sim` | 生成 world 出力先 |
 | `start_gazebo_gui` | `true` | Gazebo GUI 起動の有無 |
 
-`keep_generated_world` と `use_compat_remap` は将来拡張用に残すが、初期実装では topic 名を
-互換名で直接 bridge する。
+`keep_generated_world` と `use_compat_remap` は宣言されるが、挙動の切替には使われない。
+トピック名は `/scan`、`/cmd_vel`、`/ypspur_ros/odom` へ直接bridgeする。
 
 `gazebo_obstacle_route_stack.launch.py` は `sim_obstacle_route.launch.py` の引数に加え、以下を持つ。
 
@@ -194,88 +194,23 @@ pylon world 生成を確認する。
   `/cmd_vel`、`/drive_mode_status` が確認でき、`/cmd_vel` の publisher が `drive_cmd_mux_node` のみである。
 - GUI 確認時に robot model 上の門型支柱・梁の上へ Mid-360 が配置され、センサだけが浮いて見えない。
 
-2026-05-25 の統合確認では、GUI 付き `gazebo_obstacle_route_stack.launch.py` で route が生成され、
-`route_follower` が index 22 まで進み、`robot_navigator` が `active_target` に追従した。
-headless 再確認では `/cmd_vel` の publisher は `drive_cmd_mux_node` 1 件、subscriber は
-`obstacle_route_sim_bridge` 1 件であり、Mid-360 点群は `PointCloud2 height=24, width=900` として確認した。
-`enable_route_blocker=true` の確認では `/obstacle_avoidance_hint.front_blocked=true`、
-`route_follower` の `AVOIDING/avoid_count=1`、その後の `RUNNING index=7` 復帰を確認した。
-Gazebo 起動時に `/dev/dri` の EGL permission warning が出る環境があるが、確認時点では sensor topic と
-走行制御の機能阻害にはなっていない。
+### 10.4 地理地形とGNSS/LIO融合
 
-2026-05-26 の robot_console GUI 結合確認では、Gazebo GUI を `sim_obstacle_route.launch.py` で起動し、
-robot_console の実 GUI 自動操作から `route_planner`、`route_manager`、`route_follower`、
-`drive_mode_manager`、`robot_navigator` を起動した。`straight_w5` は goal label `20`、
-`scurve_w5` は goal label `27`、`crank_w5` は goal label `32` へ `/route_state.current_label` が到達し、
-各 world で start-to-goal 走行を確認した。確認中に `route_manager` が空の `checkpoint_labels` を
-未初期化 parameter として扱って起動失敗する問題を検出し、空配列を `[]` として正規化するよう修正した。
+terrain3dの生成・車体前提は[試験環境](terrain3d_icart_mini検証.md)、
+地理入力は[全域モデル](つくば2026全域デジタルツイン.md)、
+LiDAR/IMU接続は[FAST-LIO入力](FASTLIOシミュレータ接続検証.md)を参照する。
+GNSS単独・FAST-LIO比較・融合走行は異なる構成で、--fusion指定時に融合を制御へ使う。
+通常の実機／模擬共通起動はicart_bringupが担当する。
 
-### 10.4 terrain3d / i-Cart mini による追加検証
+### 10.5 地図とセンサ誤差
 
-2026-09-13 に、ユーザー提供 terrain3d v0.4.1 の地形コンパイラを利用する
-別の生成・計測入口を追加した。既存 launch と robot model は維持する。
-合成通路、専用差動二輪モデル、実機指定センサ高、接触監視、真値軌跡再生、
-自己位置途絶試験の設計と結果は [追加検証記録](terrain3d_icart_mini検証.md) に記載する。
+--record-lio-mapで登録済み点群を分割保存する。
+[地図評価](全域FASTLIO点群地図評価.md)は推定地図の整合、
+[誤差モデル](FASTLIOセンサ誤差モデル評価.md)はLIOへの雑音・欠測・bias注入を説明する。
+共通デジタルツインは歩行者の模擬と開始地点のFIX区域も設定できる。
 
-### 10.5 つくば 2026 全域モデル
+## 11. 制約
 
-公式必須ルート全域の写真・DEM・OSM 統合生成と同一メッシュ表示を追加した。
-[全域生成・レビュー](つくば2026全域デジタルツイン.md) に入力、候補抽出、
-生成物、起動走行確認と未校正範囲を記載する。全区間完走は未確認である。
-
-### 10.6 地理ウェイポイントと建物近傍 FLOAT
-
-[評価記録](地理ウェイポイント_FLOAT_FASTLIO評価.md) に、実形式ウェイポイント、
-局所追従・回避、建物近傍の仮説誤差モデルと FAST-LIO 接続前提を記載する。
-
-### 10.7 FAST-LIO の模擬センサ接続
-
-Gazebo の 200 Hz IMU と整形済み XYZI 点群を FAST-LIO に接続する。
-[接続検証](FASTLIOシミュレータ接続検証.md) に専用設定、launch、初期化、精度判定を記載する。
-独立した Top-URG 相当 /scan も同じ launch で bridge する。
-評価ツールは障害物判定時の直近スキャンと回避 hint 件数を記録し、
-tools/plot_urg_evaluation.py でスキャン・回避軌跡を表示する。
-
-### 10.8 全域点群地図の保存と比較
-
-評価ツールの --record-lio-map で FAST-LIO の登録済み /cloud_registered を分割保存する。
-tools/evaluate_lio_map.py が voxel 地図、PCD、SDF 表面距離、航空写真重ね合わせを出力する。
-真値は初回の評価座標整合だけに使用し、推定地図を全体最適化して誤差を消さない。
-[全域評価](全域FASTLIO点群地図評価.md) に保存形式・比較対象・制限を記載する。
-
-### 10.9 センサ誤差モデル
-
-lio_noise_core.py で測距・角度・欠測と IMU 雑音・bias・時刻差を生成する。
-標準を field_assumed とし、reference と conservative を起動時に選択できる。
-推定 pose を直接劣化させず、LIO 入力だけを変更する。URG / GNSS はこの変更の対象外とする。
-[センサ誤差モデル評価](FASTLIOセンサ誤差モデル評価.md) に係数の根拠、仮定、比較結果を記載する。
-
-全周試験の事後診断にはtools/review_full_lio_trial.pyを使用する。
-単一の2D/3D剛体整合と5秒相対誤差を併記し、固定座標のずれと内部変形を分ける。
-縮尺変更・鏡映を許さないことはtests/test_full_lio_review.pyで確認する。
-conservative全周の実測と制限は[センサ誤差モデル評価8章](FASTLIOセンサ誤差モデル評価.md)に記録する。
-
-## 11. 互換性・移行・影響範囲
-
-既存 `tc_route_msgs`、`route_planner`、`route_follower`、`robot_navigator`、
-`obstacle_monitor` の公開 interface は変更しない。移植に伴う互換は
-`obstacle_route_sim` の bridge topic と launch 構成で吸収する。
-
-## 12. 未決事項・今後の拡張
-
-- `use_compat_remap=false` の内部 `/sim/*` topic 分離は未実装である。
-- Livox Mid-360 の非反復スキャン特性再現は未実装であり、Gazebo native GPU LiDAR の規則格子点群を点群処理の近似入力として扱う。
-- シナリオ YAML 読み込みは未実装であり、初期実装では launch 引数で指定する。
-
-## 13. 改版履歴
-
-| 日付 | 版 | 変更概要 |
-| --- | --- | --- |
-| 2026-05-24 | 0.1 | 初版。Gazebo Harmonic 移植構成を記録した |
-| 2026-05-25 | 0.2 | 統合 launch、3D LiDAR bridge 根本対策、GUI 統合確認結果を追記した |
-| 2026-05-26 | 0.3 | world 別 route/config 生成ツールと robot_console GUI 結合確認結果を追記した |
-| 2026-05-27 | 0.4 | `/localization/pose_enu` を Gazebo 真値 pose 由来に変更した |
-| 2026-09-13 | 0.5 | 10.4 に terrain3d / i-Cart mini の追加検証入口を記載した |
-| 2026-09-13 | 0.6 | 10.5 に公式必須ルート全域のモデル生成・レビュー入口を追加した |
-| 2026-09-13 | 0.7 | 10.6 に地理ウェイポイント・FLOAT・FAST-LIO 評価を追加した |
-| 2026-09-13 | 0.8 | 10.7 に FAST-LIO 模擬センサ接続と精度検証を追加した |
+基本のsim_obstacle_routeは真値由来poseによる経路試験であり、融合精度の試験ではない。
+模擬Mid-360は規則格子点群を使い、非反復走査・点内時刻・材質反射を完全には再現しない。
+シナリオとセンサ設定は使用するlaunch・trial・sessionで確認する。
