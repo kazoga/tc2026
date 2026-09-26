@@ -27,7 +27,8 @@
 #                                 stale=max(3/rate_hz, 0.5)、lost=max(10/rate_hz, 2.0) で導出する。
 #                                 詳細は docs/ノード健全性監視設計.md 3章。
 #   diagnostic_nodes            : この profile が起動し /diagnostics を配信するノード名。
-#                                 DiagnosticStatus.name の先頭と突き合わせる。
+#                                 DiagnosticStatus.name の先頭と突き合わせる。health_topics が空なら
+#                                 1 Hz 診断の受信鮮度（stale 3秒、lost 10秒）で死活判定する。
 #   alternate_launch_file        : 同一profile内で切替可能な代替実装launch。
 #   launch_toggle_label            : alternate_launch_file切替チェックボックスの表示文言。
 #   simulator_package / simulator_launch_file : 実センサ・実機基盤を使わない疑似データ代替launch。
@@ -247,9 +248,6 @@ profiles:
       - topic: /localization/pose_llh
         type: tc_geo_msgs/msg/GeoPoseWithQuality
         rate_hz: 5.0
-      - topic: /route/active_target_llh
-        type: tc_route_msgs/msg/ActiveTargetLlh
-        rate_hz: 5.0
     user_arguments:
       - enable_geo_pose_converter
       - pose_enu_topic
@@ -270,10 +268,8 @@ profiles:
     launch_order: 70
     startup_group: common
     diagnostic_nodes: [route_follower]
+    # active_target は目標未設定・停止時に配信されないため死活判定に使わない。
     health_topics:
-      - topic: /active_target
-        type: geometry_msgs/msg/PoseStamped
-        rate_hz: 10.0
       - topic: /follower_state
         type: tc_route_msgs/msg/FollowerState
         rate_hz: 10.0

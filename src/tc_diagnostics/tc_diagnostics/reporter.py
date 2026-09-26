@@ -93,7 +93,8 @@ class DiagnosticReporter:
     def publish(self) -> None:
         """保持中の申告値を `/diagnostics` へ配信する。
 
-        申告が1件も無い間は配信しない。未申告と正常を区別できないためである。
+        ノードの全観点を1配列で送る。削除した観点は次の配列から除外する。
+        申告が1件も無い間は配信せず、受信側の10秒の期限で失効する。
         """
 
         with self._lock:

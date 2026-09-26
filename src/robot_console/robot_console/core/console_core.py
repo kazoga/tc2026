@@ -47,7 +47,9 @@ from .localization_adapter import (
 )
 from .log_manager import LogManager
 from .metrics import euclidean_distance
-from .node_health import DiagnosticEntry, build_summary, select_diagnostics, within_grace
+from .node_health import (
+    DiagnosticEntry, build_summary, diagnostic_freshness, select_diagnostics, within_grace,
+)
 from .operation_phase import build_operation_state
 from .route_adapter import (
     apply_active_target_llh_msg,
@@ -556,6 +558,7 @@ class ConsoleCore:
         """
 
         entries: Dict[str, DiagnosticEntry] = {}
+        received_at = time.monotonic()
         for status in msg.status:
             name = str(status.name)
             if name.count('/') != 1:
@@ -567,11 +570,19 @@ class ConsoleCore:
             level = status.level
             level = level[0] if isinstance(level, (bytes, bytearray)) else int(level)
             entries[name] = DiagnosticEntry(
-                node_name=node_name, aspect=aspect, level=level, message=str(status.message)
+                node_name=node_name, aspect=aspect, level=level, message=str(status.message),
+                received_at=received_at,
             )
         if not entries:
             return
         with self._lock:
+            # 各配信元はそのノードの全観点を1配列で送る。他ノードの申告を残し、
+            # この配列に登場したノードの取り下げ済み観点だけを削除する。
+            updated_nodes = {entry.node_name for entry in entries.values()}
+            self._diagnostics = {
+                name: entry for name, entry in self._diagnostics.items()
+                if entry.node_name not in updated_nodes
+            }
             self._diagnostics.update(entries)
 
     # ---------- ROSメッセージ反映（ros/console_node.pyから呼ばれる） ----------
@@ -1009,7 +1020,12 @@ class ConsoleCore:
             result = build_summary(
                 launch_status=state.status,
                 topic_levels=topic_levels,
-                diagnostics=select_diagnostics(diagnostics, profile.diagnostic_nodes),
+                diagnostics=select_diagnostics(
+                    diagnostics, profile.diagnostic_nodes, now=monotonic_now
+                ),
+                diagnostic_levels=diagnostic_freshness(
+                    list(diagnostics.values()), profile.diagnostic_nodes, now=monotonic_now
+                ),
                 within_startup_grace=within_grace(
                     requested_at.get(profile.profile_id), monotonic_now
                 ),

@@ -31,6 +31,7 @@
   <exec_depend>tc_geo_msgs</exec_depend>
   <exec_depend>tc_perception_msgs</exec_depend>
   <exec_depend>rtk_gps_um982_msgs</exec_depend>
+  <test_depend>tc_diagnostics</test_depend>
   <!-- pytest-forked はワークスペースの requirements.txt で導入する。 -->
 
   <export>

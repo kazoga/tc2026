@@ -1,7 +1,10 @@
 """ConsoleCore（ROS非依存の状態集約Facade）の単体テスト。"""
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from robot_console.core.console_core import ConsoleCore
 from robot_console.core.freshness import FreshnessLevel
@@ -805,3 +808,85 @@ def test_survey_rejects_external_driver(monkeypatch):
     core.request_launch('icart_real_survey')
     assert not calls
     assert 'ypspur_node' in core._launch_states['icart_real_survey'].error_message
+
+
+def _health(core, profile_id):
+    return next(item for item in core.build_snapshot().health if item.profile_id == profile_id)
+
+
+def _diagnostic(node, aspect='liveness', level=0):
+    return SimpleNamespace(name=f'{node}/{aspect}', level=level, message=f'{aspect}:{level}')
+
+
+def test_follower_health_is_ok_between_target_resends_and_without_target():
+    """目標は停止・未計画時に無音となる。周期状態だけで稼働を監視する。"""
+    core = _make_core()
+    core.mark_health_topic_received('/follower_state')
+    assert _health(core, 'route_follower').health == FreshnessLevel.OK
+    core.freshness.mark_received('/active_target',
+        datetime.now(timezone.utc) - timedelta(seconds=.75))
+    assert _health(core, 'route_follower').health == FreshnessLevel.OK
+
+
+@pytest.mark.parametrize('name', ['road_blockage_detector', 'traffic_signal_recognizer'])
+def test_diagnostic_only_external_node_expires_and_recovers(monkeypatch, name):
+    now = [100.0]
+    monkeypatch.setattr('robot_console.core.console_core.time.monotonic', lambda: now[0])
+    core = _make_core()
+    core.update_diagnostics(SimpleNamespace(status=[_diagnostic(name)]))
+    for age, status, freshness in [(0., 'RUNNING', FreshnessLevel.OK),
+                                   (3., 'RUNNING', FreshnessLevel.OK),
+                                   (3.01, 'RUNNING', FreshnessLevel.STALE),
+                                   (10., 'RUNNING', FreshnessLevel.STALE),
+                                   (10.01, 'STOPPED', FreshnessLevel.UNKNOWN)]:
+        now[0] = 100. + age
+        health = _health(core, name)
+        assert (health.status, health.health) == (status, freshness)
+        assert health.externally_started == (status == 'RUNNING')
+        if status == 'STOPPED':
+            assert health.diagnostic_message == ''
+    core.update_diagnostics(SimpleNamespace(status=[_diagnostic(name)]))
+    assert _health(core, name).health == FreshnessLevel.OK
+
+
+def test_managed_diagnostic_only_node_has_grace_then_detects_silence(monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr('robot_console.core.console_core.time.monotonic', lambda: now[0])
+    core = _make_core()
+    name = 'traffic_signal_recognizer'
+    core._on_launch_status(name, NodeLaunchStatus.RUNNING, 123, None)
+    assert _health(core, name).status == 'STARTING'
+    now[0] += 10.01
+    assert _health(core, name).status == 'ERROR'
+    core.update_diagnostics(SimpleNamespace(status=[_diagnostic(name)]))
+    assert _health(core, name).health == FreshnessLevel.OK
+    now[0] += 10.01
+    assert _health(core, name).health == FreshnessLevel.LOST
+
+
+def test_diagnostic_snapshot_removes_cleared_aspects_without_erasing_other_nodes():
+    core = _make_core()
+    core.mark_health_topic_received('/follower_state')
+    core.update_diagnostics(SimpleNamespace(status=[
+        _diagnostic('route_follower'), _diagnostic('route_follower', 'quality', 2),
+        _diagnostic('traffic_signal_recognizer'),
+    ]))
+    assert _health(core, 'route_follower').status == 'ERROR'
+    core.update_diagnostics(SimpleNamespace(status=[_diagnostic('route_follower')]))
+    assert _health(core, 'route_follower').health == FreshnessLevel.OK
+    assert _health(core, 'traffic_signal_recognizer').externally_started
+    assert 'route_follower/quality' not in core._diagnostics
+
+
+def test_last_diagnostic_expires_even_if_no_replacement_array_arrives(monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr('robot_console.core.console_core.time.monotonic', lambda: now[0])
+    core = _make_core()
+    core.mark_health_topic_received('/follower_state')
+    core.update_diagnostics(SimpleNamespace(status=[_diagnostic('route_follower', 'quality', 2)]))
+    assert _health(core, 'route_follower').status == 'ERROR'
+    core.update_diagnostics(SimpleNamespace(status=[]))
+    now[0] += 10.01
+    health = _health(core, 'route_follower')
+    assert health.health == FreshnessLevel.OK
+    assert health.diagnostic_message == ''
