@@ -1,8 +1,8 @@
-"""詳細設計書 17 章の既知の欠陥を再現する。ROS・ドライバ・車体は起動しない。
+"""詳細設計書 10.2 節の既知の欠陥を再現する。ROS・ドライバ・車体は起動しない。
 
 いずれも**望ましい挙動**を assert し、`xfail(strict=True)` を付けている。現状は欠陥が
 あるため失敗し、xfail として扱われる。欠陥が修正されると xpass になり、strict 指定に
-よりテストが失敗する。そこで初めて、このマーカーと詳細設計書 17 章の記述を外す。
+よりテストが失敗する。そこで初めて、このマーカーと詳細設計書 10.2 節の記述を外す。
 
 現状の（誤った）挙動を assert して通してしまうと、修正時にテストが壊れる形になり、
 欠陥を固定してしまう。そのため逆向きに書く。
@@ -24,7 +24,7 @@ from gnss_lio_fusion.motion_guard_core import MotionGuard  # noqa: E402
 
 @pytest.mark.xfail(
     strict=True,
-    reason='詳細設計書 17.1: 方位の鮮度を入力境界で検査していない',
+    reason='詳細設計書 10.2.1: 方位の鮮度を入力境界で検査していない',
 )
 def test_stale_heading_is_not_merged_into_fresh_position() -> None:
     """100 秒古い方位が、新しい位置観測へそのまま結合されないことを確認する.
@@ -51,7 +51,7 @@ def test_stale_heading_is_not_merged_into_fresh_position() -> None:
 
 @pytest.mark.xfail(
     strict=True,
-    reason='詳細設計書 17.2: 相対運動を採用できない入力から自動復帰しない',
+    reason='詳細設計書 10.2.2: 相対運動を採用できない入力から自動復帰しない',
 )
 def test_motion_guard_recovers_after_inputs_return_to_normal() -> None:
     """入力が正常化したら相対運動の採用が再開することを確認する.
