@@ -4,7 +4,7 @@
 ソースを変更したのに文書が追随していない状態を、CI で機械的に見つけるための検査である。
 `tools/tests/test_doc_consistency.py` から呼ばれ、pytest の一部として実行される。
 
-検査は次の 6 つとする。
+検査は次の 7 つとする。
 
 1. リンク・アンカー切れ       文書の移動・改名の取りこぼし
 2. トピック名の残存           廃止・改名されたトピック名が文書に残っている
@@ -12,6 +12,7 @@
 4. パッケージ必須文書の欠落   README と詳細設計書の欠落
 5. 記述方針の同期             CLAUDE.md と AGENTS.md の規則ブロックの不一致
 6. 検討資料の決着期限         docs/notes/ の期限超過（報告のみ）
+7. 章番号参照の切れ           コードが指す設計書の章・節が実在しない
 
 除外は `tools/doc_check_allowlist.yaml` に理由付きで書く。無条件の無視は作らない。
 
@@ -38,6 +39,16 @@ EXCLUDED_DIRS = check_doc_links.EXCLUDED_DIRS | {"notes"}
 
 # 文書中で backtick に囲まれたトピック風のトークン。
 DOC_TOPIC_PATTERN = re.compile(r"`(/[a-z][a-z0-9_]*(?:/[a-z0-9_]+)*)`")
+
+# ソース中の「<文書名>.md 6.3節」「<文書名>.md 10章」形式の参照。
+# backtick や読点が間に入る書き方を許し、文書名・番号・単位を取り出す。
+SOURCE_DOC_SECTION_PATTERN = re.compile(
+    r"([A-Za-z0-9_]+)\.md`?\s*([0-9]+(?:\.[0-9]+)?)\s*(節|章)"
+)
+
+# 文書の見出しのうち、先頭が章・節番号であるもの。章見出しは「## 6. 章題」のように
+# 番号の後ろにピリオドを置くため、末尾のピリオドを番号に含めずに取り出す。
+DOC_HEADING_NUMBER_PATTERN = re.compile(r"^#{1,6}\s+([0-9]+(?:\.[0-9]+)?)\.?\s+\S")
 
 # コード中の文字列リテラルに現れるトピック・サービス名。相対名（先頭の `/` 無し、
 # 単一セグメント）も拾う。launch remap を前提に相対名で宣言する実装が多く、これを
@@ -414,6 +425,73 @@ def check_permanent_docs_do_not_link_notes(docs: list[Path], root: Path,
                     )
 
 
+def check_doc_section_references(sources: list[Path], root: Path, report: Report) -> None:
+    """ソースから参照されている文書の章・節が実在することを検査する.
+
+    コードコメントが `<文書名>.md 6.3節` の形で設計書の章番号を指す箇所がある。
+    文書側で章立てを変更すると参照が無言で壊れるため、見出しの実在を照合する。
+
+    Args:
+        sources (list[Path]): 検査対象のソース.
+        root (Path): リポジトリルート.
+        report (Report): 結果の記録先.
+    """
+    all_docs = iter_docs(root)
+    heading_cache: dict[Path, set[str]] = {}
+    resolve_cache: dict[str, list[Path]] = {}
+
+    def resolve(stem: str) -> list[Path]:
+        """参照された文書名から候補を引く.
+
+        コードは `robot_console_gui_screen_function_design.md` を
+        `screen_function_design.md` のように前方を省略して参照する。末尾一致で
+        候補を探し、一意に定まる場合だけ採用する。
+        """
+        if stem not in resolve_cache:
+            target = f"{stem}.md"
+            resolve_cache[stem] = [
+                path for path in all_docs
+                if path.name == target or path.name.endswith(f"_{target}")
+            ]
+        return resolve_cache[stem]
+
+    def headings(path: Path) -> set[str]:
+        if path not in heading_cache:
+            found: set[str] = set()
+            for line in path.read_text(encoding="utf-8").splitlines():
+                match = DOC_HEADING_NUMBER_PATTERN.match(line)
+                if match is not None:
+                    found.add(match.group(1))
+            heading_cache[path] = found
+        return heading_cache[path]
+
+    for source in sources:
+        text = source.read_text(encoding="utf-8", errors="replace")
+        for lineno, line in enumerate(text.splitlines(), 1):
+            for stem, number, unit in SOURCE_DOC_SECTION_PATTERN.findall(line):
+                candidates = resolve(stem)
+                if not candidates:
+                    # 文書名そのものの誤りはリンク検査の対象外であり、ここでも報告する。
+                    report.failures.append(
+                        f"{source.relative_to(root)}:{lineno}: "
+                        f"参照先の文書が無い -> {stem}.md"
+                    )
+                    continue
+                if len(candidates) > 1:
+                    names = ", ".join(sorted(path.name for path in candidates))
+                    report.failures.append(
+                        f"{source.relative_to(root)}:{lineno}: "
+                        f"参照先の文書名が一意に定まらない -> {stem}.md ({names})"
+                    )
+                    continue
+                path = candidates[0]
+                if number not in headings(path):
+                    report.failures.append(
+                        f"{source.relative_to(root)}:{lineno}: "
+                        f"{path.relative_to(root)} に {number}{unit} が無い"
+                    )
+
+
 def run_checks(root: Path, today: str) -> Report:
     """すべての検査を実行する.
 
@@ -441,6 +519,7 @@ def run_checks(root: Path, today: str) -> Report:
     check_rules_sync(root, report)
     check_notes(root, today, report)
     check_permanent_docs_do_not_link_notes(docs, root, report)
+    check_doc_section_references(sources, root, report)
     return report
 
 
