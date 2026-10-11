@@ -25,6 +25,8 @@ from robot_console.utils import NodeLaunchStatus as S
     ([F.OK, F.OK], False, F.OK),
     ([F.OK, F.LOST], False, F.STALE),
     ([F.OK, F.UNKNOWN], False, F.STALE),
+    ([F.STALE], False, F.STALE),
+    ([F.STALE, F.LOST], False, F.STALE),
     ([F.LOST, F.LOST], False, F.LOST),
     ([F.UNKNOWN, F.UNKNOWN], False, F.LOST),
     ([F.UNKNOWN, F.UNKNOWN], True, F.UNKNOWN),

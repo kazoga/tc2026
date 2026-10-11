@@ -14,7 +14,7 @@ from robot_navigator.input_watchdog_core import InputWatchdog
 def test_contract_invalid_stale_and_missing_force_zero():
     output=[]
     guard=InputWatchdog({'motion_limits': .5})
-    node=NS(max_v=1., max_w=1., max_a_v=.7, max_a_w=1.5,max_decel_v=1.5,
+    node=NS(max_v=1., max_w=1., max_a_v=.7, max_a_w=.6,max_decel_v=1.5,
         input_watchdog=guard, get_clock=lambda: NS(now=lambda:NS(nanoseconds=10_000_000_000)),
         _input_time_seconds=lambda: 10., get_logger=lambda: NS(error=lambda *a,**k:None,warn=lambda *a:None),
         _stale_inputs=(), integral_w=0.,prev_yaw_error=0., prev_cmd_vel=Twist(),
@@ -22,7 +22,7 @@ def test_contract_invalid_stale_and_missing_force_zero():
     RobotNavigator.on_timer(node)
     assert output[-1] == Twist()  # no contract
     msg=MotionLimits(max_linear_velocity=1.,max_angular_velocity=1.,linear_acceleration=.7,
-        linear_deceleration=1.5,angular_acceleration=1.5)
+        linear_deceleration=1.5,angular_acceleration=.6)
     msg.header.stamp.sec=10
     RobotNavigator.on_motion_limits(node,msg)
     assert guard.stale_inputs(10.)==()
@@ -36,7 +36,7 @@ def test_contract_invalid_stale_and_missing_force_zero():
 
 
 def controller():
-    return NS(prev_cmd_vel=Twist(),max_v=1.,max_w=1.,max_a_v=.7,max_a_w=1.5,
+    return NS(prev_cmd_vel=Twist(),max_v=1.,max_w=1.,max_a_v=.7,max_a_w=.6,
         max_decel_v=1.5,braking_delay_sec=.2,dt=.05,pos_tol=.5,ang_tol=.25,
         _within_goal_pos_tolerance=False,_within_goal_ang_tolerance=False,
         integral_w=0.,integral_w_limit=1000.,prev_yaw_error=0.,kp_w=.65,ki_w=.001,kd_w=.02,

@@ -47,7 +47,9 @@ from .localization_adapter import (
 )
 from .log_manager import LogManager
 from .metrics import euclidean_distance
-from .node_health import DiagnosticEntry, build_summary, select_diagnostics, within_grace
+from .node_health import (
+    DiagnosticEntry, build_summary, diagnostic_freshness, select_diagnostics, within_grace,
+)
 from .operation_phase import build_operation_state
 from .route_adapter import (
     apply_active_target_llh_msg,
@@ -111,6 +113,7 @@ class ConsoleCore:
         self._survey_received = float('-inf')
         self.survey_publisher = None
         self.survey_conflict_check = None
+        self.gnss_conflict_check = None
 
         self._profile_store = profile_store or LaunchProfileStore()
         self._profiles: List[LaunchProfile] = self._profile_store.load()
@@ -359,7 +362,7 @@ class ConsoleCore:
             else (resolve_effective_overrides(profile, state) if state else None)
         )
         survey_id = 'icart_real_survey'
-        integrated_ids = {survey_id, 'icart_recorded_route'}
+        integrated_ids = {survey_id, 'icart_recorded_route', 'icart_icp_route'}
         active = [pid for pid, value in self._launch_states.items()
                   if value.status in (NodeLaunchStatus.RUNNING, NodeLaunchStatus.STARTING)]
         if profile_id in integrated_ids and profile_id in active:
@@ -368,12 +371,14 @@ class ConsoleCore:
                      (profile_id in integrated_ids or pid in integrated_ids)]
         if profile_id in integrated_ids and self.survey_conflict_check:
             conflicts += list(self.survey_conflict_check())
+        if profile_id == 'rtk_gps_um982' and profile_id not in active and self.gnss_conflict_check:
+            conflicts += list(self.gnss_conflict_check())
         error = ''
         if conflicts:
             error = '構成が重複します。先に起動中の項目を停止してください: ' + ', '.join(conflicts)
-        elif profile_id == survey_id and (resolved_overrides or {}).get('site') not in ('稲城', 'つくば'):
+        elif profile_id in (survey_id, 'rtk_gps_um982') and (resolved_overrides or {}).get('site') not in ('稲城', 'つくば'):
             error = '起動・設定で場所（稲城／つくば）を選択してください'
-        if not error and profile_id == 'icart_recorded_route':
+        if not error and profile_id in ('icart_recorded_route', 'icart_icp_route'):
             try:
                 from icart_bringup.recorded_route import inspect_recorded_route
                 inspect_recorded_route((resolved_overrides or {}).get('route_directory', ''))
@@ -556,6 +561,7 @@ class ConsoleCore:
         """
 
         entries: Dict[str, DiagnosticEntry] = {}
+        received_at = time.monotonic()
         for status in msg.status:
             name = str(status.name)
             if name.count('/') != 1:
@@ -567,11 +573,19 @@ class ConsoleCore:
             level = status.level
             level = level[0] if isinstance(level, (bytes, bytearray)) else int(level)
             entries[name] = DiagnosticEntry(
-                node_name=node_name, aspect=aspect, level=level, message=str(status.message)
+                node_name=node_name, aspect=aspect, level=level, message=str(status.message),
+                received_at=received_at,
             )
         if not entries:
             return
         with self._lock:
+            # 各配信元はそのノードの全観点を1配列で送る。他ノードの申告を残し、
+            # この配列に登場したノードの取り下げ済み観点だけを削除する。
+            updated_nodes = {entry.node_name for entry in entries.values()}
+            self._diagnostics = {
+                name: entry for name, entry in self._diagnostics.items()
+                if entry.node_name not in updated_nodes
+            }
             self._diagnostics.update(entries)
 
     # ---------- ROSメッセージ反映（ros/console_node.pyから呼ばれる） ----------
@@ -1009,7 +1023,12 @@ class ConsoleCore:
             result = build_summary(
                 launch_status=state.status,
                 topic_levels=topic_levels,
-                diagnostics=select_diagnostics(diagnostics, profile.diagnostic_nodes),
+                diagnostics=select_diagnostics(
+                    diagnostics, profile.diagnostic_nodes, now=monotonic_now
+                ),
+                diagnostic_levels=diagnostic_freshness(
+                    list(diagnostics.values()), profile.diagnostic_nodes, now=monotonic_now
+                ),
                 within_startup_grace=within_grace(
                     requested_at.get(profile.profile_id), monotonic_now
                 ),

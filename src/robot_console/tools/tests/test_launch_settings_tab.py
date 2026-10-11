@@ -24,9 +24,9 @@ def _make_tab() -> LaunchSettingsTab:
 def test_tab_loads_all_profiles_grouped_by_category(qt_app):
     tab = _make_tab()
 
-    assert len(tab._profiles) == 18
+    assert 'icart_icp_route' in {p.profile_id for p in tab._profiles}
     assert 'icart_fused_stack' in {p.profile_id for p in tab._profiles}
-    assert tab._tree.topLevelItemCount() == 8  # profile.category の種類数
+    assert tab._tree.topLevelItemCount() == len({p.category for p in tab._profiles})
     assert set(tab._tree_items.keys()) == {p.profile_id for p in tab._profiles}
 
 
@@ -109,9 +109,39 @@ def test_selecting_plan_row_updates_preview_and_config_panel(qt_app):
 
     assert tab._selected_profile_id == 'rtk_gps_um982'
     preview = tab._preview_text.toPlainText()
-    assert 'ros2 launch rtk_gps_um982 rtk_gps_um982.launch.py config:=config/default.yaml' in preview
+    assert 'ros2 launch icart_bringup gnss.launch.py config:=config/default.yaml' in preview
     assert '起動順: 1' in preview
     assert '/rtk_gps/fix' in preview
+
+
+@pytest.mark.parametrize('profile', ['rtk_gps_um982', 'icart_real_survey'])
+def test_station_choices_follow_region_and_reset_incompatible_selection(qt_app, profile):
+    tab = _make_tab()
+    tab._tree_items[profile].setCheckState(0, QtCore.Qt.Checked)
+    tab._select_plan_row_for(profile)
+    tab._argument_widgets['site'].setCurrentText('稲城')
+    stations = tab._argument_widgets['station']
+    assert stations.findData('tokyo_c4cae992') >= 0
+    assert stations.findData('tsukuba_takashima') == -1
+    stations.setCurrentIndex(stations.findData('tokyo_c4cae992'))
+    assert tab.state_for(profile).override_inputs['station'] == 'tokyo_c4cae992'
+    tab._argument_widgets['site'].setCurrentText('つくば')
+    stations = tab._argument_widgets['station']
+    assert stations.findData('joso_yasuda') >= 0
+    assert stations.findData('tokyo_c4cae992') == -1
+    assert tab.state_for(profile).override_inputs['station'] == '地域の既定局'
+    assert 'ntrip_config' in tab._argument_widgets
+
+
+def test_explicit_gnss_startup_settings_use_normal_plan_and_signals(qt_app):
+    tab = _make_tab()
+    changes = []
+    tab.argument_changed.connect(lambda *args: changes.append(args))
+    tab.configure_gnss('つくば', 'joso_yasuda')
+    assert tab.plan.ordered_profile_ids == ['rtk_gps_um982']
+    assert tab._selected_profile_id == 'rtk_gps_um982'
+    assert tab.state_for('rtk_gps_um982').override_inputs['station'] == 'joso_yasuda'
+    assert ('rtk_gps_um982', 'site', 'つくば') in changes
 
 
 def test_preview_shows_not_in_plan_when_profile_not_selected_for_launch(qt_app):
@@ -269,3 +299,16 @@ def test_real_manual_plan_has_site_and_output_controls(qt_app):
     assert received[-1] == ('icart_real_survey', 'site', 'つくば')
     assert tab._states['icart_real_survey'].override_inputs['site'] == 'つくば'
     assert 'output_root' in tab._argument_widgets
+
+
+def test_manual_localization_preset_changes_reach_launch_core(qt_app, monkeypatch):
+    from PyQt5 import QtWidgets
+    from robot_console.core.console_core import ConsoleCore
+    monkeypatch.setattr(QtWidgets.QMessageBox, 'question', lambda *a, **kw: QtWidgets.QMessageBox.Yes)
+    tab = LaunchSettingsTab()
+    core = ConsoleCore()
+    tab.argument_changed.connect(core.update_launch_override)
+    for environment, mode in [('実機（融合）', 'gnss'), ('実機', 'icp'), ('実機（ICP）', 'icp')]:
+        tab.apply_preset(environment, '手動走行')
+        assert tab.state_for('icart_real_survey').override_inputs['localization_mode'] == mode
+        assert core._launch_states['icart_real_survey'].override_inputs['localization_mode'] == mode

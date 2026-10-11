@@ -31,14 +31,18 @@ filesystem_paths:
   - name: /run/icart-clock
     reason: 時刻同期ゲートが状態を置く実行時ディレクトリ
 
-# 名前空間を含む形で文書に書かれ、コード上は相対名で宣言されるトピック。
-remapped_topics:
-  - name: /rtk_gps/rtk_gps_um982_node/fix
-    reason: rtk_gps_um982 の private 名。コードは相対名で宣言し起動側が remap する
-  - name: /rtk_gps/rtk_gps_um982_node/rtk_status
-    reason: 同上
-  - name: /rtk_gps/rtk_gps_um982_node/ntrip_status
-    reason: 同上
+# 名前空間を含む形で文書に書かれ、コード上は相対名で宣言されるトピックは、
+# check_docs.py が末尾から部分名を照合するため除外の必要がない。
+remapped_topics: []
 
 # 文書で言及するが declare_parameter を持たないパラメータ名。
 parameters: []
+
+# 詳細設計書が未整備のパッケージ。README が設計内容を含むため当面は README を正とする。
+# 設計書を起こした時点でこの項目を消す。放置の言い訳にしないため理由と状況を書く。
+pending_design_docs:
+  - name: icp_localization
+    reason: |
+      上流が追加した固定地図ICP自己位置推定。README に構成・初期化条件・計測値・
+      未検証範囲を記載済み。設計判断の正は実装者にあり、本リポジトリの文書整備側で
+      推測して書き起こさない。実機走行が未検証の段階であり、確定した設計を記述できない。

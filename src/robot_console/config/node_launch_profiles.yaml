@@ -27,7 +27,8 @@
 #                                 stale=max(3/rate_hz, 0.5)、lost=max(10/rate_hz, 2.0) で導出する。
 #                                 詳細は docs/ノード健全性監視設計.md 3章。
 #   diagnostic_nodes            : この profile が起動し /diagnostics を配信するノード名。
-#                                 DiagnosticStatus.name の先頭と突き合わせる。
+#                                 DiagnosticStatus.name の先頭と突き合わせる。health_topics が空なら
+#                                 1 Hz 診断の受信鮮度（stale 3秒、lost 10秒）で死活判定する。
 #   alternate_launch_file        : 同一profile内で切替可能な代替実装launch。
 #   launch_toggle_label            : alternate_launch_file切替チェックボックスの表示文言。
 #   simulator_package / simulator_launch_file : 実センサ・実機基盤を使わない疑似データ代替launch。
@@ -66,23 +67,49 @@ profiles:
       master_forward_m: '-0.30'
       output_root: ~/route_runs
 
+  - profile_id: icart_icp_route
+    category: real_robot_base
+    display_name: 実機・ICP地図照合走行
+    package: icart_bringup
+    launch_file: icp_route.launch.py
+    param_argument: null
+    launch_order: 10
+    startup_group: real_robot_base
+    diagnostic_nodes: [icp_localization, rtk_gps_um982_node, route_manager, route_follower, drive_cmd_mux_node, obstacle_monitor, route_geo_projector]
+    health_topics:
+      - topic: /localization/icp_status
+        type: std_msgs/msg/String
+        rate_hz: 10.0
+      - topic: /scan
+        type: sensor_msgs/msg/LaserScan
+        rate_hz: 10.0
+      - topic: /route_state
+        type: tc_route_msgs/msg/RouteState
+        rate_hz: 1.0
+    user_arguments: [route_directory, icp_map_manifest, icp_backend_python_path, antenna_baseline_m, master_forward_m, output_root]
+    default_arguments:
+      localization_mode: icp
+      route_directory: /media/nkb/TEST/autonomous_route_20261005/route
+      icp_map_manifest: /media/nkb/TEST/icp_runtime_20261007/map_manifest.json
+      icp_backend_python_path: /home/nkb/colcon_ws_experiments/glim_runtime/python
+      antenna_baseline_m: '0'
+      master_forward_m: ''
+      output_root: /media/nkb/TEST/icp_route_runs
+
   - profile_id: icart_real_survey
     category: real_robot_base
-    display_name: 実機・手動走行／軌跡取得（センサ一式）
+    display_name: 実機・手動走行／ルート記録（既定ICP）
     package: icart_bringup
     launch_file: real_survey.launch.py
     param_argument: null
     launch_order: 10
     startup_group: real_robot_base
-    diagnostic_nodes: [gnss_lio_fusion, rtk_gps_um982_node, route_survey]
+    diagnostic_nodes: [rtk_gps_um982_node, route_survey]
     health_topics:
-      - topic: /fusion/status
-        type: tc_geo_msgs/msg/FusionState
-        rate_hz: 1.0
       - topic: /localization/pose_enu
         type: geometry_msgs/msg/PoseWithCovarianceStamped
         rate_hz: 10.0
-      - topic: /lio/odometry
+      - topic: /lio/odometry_raw
         type: nav_msgs/msg/Odometry
         rate_hz: 10.0
       - topic: /ypspur_ros/odom
@@ -91,11 +118,14 @@ profiles:
       - topic: /scan
         type: sensor_msgs/msg/LaserScan
         rate_hz: 10.0
-    user_arguments: [site, station, output_root]
+    user_arguments: [site, station, ntrip_config, localization_mode, icp_map_manifest, icp_backend_python_path, output_root]
     default_arguments:
       site: 場所を選択
       station: 地域の既定局
-      output_root: ~/route_surveys
+      localization_mode: icp
+      icp_map_manifest: /media/nkb/TEST/icp_runtime_20261007/map_manifest.json
+      icp_backend_python_path: /home/nkb/colcon_ws_experiments/glim_runtime/python
+      output_root: /media/nkb/TEST/route_surveys
 
   - profile_id: icart_fused_stack
     category: route_stack
@@ -152,9 +182,10 @@ profiles:
   - profile_id: rtk_gps_um982
     category: gps_gnss
     display_name: RTK GPS UM982
-    package: rtk_gps_um982
-    launch_file: rtk_gps_um982.launch.py
+    package: icart_bringup
+    launch_file: gnss.launch.py
     param_argument: config
+    param_package: rtk_gps_um982
     default_param: config/default.yaml
     launch_order: 20
     startup_group: real_robot_base
@@ -169,6 +200,13 @@ profiles:
       - topic: /rtk_gps/rtk_status
         type: rtk_gps_um982_msgs/msg/RtkStatus
         rate_hz: 5.0
+      - topic: /rtk_gps/ntrip_status
+        type: std_msgs/msg/String
+        rate_hz: 1.0
+    user_arguments: [site, station, ntrip_config]
+    default_arguments:
+      site: 場所を選択
+      station: 地域の既定局
 
   - profile_id: obstacle_route_sim
     category: simulation_base
@@ -247,9 +285,6 @@ profiles:
       - topic: /localization/pose_llh
         type: tc_geo_msgs/msg/GeoPoseWithQuality
         rate_hz: 5.0
-      - topic: /route/active_target_llh
-        type: tc_route_msgs/msg/ActiveTargetLlh
-        rate_hz: 5.0
     user_arguments:
       - enable_geo_pose_converter
       - pose_enu_topic
@@ -270,10 +305,8 @@ profiles:
     launch_order: 70
     startup_group: common
     diagnostic_nodes: [route_follower]
+    # active_target は目標未設定・停止時に配信されないため死活判定に使わない。
     health_topics:
-      - topic: /active_target
-        type: geometry_msgs/msg/PoseStamped
-        rate_hz: 10.0
       - topic: /follower_state
         type: tc_route_msgs/msg/FollowerState
         rate_hz: 10.0

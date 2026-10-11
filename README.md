@@ -32,6 +32,8 @@ ROS 2 Jazzy ワークスペース。初めて読む場合は[システム構成]
 | ----------------------------------------------------------- | -------------------------------------------------------------------- |
 | [`src/tc_geo_msgs`](src/tc_geo_msgs/README.md)              | LLH位置、品質、地図投影条件を共有する msg 定義                       |
 | [`src/geo_pose_converter`](src/geo_pose_converter/README.md) | LLH/ENU相互変換、経路の地理座標投影、OSM経路表示を提供               |
+| [`src/icp_localization`](src/icp_localization/README.md) | FIX拘束済み地図とFAST-LIO点群で車体位置を推定。GNSS系と共通の経路・位置出力を使用 |
+| [`src/icart_mapping`](src/icart_mapping/README.md) | GUIからbagのICP閉合・FIX拘束付き地図を隔離生成 |
 | [`src/gnss_lio_fusion`](src/gnss_lio_fusion/README.md) | GNSSと水平化したFAST-LIOを融合し、車輪odomによる退避と自律速度制限を行う |
 | [`src/route_survey`](src/route_survey/README.md) | 手動走行の融合位置からLLH経路を採取し、観測した路面の横移動余裕を記録・編集する |
 | [`src/icart_bringup`](src/icart_bringup/README.md) | 実機・デジタルツイン・手動採取・保存経路走行の共通セッションを準備・起動する |
@@ -188,6 +190,8 @@ GUIで実機モードを選び、手動採取または保存経路走行のセ�
 `robot_navigator` の `/cmd_vel/autonomous` を融合側の速度制限と
 `drive_mode_manager` の自律／手動切替に通し、最終 `/cmd_vel` を車輪へ渡す。
 手動採取は手動モードを固定し、L1を押して操作する。R1はGNSS途絶模擬、ターボ割当は無効。
+実機ルート記録はFIX拘束済み地図によるICPが既定で、GNSS融合も選択できる。
+保存方式・初期化条件・RTKとの差と負荷の確認範囲は[経路採取](src/route_survey/README.md)を参照する。
 
 個別の診断起動は [車輪ドライバ](src/ypspur_ros2/README.md)、
 [手動切替](src/drive_mode_manager/README.md)、[GNSS](src/rtk_gps_um982/README.md)を参照する。
@@ -270,8 +274,12 @@ ros2 run icart_bringup run_digital_twin --output log/digital_twin/session01 --st
 - [シミュレーション](src/obstacle_route_sim/README.md): 地形・センサ生成と評価
 - [検証用経路](src/route_planner/routes/tsukuba2026_digital_twin/README.md): 未測量の試験データ
 
-各パッケージのテストはルートの `pytest` に含まれる。ROS 環境とビルド済み
-`install/setup.bash` を読み込み、有効な venv で実行する。
+全体テストは `python3 scripts/run_pytest.py -v` で実行する。対象は `pytest.ini` の
+`testpaths` から取得する。ROS 環境とビルド済み `install/setup.bash` を読み込み、
+有効な venv で実行する。GUI とその他を別の Python プロセスで実行し、DDS 初期化後の
+fork による停止を避ける。各グループが600秒を超えた場合は失敗とする。
+単一パッケージは `python3 -m pytest src/<package>/tests`（robot_console は
+`src/robot_console/tools/tests`）で実行できる。
 GUI テストには Qt WebEngine と pytest-forked、地形生成には Node.js が必要。
 ROS を実際に起動するテストは、pytest の親プロセスではなく `pytest.mark.forked` か
 `subprocess` で別プロセスへ隔離する。ROS context の初期化で生じる DDS スレッドは

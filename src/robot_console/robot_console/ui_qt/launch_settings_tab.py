@@ -32,6 +32,7 @@ from robot_console.core.launch_profile import (
 )
 
 from .widgets.argument_widget_hints import ENUM_ARGUMENTS, NUMBER_ARGUMENTS, widget_kind
+from robot_console.core.rtk_station_catalog import station_choices
 
 # architecture_design.md 9.2節の category 定義に対応する表示名。
 CATEGORY_LABELS: Dict[str, str] = {
@@ -163,6 +164,7 @@ class LaunchSettingsTab(QtWidgets.QWidget):
             state.simulator_enabled = entry.use_simulator_alternate
             for key, value in entry.overrides.items():
                 state.override_inputs[key] = value
+                self.argument_changed.emit(entry.profile_id, key, value)
 
         self._sync_tree_checkboxes_with_plan()
         self._refresh_plan_table()
@@ -313,6 +315,27 @@ class LaunchSettingsTab(QtWidgets.QWidget):
             self._selected_profile_id = item.data(PROFILE_ID_ROLE) if item else None
         self._update_config_panel()
 
+    def configure_icp_map(self, manifest: str, backend: str) -> None:
+        """完成地図を次回ICP起動へ渡す。起動中の構成・経路は変更しない。"""
+        from pathlib import Path
+        from geo_pose_converter.geo_core import load_projection_config_from_yaml
+        from icp_localization.registration import load_manifest
+        profile_id = 'icart_icp_route'
+        profile = self._profiles_by_id[profile_id]
+        state = self._states[profile_id]
+        values = resolve_effective_overrides(profile, state)
+        projection_file = Path(values['route_directory']).expanduser()/'projection.yaml'
+        projection = vars(load_projection_config_from_yaml(str(projection_file)))
+        load_manifest(manifest, projection)
+        for target in (profile_id, 'icart_real_survey'):
+            for key, value in [('icp_map_manifest', manifest), ('icp_backend_python_path', backend)]:
+                self._states[target].override_inputs[key] = value
+                self.argument_changed.emit(target, key, value)
+        self._selected_profile_id = profile_id
+        self._update_config_panel()
+        self._update_preview()
+        self._refresh_plan_table()
+
     def _select_plan_row_for(self, profile_id: str) -> None:
         for row in range(self._plan_table.rowCount()):
             item = self._plan_table.item(row, 0)
@@ -370,7 +393,7 @@ class LaunchSettingsTab(QtWidgets.QWidget):
             self._config_form.addRow('config:', param_edit)
         else:
             param_edit.deleteLater()
-        if profile_id == 'icart_recorded_route':
+        if profile_id in ('icart_recorded_route', 'icart_icp_route'):
             note = QtWidgets.QLabel('記録ルートを選択して一斉起動。\n起動後は始点と車体位置を確認し、\nダッシュボードの「自律走行開始」を押してください。\n切替前に手動採取の起動項目を停止してください。')
             note.setWordWrap(True)
             self._config_form.addRow(note)
@@ -398,9 +421,12 @@ class LaunchSettingsTab(QtWidgets.QWidget):
         for argument_name in profile.user_arguments:
             widget = self._build_argument_widget(profile_id, state, argument_name)
             self._argument_widgets[argument_name] = widget
-            label = {'site': '場所', 'station': 'RTK補正局', 'route_directory': '記録ルート', 'antenna_baseline_m': '現在のアンテナ間隔［m］',
+            label = {'site': '場所', 'station': 'RTK補正局', 'ntrip_config': '独自局の設定ファイル', 'route_directory': '記録ルート', 'antenna_baseline_m': '現在のアンテナ間隔［m］',
                      'master_forward_m': '主アンテナ前後位置［m］（後方−）',
-                     'output_root': '走行設定の保存先' if profile_id == 'icart_recorded_route' else '軌跡の保存先'}.get(argument_name, argument_name)
+                     'icp_map_manifest': 'ICP地図manifest JSON',
+                     'localization_mode': '記録の自己位置（icp／gnss融合）',
+                     'icp_backend_python_path': 'small_gicpのPythonフォルダ（任意）',
+                     'output_root': '走行設定の保存先' if profile_id in ('icart_recorded_route', 'icart_icp_route') else '軌跡の保存先'}.get(argument_name, argument_name)
             self._config_form.addRow(f'{label}:', widget)
 
         self._update_preview()
@@ -428,6 +454,15 @@ class LaunchSettingsTab(QtWidgets.QWidget):
 
         if kind == 'enum':
             widget = QtWidgets.QComboBox()
+            if argument_name == 'station':
+                for label, station in station_choices(state.override_inputs.get('site', '')):
+                    widget.addItem(label, station)
+                index = widget.findData(current_value)
+                widget.setCurrentIndex(max(0, index))
+                widget.currentIndexChanged.connect(
+                    lambda _index, pid=profile_id: self._on_argument_changed(
+                        pid, 'station', widget.currentData()))
+                return widget
             options = ENUM_ARGUMENTS[argument_name]
             widget.addItems(options)
             if current_value in options:
@@ -495,8 +530,23 @@ class LaunchSettingsTab(QtWidgets.QWidget):
         if state is None:
             return
         state.override_inputs[argument_name] = value
+        if argument_name == 'site' and 'station' in state.override_inputs:
+            allowed = {key for _, key in station_choices(value)}
+            if state.override_inputs['station'] not in allowed:
+                state.override_inputs['station'] = '地域の既定局'
+                self.argument_changed.emit(profile_id, 'station', '地域の既定局')
+            if self._selected_profile_id == profile_id:
+                self._update_config_panel()
         self._refresh_plan_table()
         self.argument_changed.emit(profile_id, argument_name, value)
+
+    def configure_gnss(self, site: str, station: str) -> None:
+        """明示された初期設定を通常の起動管理・編集画面へ反映する。"""
+        profile_id = 'rtk_gps_um982'
+        self._tree_items[profile_id].setCheckState(0, QtCore.Qt.Checked)
+        self._on_argument_changed(profile_id, 'site', site)
+        self._on_argument_changed(profile_id, 'station', station)
+        self._select_plan_row_for(profile_id)
 
     # ---------- 起動内容プレビュー（4.8節） ----------
     def _build_preview_panel(self) -> QtWidgets.QGroupBox:

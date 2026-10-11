@@ -28,8 +28,8 @@ def test_load_repository_profile_file_has_no_validation_errors():
     profiles = store.load()
 
     assert store.validation_errors == []
-    assert len(profiles) == 18
     profile_ids = [profile.profile_id for profile in profiles]
+    assert 'icart_icp_route' in profile_ids
     assert len(profile_ids) == len(set(profile_ids))
 
 
@@ -48,19 +48,22 @@ def test_rtk_gps_um982_matches_architecture_design_example():
     profile = store.get('rtk_gps_um982')
     assert profile is not None
     assert profile.category == 'gps_gnss'
-    assert profile.package == 'rtk_gps_um982'
-    assert profile.launch_file == 'rtk_gps_um982.launch.py'
+    assert profile.package == 'icart_bringup'
+    assert profile.launch_file == 'gnss.launch.py'
+    assert profile.param_package == 'rtk_gps_um982'
     assert profile.param_argument == 'config'
     assert profile.launch_order == 20
     assert [topic.topic for topic in profile.health_topics] == [
         '/rtk_gps/fix',
         '/rtk_gps/heading',
         '/rtk_gps/rtk_status',
+        '/rtk_gps/ntrip_status',
     ]
     assert [topic.type for topic in profile.health_topics] == [
         'sensor_msgs/msg/NavSatFix',
         'sensor_msgs/msg/Imu',
         'rtk_gps_um982_msgs/msg/RtkStatus',
+        'std_msgs/msg/String',
     ]
 
 

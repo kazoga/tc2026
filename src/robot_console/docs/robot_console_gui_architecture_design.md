@@ -15,7 +15,7 @@ Qt表示・ROS通信・状態集約・HTTP配信を分離し、画面からROS�
 | core/freshness.py、operation_phase.py、event_builder.py | 鮮度・運行フェーズ・イベントの導出 |
 | core/launch_manager.py、launch_profile.py、log_manager.py | profile起動・停止・ログ |
 | core/bag_recorder.py | bag記録プロセスと保存状態 |
-| ui_qt/ | MainWindow、6タブ、各カード |
+| ui_qt/ | MainWindow、7タブ、各カード |
 | web/ | 読取専用HTTP、JSON整形、ブラウザ表示 |
 
 ## データの流れ
@@ -35,7 +35,7 @@ pose_enu/pose_llh、cmd_vel、drive_mode_status、車輪odom、RTK/NTRIP診断�
 ConsoleCoreで重畳し、QtとHTMLは同じ画像とperception_decisionsを表示する。
 画像・overlayの購読はBEST_EFFORT、active_routeはRELIABLE / TRANSIENT_LOCAL / depth 1。
 RTK/NTRIP診断は相対名 `rtk_gps/rtk_status` と `rtk_gps/ntrip_status` で購読し、
-共通起動が実機private名または模擬公開名へremapする。
+実機・模擬・単独起動・共通起動とも `/rtk_gps/` 配下の公開名を使用する。
 トピック名はlaunch remapとROS側設定に従う。
 active_route等の保持される情報と、速度・センサ等の鮮度が必要な情報を区別する。
 
@@ -43,7 +43,9 @@ active_route等の保持される情報と、速度・センサ等の鮮度が�
 
 profileの定義は `config/node_launch_profiles.yaml` とCoreの起動モデルで管理する。
 選択済みprofile、設定ファイル、launch引数から起動コマンドを構成する。
-実機手動のreal_survey、記録ルート自律のrecorded_routeはicart_bringupへ委譲する。
+実機手動のreal_survey、記録ルート自律のrecorded_route／icp_routeはicart_bringupへ委譲する。
+実機手動の既定は `localization_mode=icp`、実機（融合）の手動は `gnss` を明示する。
+プリセットの引数変更もConsoleCoreへ通知し、表示中の方式と実際の起動引数を一致させる。
 同じドライバ・走行スタックの重複起動を拒否する。
 環境選択だけでは稼働中プロセスの環境を切り替えない。全停止後に設定して再起動する。
 
@@ -52,7 +54,7 @@ stdout/stderrをログへ集約し、終了状態をSnapshotへ反映する。
 
 ## 表示と監視
 
-[画面仕様](robot_console_gui_screen_function_design.md)の6タブを使う。
+[画面仕様](robot_console_gui_screen_function_design.md)の7タブを使う。
 入力途絶はfreshnessとして表示し、未受信値をゼロや正常値に置換しない。
 未受信と期限切れは区別して表示する。**表示値だけで走行の許可を判断しない。**
 画面はROS観測の写しであり、走行可否の判定機構を持たない。
@@ -65,6 +67,16 @@ R1途絶模擬は `/fusion/gnss_dropout_active` を表示する。
 後者はROS起動前にも表示でき、実機モードの全タブで1秒周期に更新する。
 停止の実行はicart_bringupの同期ゲートが担当する。
 
+## オフライン地図作成
+
+MapCreationTabはicart_mappingで入力を検査し、QProcessで専用ジョブを起動する。
+ジョブはbubblewrap隔離内でのみ処理し、ネットワークと実機デバイスに接続しない。
+段階状態はstatus.json、詳細はbuild.logへ保存する。Qtは状態とログを非同期に読み、
+処理中も中止できる。GUI終了時はジョブを終了する。
+完成状態と地図ハッシュを確認できた結果だけ、利用者操作でLaunchSettingsTabへ渡す。
+この操作は次回のICP走行・ルート記録の地図引数を更新し、ConsoleCoreの同じoverride更新経路へ通知する。
+走行指令・稼働中ノード・現在の経路は変更しない。
+
 ## 遠隔観測と記録
 
 HTMLは読取専用で、走行指令・起動停止・bag操作を提供しない。
@@ -73,7 +85,7 @@ HTMLは読取専用で、走行指令・起動停止・bag操作を提供しな�
 画像参照はImageStore、JSON変換はweb/json_codec.pyで扱う。
 
 [ROSBAG保存](robot_console_gui_screen_function_design.md)はPCの記録操作、[経路採取](../../route_survey/README.md)は
-融合軌跡と経路属性の保存であり、出力形式と用途が異なる。
+共通自己位置（ICP／GNSS融合）と経路属性の保存であり、出力形式と用途が異なる。
 
 ## 確認方法
 

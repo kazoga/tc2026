@@ -190,6 +190,26 @@ def collect_code_topics(sources: list[Path]) -> set[str]:
     return {name.lstrip("/") for name in names}
 
 
+
+def _is_known_topic(doc_name: str, known: set[str]) -> bool:
+    """文書中のトピック名がコード側の宣言と対応するかを判定する.
+
+    文書は名前空間まで解決した完全名（`/rtk_gps/time_sync`）を書くが、コードは
+    起動時の remap を前提に相対名（`time_sync`）で宣言する。名前空間を静的に解決
+    できないため、末尾から区切りごとに切った部分名のいずれかが一致すれば対応ありと
+    みなす。`/a/b/c` なら `a/b/c`、`b/c`、`c` を順に照合する。
+
+    Args:
+        doc_name (str): 文書中のトピック名.
+        known (set[str]): コードに現れた名前の集合（先頭の `/` は除いてある）.
+
+    Returns:
+        bool: 対応する宣言があれば True.
+    """
+    segments = doc_name.lstrip("/").split("/")
+    return any("/".join(segments[i:]) in known for i in range(len(segments)))
+
+
 def check_topics(docs: list[Path], sources: list[Path], root: Path,
                  allowlist: dict[str, set[str]], report: Report) -> None:
     """文書中のトピック名がコードに存在するかを検査する.
@@ -207,7 +227,7 @@ def check_topics(docs: list[Path], sources: list[Path], root: Path,
     for path in docs:
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             for name in DOC_TOPIC_PATTERN.findall(line):
-                if name in allowed or name.lstrip("/") in known:
+                if name in allowed or _is_known_topic(name, known):
                     continue
                 report.failures.append(
                     f"{path.relative_to(root)}:{lineno}: "
@@ -274,13 +294,15 @@ def check_parameters(root: Path, allowlist: dict[str, set[str]], report: Report)
                 )
 
 
-def check_required_docs(root: Path, report: Report) -> None:
+def check_required_docs(root: Path, allowlist: dict[str, set[str]], report: Report) -> None:
     """パッケージごとの必須文書が存在するかを検査する.
 
     Args:
         root (Path): リポジトリルート.
+        allowlist (dict[str, set[str]]): 除外名. `pending_design_docs` を参照する.
         report (Report): 結果の記録先.
     """
+    pending = allowlist.get("pending_design_docs", set())
     for package in sorted((root / "src").iterdir()):
         if not (package / "package.xml").exists() or is_excluded(package, root):
             continue
@@ -300,8 +322,15 @@ def check_required_docs(root: Path, report: Report) -> None:
             doc for doc in package.glob("docs/*.md")
             if "設計" in doc.name or "design" in doc.name
         ]
-        if not design_docs:
-            report.failures.append(f"src/{name}: ノードを持つが詳細設計書が無い")
+        if design_docs:
+            continue
+        if name in pending:
+            report.warnings.append(
+                f"src/{name}: ノードを持つが詳細設計書が無い。"
+                "allowlist の pending_design_docs に理由を記載済み"
+            )
+            continue
+        report.failures.append(f"src/{name}: ノードを持つが詳細設計書が無い")
 
 
 def check_rules_sync(root: Path, report: Report) -> None:
@@ -408,7 +437,7 @@ def run_checks(root: Path, today: str) -> Report:
 
     check_topics(docs, sources, root, allowlist, report)
     check_parameters(root, allowlist, report)
-    check_required_docs(root, report)
+    check_required_docs(root, allowlist, report)
     check_rules_sync(root, report)
     check_notes(root, today, report)
     check_permanent_docs_do_not_link_notes(docs, root, report)

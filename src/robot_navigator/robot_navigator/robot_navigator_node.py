@@ -75,7 +75,7 @@ class RobotNavigator(Node):
         self.declare_parameter('max_vel', 1.0, immutable)
         self.declare_parameter('max_w', 1.0, immutable)
         self.declare_parameter('max_acc_v', 0.7, immutable)
-        self.declare_parameter('max_acc_w', 1.5, immutable)
+        self.declare_parameter('max_acc_w', 0.6, immutable)
         self.declare_parameter('max_decel_v', 1.5, immutable)
         self.declare_parameter('braking_delay_sec', 0.2, immutable)
         self.declare_parameter('require_motion_limits', True, immutable)

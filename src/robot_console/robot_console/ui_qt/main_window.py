@@ -8,10 +8,12 @@ from PyQt5 import QtWidgets
 
 from ..core.console_core import ConsoleCore
 from ..core.snapshot_model import ConsoleSnapshot
+from ..utils import NodeLaunchStatus
 from .console_log_tab import ConsoleLogTab
 from .dashboard_tab import DashboardTab
 from .gnss_tab import GnssTab
 from .launch_settings_tab import LaunchSettingsTab
+from .map_creation_tab import MapCreationTab
 from .localization_sensor_tab import LocalizationSensorTab
 from .widgets.scaled_canvas import ScaledCanvas
 from .widgets.clock_sync_warning import ClockSyncWarning
@@ -28,7 +30,7 @@ TAB_TITLE_CONSOLE_LOG = 'コンソールログ'
 
 
 class MainWindow(QtWidgets.QMainWindow):
-    """5タブ構成のPyQt5メインウィンドウ。
+    """運行・設定・記録を扱うPyQt5メインウィンドウ。
 
     robot_console_gui_screen_function_design.md 2章の方針に従い、全タブ共通の
     常設の上部ステータスバーは設けない。時刻同期警告は異常時のみ全タブ上部に表示する。タブ内容はダッシュボードタブを既定表示とし、
@@ -68,12 +70,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.recording_tab = QtWidgets.QWidget()
         recording_layout = QtWidgets.QVBoxLayout(self.recording_tab)
         recording_layout.setContentsMargins(36, 36, 36, 36)
-        guide = QtWidgets.QLabel('① 起動・設定で「実機／手動走行」を適用し、場所を選択\n② ダッシュボードで一斉起動\n③ 融合位置の受信後に「ルート記録開始」→ 手動走行 →「終了・保存」')
+        guide = QtWidgets.QLabel('① 起動・設定で「実機／手動走行」を適用し、場所を選択\n② ICP地図を確認し、ダッシュボードで一斉起動（既定：FIX拘束地図＋ICP）\n③ 自己位置の受信後に「ルート記録開始」→ 手動走行 →「終了・保存」')
         guide.setWordWrap(True)
         recording_layout.addWidget(guide)
         recording_layout.addWidget(self.dashboard_tab.survey_card)
         recording_layout.addStretch(1)
         self.tab_widget.addTab(self.recording_tab, 'ルート記録')
+        self.map_creation_tab = MapCreationTab()
+        self.map_creation_tab.map_selected.connect(self._select_created_map)
+        self.tab_widget.addTab(self.map_creation_tab, '地図作成')
         self.tab_widget.setCurrentWidget(self.dashboard_tab)
 
         self.clock_sync_warning = ClockSyncWarning()
@@ -150,6 +155,18 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.launch_settings_tab.environment, self.launch_settings_tab.drive_mode
             )
 
+    def _select_created_map(self, manifest: str, backend: str) -> None:
+        try:
+            self.launch_settings_tab.configure_icp_map(manifest, backend)
+        except (ValueError, OSError, KeyError) as error:
+            QtWidgets.QMessageBox.warning(self, '地図と経路を確認してください', str(error))
+            return
+        self.tab_widget.setCurrentWidget(self.launch_settings_tab)
+
+    def closeEvent(self, event) -> None:
+        self.map_creation_tab.shutdown()
+        super().closeEvent(event)
+
     def _start_bag(self, directory: str) -> None:
         self._core.bag_recorder.start(directory)
         self.dashboard_tab.bag_card.update_state(self._core.bag_recorder.snapshot())
@@ -166,6 +183,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.localization_sensor_tab.update_snapshot(snapshot)
         self.console_log_tab.update_snapshot(snapshot)
         self.launch_settings_tab.update_launch_states(snapshot.launch_profiles)
+        active = [pid for pid, state in snapshot.launch_profiles.items()
+                  if state.status in (NodeLaunchStatus.RUNNING, NodeLaunchStatus.STARTING,
+                                      NodeLaunchStatus.STOPPING)]
+        if active != getattr(self, '_active_profile_ids', []):
+            self._active_profile_ids = active
+            self._on_launch_plan_changed()
 
     def _on_launch_all_requested(self, profile_ids: List[str]) -> None:
         """起動予定ノード一覧（プラン）の一括起動要求を反映する。"""
@@ -205,6 +228,7 @@ class MainWindow(QtWidgets.QMainWindow):
             drive_mode=self.launch_settings_tab.drive_mode,
             ordered_profile_ids=list(self.launch_settings_tab.plan.ordered_profile_ids),
             profiles_by_id=self.launch_settings_tab.profiles_by_id,
+            active_profile_ids=getattr(self, '_active_profile_ids', []),
         )
 
     @staticmethod

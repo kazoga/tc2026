@@ -14,7 +14,7 @@ def setup(context):
     session = LaunchConfiguration('session').perform(context)
     data = load_session(Path(session), environment)
     gps = '/rtk_gps' if environment == 'simulation' else data.get(
-        'gnss_namespace', '/rtk_gps/rtk_gps_um982_node')
+        'gnss_namespace', '/rtk_gps')
     joy_input = LaunchConfiguration('joy_input').perform(context)
     actions = [IncludeLaunchDescription(PythonLaunchDescriptionSource(str(
         Path(get_package_share_directory('icart_bringup'))/'launch/bringup.launch.py')),
@@ -27,6 +27,8 @@ def setup(context):
             *([data['recorder_params']] if data.get('recorder_params') else []),
             {'output_directory': LaunchConfiguration('output').perform(context),
              'projection_config': data['projection_params'],
+             'localization_mode': data.get('localization_mode', 'gnss'),
+             'icp_map_manifest': data.get('icp_map_manifest', ''),
              'gnss_fix_topic': gps+'/fix', 'gnss_status_topic': gps+'/rtk_status',
              'use_sim_time': environment=='simulation'}])]
     return actions
