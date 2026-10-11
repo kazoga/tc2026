@@ -81,6 +81,16 @@ bag の配置はリポジトリ外であり、引数で与える。既定値は�
 `--require-stop` を付けると停止中の場面だけに絞るが、手動走行では運転者が障害物へ
 近づく前に避けるため、場面が得られないことがある。
 
+多数の場面をまとめて数える場合は `analyze_bag_layers.py` を使う。層ごとに点が得られた
+割合、層から求めた横移動余裕、記録時の `obstacle_avoidance_hint` との差を集計し、
+場面ごとの値を CSV へ書き出す。
+
+```bash
+python3 src/lidar_layer_slicer/tools/analyze_bag_layers.py <bag のディレクトリ> \
+  --near-threshold 3.0 --min-interval-sec 1.0 --csv <出力.csv>
+```
+点群は場面の直前 `--accumulate-sec` 分だけを復号するため、長い bag でも数十秒で終わる。
+
 ## 8. 関連文書
 - [詳細設計書](docs/lidar_layer_slicer_詳細設計書.md)
 - [トピック通信規約](../../docs/トピック通信規約.md)
