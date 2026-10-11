@@ -81,7 +81,8 @@ ros2 run robot_navigator robot_navigator
 | `max_decel_v` | double | `1.5` | 制動距離の計算で想定する線減速度 [m/s^2]。
 | `braking_delay_sec` | double | `0.2` | 通信・driver遅延の設計予算 [s]。制御1周期を別途加算する。
 | `require_motion_limits` | bool | `true` | ドライバの実効制限の受信を必須にする。
-| `pos_tol` | double | `0.5` | 位置許容誤差 [m]。近接時に角度誤差処理へ切替。
+| `pos_tol` | double | `0.5` | 位置許容誤差 [m]。近接時に角度誤差処理へ切替。一度入ると新しい目標の受信まで解除しない。
+| `pos_tol_exit_margin` | double | `0.2` | 離脱判定の余裕として宣言するが、現在の制御では参照しない。
 | `ang_tol` | double | `0.25` | 角度許容誤差 [rad]。
 | `control_rate_hz` | double | `20.0` | 制御ループ周期 [Hz]。
 | `robot_width` | double | `0.6` | 障害物距離評価に用いるロボット幅 [m]。
@@ -91,6 +92,14 @@ ros2 run robot_navigator robot_navigator
 | `obstacle_distance_mode` | string | `"hint"` | `hint` または `scan`。距離取得ソースを切替。
 | `marker_frame` | string | `"map"` | Marker の出力フレーム。
 | `log_csv_path` | string | `/tmp/control_log.csv` | 同梱YAMLのCSVログ出力先。ノード直接起動時の既定は`~/control_log.csv`。
+| `pose_timeout_sec` | double | `1.0` | 自己位置の受信期限 [s]。
+| `odom_timeout_sec` | double | `1.0` | odom の受信期限 [s]。
+| `obstacle_timeout_sec` | double | `0.0` | 障害物距離の受信期限 [s]。0 で監視無効。
+| `road_block_hold_sec` | double | `5.0` | `/road_blocked` による停止の保持時間 [s]。
+
+`max_vel`・`max_w`・`max_acc_v`・`max_acc_w`・`max_decel_v`・`braking_delay_sec`・
+`require_motion_limits` は読み取り専用として宣言し、起動後に変更できない。
+角速度 PID のゲインはパラメータを持たず、実装内の固定値である。
 
 ## 動作確認手順
 1. `robot_simulator`（当パッケージ内）を起動し、最終 `/cmd_vel` を受け取って `pose_topic`（既定 `/localization/pose_enu`）・`/ypspur_ros/odom` を配信させる。
@@ -146,7 +155,7 @@ ros2 run robot_navigator robot_navigator
 icart_bringupの共通実機profileは1秒を設定する。手動速度系には適用しない。
 
 監視の判定時刻、stampの鮮度を検証しないこと、別途対策が必要な事象は
-[robot_navigator 詳細設計書](docs/robot_navigator_詳細設計書.md) 6 章を参照する。
+[robot_navigator 詳細設計書](docs/robot_navigator_詳細設計書.md) 7.6 節を参照する。
 
 ## 関連文書
 
