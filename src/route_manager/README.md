@@ -99,7 +99,7 @@ skip / road_blocked_fixed / failed）を出力します。
 
 再計画が全段階失敗した場合、公開状態は `holding` になる一方で FSM は `ERROR` へ遷移し、
 以降の `/report_stuck` を受け付けません。詳細は
-[詳細設計](docs/route_manager_詳細設計書.md)の 8.5 節を参照してください。
+[詳細設計](docs/route_manager_詳細設計書.md)の 6.4 節を参照してください。
 
 > 走行開始タイミングの制御を `route_follower` の `start_immediately` パラメータに統一し、
 > `route_manager` は起動直後に必ず初期ルートを要求します。`start_immediately=false` の場合は
