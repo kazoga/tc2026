@@ -197,7 +197,11 @@ def test_recording_can_be_turned_off_and_advice_cannot_be_turned_on(
 
 
 def test_simulation_does_not_record_and_can_enable_advice(monkeypatch, tmp_path: Path) -> None:
-    """模擬環境は自動記録せず、助言を引数で有効にできる."""
+    """模擬環境は自動記録せず、助言を引数で有効にできる。
+
+    助言を有効にしたときだけ、層スライスと助言のノードを起動する。層の観測値は回避幅の
+    上限に効くため、助言なしの基準走行では起動しない。
+    """
     module, context, captured = _real_hardware_setup(monkeypatch, tmp_path)
     monkeypatch.setenv('ROS_DOMAIN_ID', '86')
     context.launch_configurations.update(environment='simulation', session='session.yaml',
@@ -210,6 +214,53 @@ def test_simulation_does_not_record_and_can_enable_advice(monkeypatch, tmp_path:
     follower = next(item for item in captured if item['package'] == 'route_follower')
     assert _parameter(follower, 'use_ai_advice') is True
     assert _bag_recorders(_all_actions(actions)) == []
+    packages = [item['package'] for item in captured]
+    assert packages.count('lidar_layer_slicer') == 1
+    assert packages.count('avoidance_advisor') == 1
+
+
+def test_advice_nodes_are_absent_when_advice_is_disabled(monkeypatch, tmp_path: Path) -> None:
+    """助言が無効なら、層スライスと助言のノードを起動しない。
+
+    層の観測値は回避幅の上限に効く。助言なしの走行を従来の挙動のまま記録するため、
+    基準の走行ではこれらを動かさない。層は記録したbagから再現できる。
+    """
+    module, context, captured = _real_hardware_setup(monkeypatch, tmp_path)
+    monkeypatch.setenv('ROS_DOMAIN_ID', '86')
+    context.launch_configurations.update(environment='simulation', session='session.yaml',
+                                         start_ui='false', fusion_log='',
+                                         initial_drive_mode='autonomous')
+
+    module.setup(context)
+
+    packages = [item['package'] for item in captured]
+    assert 'lidar_layer_slicer' not in packages
+    assert 'avoidance_advisor' not in packages
+
+
+def test_advice_nodes_do_not_stop_the_stack_when_they_exit(monkeypatch, tmp_path: Path) -> None:
+    """助言ノードの終了で走行全体を止めない。
+
+    共通起動は主要子プロセスの終了で全体を停止する。助言は走行の付帯機能であり、
+    停止の理由にしない。launchのNodeもこの登録の対象になるため、登録の後に追加する。
+    """
+    from launch.actions import RegisterEventHandler
+    from launch_ros.actions import Node
+    module, context, _ = _real_hardware_setup(monkeypatch, tmp_path)
+    monkeypatch.setenv('ROS_DOMAIN_ID', '86')
+    context.launch_configurations.update(environment='simulation', session='session.yaml',
+                                         start_ui='false', fusion_log='',
+                                         initial_drive_mode='autonomous',
+                                         use_ai_advice='true')
+
+    actions = module.setup(context)
+
+    watched = {id(getattr(action.event_handler, '_OnActionEventBase__action_matcher', None))
+               for action in actions if isinstance(action, RegisterEventHandler)}
+    advice = [action for action in actions if isinstance(action, Node)
+              and action.node_package in ('lidar_layer_slicer', 'avoidance_advisor')]
+    assert len(advice) == 2
+    assert all(id(action) not in watched for action in advice)
 
 
 @pytest.mark.parametrize('site,expected', [('稲城', 'inagi'), ('つくば', 'tsukuba')])

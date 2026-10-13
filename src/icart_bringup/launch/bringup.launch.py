@@ -153,6 +153,26 @@ def setup(context) -> list:
     actions += [RegisterEventHandler(OnProcessExit(target_action=action,
                 on_exit=[EmitEvent(event=Shutdown(reason='共通走行プロセス終了'))]))
                 for action in list(actions) if isinstance(action, ExecuteProcess)]
+    if use_ai_advice:
+        # 層スライスと助言は走行の付帯機能であり、終了しても走行を止めない。このため
+        # 「プロセス終了で全体を停止する」登録より後に追加する。
+        # 助言を使わない基準の走行では起動しない。層の観測値は回避幅の上限に効くため、
+        # 起動すると助言なしの走行が従来の挙動と変わる。層はbagから再現できる。
+        slicer_params = str(Path(get_package_share_directory('lidar_layer_slicer'))
+                            / 'params/default.yaml')
+        advisor_params = str(Path(get_package_share_directory('avoidance_advisor'))
+                             / 'params/default.yaml')
+        cloud_topic = ('/mid360/livox/lidar/points' if simulation
+                       else '/mid360/livox/lidar')
+        actions += [
+            node('lidar_layer_slicer', 'lidar_layer_slicer',
+                 [slicer_params, {'cloud_message_type':
+                                  'pointcloud2' if simulation else 'custom'}],
+                 [('scan', '/scan'), ('points', cloud_topic), ('livox_lidar', cloud_topic)]),
+            node('avoidance_advisor', 'avoidance_advisor', [advisor_params],
+                 [('camera/image_raw', '/usb_cam/image_raw')]),
+        ]
+
     if hardware and context.launch_configurations.get('record_bag', 'true') == 'true':
         # 記録は走行の付帯処理であり、失敗しても走行を止めない。このため上の
         # 「プロセス終了で全体を停止する」登録より後に追加する。
