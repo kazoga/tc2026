@@ -32,6 +32,10 @@ undo/redo、CSV/JSON/PNG保存を備える。編集は走行中routeへ自動適
 
 PC内HTMLはiPhoneへ自動配信されない。会話内の静止画像・本文を閲覧版とし、
 iPhoneで編集する際はアクセス可能な共有先が必要である。外部公開は行わない。
+手動走行bagの前方映像と既存の路面場・幅推定を並べ、区間ごとに道幅を判断して記入する
+確認資料は`tools/extract_route_frames.py`、`tools/render_width_panels.py`、
+`tools/build_width_review.py`で作る。手順はdocs/道幅の区間確認ツール.mdを参照する。
+
 詳細・検証範囲はdocs/route_survey_詳細設計書.mdを参照する。
 
 本番として確認した経路の配置先は`src/route_planner/routes/<コース名>/`とする。
