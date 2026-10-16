@@ -16,7 +16,8 @@ from pathlib import Path
 import sqlite3
 
 import numpy as np
-from scipy.spatial.transform import Rotation, Slerp
+from scipy.signal import fftconvolve
+from scipy.spatial.transform import Rotation
 from scipy.spatial import cKDTree
 import yaml
 
@@ -117,6 +118,36 @@ def iter_scans(bag: Path, topic: str, stride: int, min_range: float):
                        angles[valid], ranges[valid])
 
 
+def observation_ratio(hits: np.ndarray, origins: np.ndarray, resolution: float,
+                      max_range: float, min_views: int) -> np.ndarray:
+    """当たり数を、その場所を見られた走査数で正規化する.
+
+    当たり数そのものは走査の密度に比例するため、場所ごとの比較に使えない。
+    走査原点の分布を到達半径の円板で畳み込み、各格子を見られた走査数の概算とする。
+    畳み込みは 1 m 格子で行う。可視性は滑らかに変化するため、この粗さで足りる。
+
+    Args:
+        hits (np.ndarray): 格子ごとの当たり数.
+        origins (np.ndarray): 格子ごとの走査原点の数.
+        resolution (float): 格子の分解能 [m].
+        max_range (float): 走査の到達半径 [m].
+        min_views (int): これ未満の可視走査数の格子は 0 とする.
+
+    Returns:
+        np.ndarray: 当たり数 / 可視走査数.
+    """
+    factor = int(round(1./resolution))
+    ny, nx = hits.shape
+    ny2, nx2 = ny//factor, nx//factor
+    coarse = origins[:ny2*factor, :nx2*factor].reshape(ny2, factor, nx2, factor).sum((1, 3))
+    radius = int(round(max_range))
+    grid_y, grid_x = np.mgrid[-radius:radius+1, -radius:radius+1]
+    disk = ((grid_y**2+grid_x**2) <= radius**2).astype(np.float32)
+    views = fftconvolve(coarse.astype(np.float32), disk, mode='same')
+    views = np.repeat(np.repeat(views, factor, axis=0), factor, axis=1)[:ny, :nx]
+    return np.where(views >= min_views, hits/np.maximum(views, 1.), 0.).astype(np.float32)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--poses', type=Path, required=True)
@@ -140,6 +171,8 @@ def main() -> None:
     parser.add_argument('--route-margin', type=float, default=10.,
                         help='経路からこの距離までの点だけを残す [m]')
     parser.add_argument('--max-gap', type=float, default=3., help='姿勢内挿を許す時間差 [s]')
+    parser.add_argument('--min-views', type=int, default=10,
+                        help='正規化に必要な可視走査数の下限')
     args = parser.parse_args()
 
     stamp, position, yaw, segment, urg = base_poses(args.poses, args.keyframes, args.hardware)
@@ -201,7 +234,9 @@ def main() -> None:
             if used % 2000 == 0:
                 print(f'run{run} 使用 {used} 走査', flush=True)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(args.output, hits=hits, origins=views,
+    ratio = observation_ratio(hits.astype(np.float32), views.astype(np.float32),
+                              args.resolution, args.max_range, args.min_views)
+    np.savez_compressed(args.output, hits=hits, origins=views, ratio=ratio,
                         extent=np.array([x0, x1, y0, y1]),
                         resolution=np.array(args.resolution),
                         scan_stride=np.array(args.scan_stride),

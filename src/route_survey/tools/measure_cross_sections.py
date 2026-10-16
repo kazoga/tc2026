@@ -120,6 +120,45 @@ class SurfaceField:
         return reach, reason
 
 
+class BoundaryField:
+    """URGの水平走査から得た鉛直物の分布。断面に沿って最初の境界までを測る."""
+
+    def __init__(self, path: Path, threshold: float) -> None:
+        data = np.load(path)
+        self.ratio = data['ratio']
+        self.threshold = threshold
+        self.resolution = float(data['resolution'])
+        self.x0, _, self.y0, _ = data['extent']
+
+    def edge(self, x: float, y: float, yaw: float, sign: int, limit: float,
+             step: float) -> float | None:
+        """断面に沿って、最初に鉛直物を検出した距離を返す.
+
+        Args:
+            x (float): 断面原点のENU X [m].
+            y (float): 断面原点のENU Y [m].
+            yaw (float): 進行方位 [rad].
+            sign (int): 1 で左、-1 で右.
+            limit (float): 走査の上限距離 [m].
+            step (float): 走査の刻み [m].
+
+        Returns:
+            float | None: 境界までの距離 [m]。検出しなければ None.
+        """
+        cos_yaw, sin_yaw = math.cos(yaw), math.sin(yaw)
+        for offset in np.arange(step, limit+1e-9, step):
+            px = x-sign*sin_yaw*offset
+            py = y+sign*cos_yaw*offset
+            ix = int((px-self.x0)/self.resolution)
+            iy = int((py-self.y0)/self.resolution)
+            if not (0 <= ix < self.ratio.shape[1] and 0 <= iy < self.ratio.shape[0]):
+                return None
+            window = self.ratio[max(iy-1, 0):iy+2, max(ix-1, 0):ix+2]
+            if window.size and float(window.max()) >= self.threshold:
+                return float(offset)
+        return None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--waypoints', type=Path, required=True)
@@ -130,17 +169,23 @@ def main() -> None:
     parser.add_argument('--step', type=float, default=.1, help='走査の刻み [m]')
     parser.add_argument('--tangent-span', type=float, default=3., help='接線を取る前後の距離 [m]')
     parser.add_argument('--curvature-span', type=float, default=5., help='曲率を取る前後の距離 [m]')
+    parser.add_argument('--urg-boundary', type=Path, default=None,
+                        help='extract_urg_boundary.py の出力。指定すると鉛直境界の列を加える')
+    parser.add_argument('--urg-threshold', type=float, default=.15,
+                        help='鉛直物とみなす正規化当たり数の下限')
     args = parser.parse_args()
 
     route = Route(args.waypoints)
     field = SurfaceField(args.surface_mask)
+    boundary = BoundaryField(args.urg_boundary, args.urg_threshold) if args.urg_boundary else None
     total = float(route.distance[-1])
     args.output.parent.mkdir(parents=True, exist_ok=True)
     count = 0
     with args.output.open('w', newline='') as handle:
         writer = csv.writer(handle)
         writer.writerow(['distance_m', 'label', 'x', 'y', 'yaw_rad', 'curvature_deg_per_m',
-                         'left_m', 'left_reason', 'right_m', 'right_reason', 'width_m'])
+                         'left_m', 'left_reason', 'right_m', 'right_reason', 'width_m',
+                         'urg_left_m', 'urg_right_m', 'urg_width_m'])
         for s in np.arange(0., total+1e-9, args.spacing):
             yaw = route.tangent(float(s), args.tangent_span)
             if yaw is None:
@@ -149,10 +194,18 @@ def main() -> None:
             x, y = route.point[i]
             left, left_reason = field.edge(x, y, yaw, 1, args.limit, args.step)
             right, right_reason = field.edge(x, y, yaw, -1, args.limit, args.step)
+            urg_left = urg_right = None
+            if boundary is not None:
+                urg_left = boundary.edge(x, y, yaw, 1, args.limit, args.step)
+                urg_right = boundary.edge(x, y, yaw, -1, args.limit, args.step)
+            urg_width = ('' if urg_left is None or urg_right is None
+                         else f'{urg_left+urg_right:.2f}')
             writer.writerow([f'{s:.1f}', route.label[i], f'{x:.3f}', f'{y:.3f}', f'{yaw:.5f}',
                              f'{route.curvature(float(s), args.curvature_span):.2f}',
                              f'{left:.2f}', left_reason, f'{right:.2f}', right_reason,
-                             f'{left+right:.2f}'])
+                             f'{left+right:.2f}',
+                             '' if urg_left is None else f'{urg_left:.2f}',
+                             '' if urg_right is None else f'{urg_right:.2f}', urg_width])
             count += 1
     print(f'DONE {count} 断面 -> {args.output}', flush=True)
 
