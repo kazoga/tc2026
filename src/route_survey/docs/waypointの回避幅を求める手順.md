@@ -208,7 +208,8 @@ python3 src/route_survey/tools/apply_region_widths.py \
 
 ## 検証
 
-次の2つを必ず行う。どちらも通らなければ反映しない。
+最初の2つは必ず行う。どちらも通らなければ反映しない。残る2つは、反映した値が全域で
+どうなったかと、実際の走行で何が起きるかを見るために行う。
 
 ### 幅2列以外が変わっていないこと
 
@@ -231,6 +232,59 @@ URGは最も近い鉛直物で走査を打ち切るため、通り抜けられ�
 連続した境界として扱い、値を過小に見積もる。この場合は区間表の上書き列へ
 利用者の判断値を与える。
 
+### 全域を図で確かめること
+
+区間ごとの値を個別に見ても全体の傾向は掴めない。全点と区間と左右幅を一枚に描く。
+
+```bash
+python3 src/route_survey/tools/render_route_widths.py \
+  --waypoints-enu <route>/waypoints_enu.json \
+  --route <out>/route_with_widths/fixed/waypoints.csv \
+  --regions <out>/regions.csv \
+  --output <out>/route_widths_overview.png
+```
+
+俯瞰図は回避できる範囲を実寸で塗るため、拡大すれば区間ごとの広がりをそのまま読める。
+距離方向の帯では、上が左、下が右である。区間の切れ目に振った番号が下の一覧と対応する。
+意図しない値はここで見つける。幅0の区間が連続しすぎていないか、広い扱いの区間が
+想定より長くないかを見る。
+
+### 模擬環境で走らせて確かめること
+
+同梱のデジタルツイン（`obstacle_route_sim/maps/tsukuba2026`）へ経路を入れて走らせ、
+記録から横ずれと回避の判断を集計する。
+
+```bash
+ros2 run icart_bringup run_digital_twin --output <session> --prepare-only
+cp <out>/route_with_widths/fixed/waypoints.csv <session>/routes/fixed/waypoints.csv
+# <session>/session.yaml の start_label と goal_label を経路のラベルへ変更する
+ros2 run icart_bringup run_session --session <session>/session.yaml --environment simulation
+```
+
+`route_follower` は `line_is_stop` の waypoint で `WAITING_STOP` に入り、`manual_start`
+による解除を待つ。UIを使わない場合は `manual_start` を一定間隔で送り続ける。
+
+```bash
+ros2 topic pub -r 1 /manual_start std_msgs/msg/Bool "{data: true}"
+```
+
+記録した bag は次で集計する。経路は走行時と同じ `projection.yaml` でENUへ直すため、
+地図作成時のENUとは原点が違っていてよい。
+
+```bash
+python3 src/route_survey/tools/summarize_avoidance_run.py \
+  --bag <session>/run/bag \
+  --route <out>/route_with_widths/fixed/waypoints.csv \
+  --projection <session>/projection.yaml \
+  --output <out>/sim_run_width_check.csv
+```
+
+**この確認で分かるのは、値がスタックへ正しく届き、走行が破綻しないことまでである。**
+同梱地図は公式コース図を図上トレースした概略経路を基準に作られ、その経路に対してだけ
+左右1 mの離隔を保証している。実走ログ由来の経路とは中央0.99 m、最大7.70 mずれるため、
+地図上の離隔は実際の路端と対応しない。生垣・ロードコーン・縁石・植栽帯は地図に無い。
+幅の値そのものの正しさは、この確認では判定できない。
+
 ## 人の判断が必要な箇所
 
 この手順は全自動ではない。次の3箇所で人が映像を見て判断する。
@@ -244,6 +298,8 @@ URGは最も近い鉛直物で走査を打ち切るため、通り抜けられ�
 - URGは1つの高さの水平断面しか持たない。縁石・草地・点字ブロックのような低い境界は
   観測できない。張り出した葉と壁も区別できない。
 - 境界物の種類（固いか柔らかいか）は判定しない。
-- 走行中の追従誤差は含まない。実機が経路からどれだけ外れるかは別に見込む。
+- 走行中の追従誤差は含まない。模擬環境では、幅0の区間でも経路から最大0.23 mずれる。
+  幅0は横移動を禁じるだけで、経路の上を正確になぞることを保証しない。実際の離隔が
+  0.25 mを下回る区間では、幅を0にしても接触を避けられない。
 - 路面領域の格子は、走行した軌跡の直下でも25%が路面と判定されない。このため路面場
   単独では左右端を決められず、URGを併用する。
