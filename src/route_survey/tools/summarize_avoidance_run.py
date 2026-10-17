@@ -30,8 +30,17 @@ def read_topics(bag: Path, topics: set[str]) -> dict[str, list]:
     Returns:
         dict[str, list]: トピック名から (時刻[s], メッセージ) の列への対応.
     """
+    # 記録が中断され metadata.yaml が残らない場合に備え、mcap を直接開けるようにする
+    storage = ''
+    if bag.is_dir() and not (bag/'metadata.yaml').is_file():
+        found = sorted(bag.glob('*.mcap'))
+        if not found:
+            raise SystemExit(f'記録が読めません: {bag}')
+        bag, storage = found[0], 'mcap'
+    elif bag.suffix == '.mcap':
+        storage = 'mcap'
     reader = rosbag2_py.SequentialReader()
-    reader.open(rosbag2_py.StorageOptions(uri=str(bag), storage_id=''),
+    reader.open(rosbag2_py.StorageOptions(uri=str(bag), storage_id=storage),
                 rosbag2_py.ConverterOptions('', ''))
     types = {t.name: t.type for t in reader.get_all_topics_and_types()}
     out = {name: [] for name in topics if name in types}
@@ -64,25 +73,38 @@ class RouteFrame:
         self.segment = np.vstack([delta, delta[-1:]])
         self.length2 = np.maximum((self.segment**2).sum(axis=1), 1e-9)
 
-    def project(self, x: float, y: float) -> tuple[float, float]:
+    def project(self, x: float, y: float, near: int = None,
+                window: int = 200) -> tuple[float, float, int]:
         """位置を経路へ投影し、始点からの距離と左向きを正とする横ずれを返す.
+
+        往路と復路が近接する区間では、経路全体から最寄りを選ぶと別の足へ飛ぶ。
+        直前の点が分かる場合は、その周辺だけを探す。
 
         Args:
             x (float): ENU X [m].
             y (float): ENU Y [m].
+            near (int | None): 直前に対応した waypoint の番号.
+            window (int): near の前後に探す waypoint 数.
 
         Returns:
-            tuple[float, float]: 始点からの距離 [m]、横ずれ [m]（左が正）.
+            tuple[float, float, int]: 始点からの距離 [m]、横ずれ [m]（左が正）、
+                対応した waypoint の番号.
         """
         here = np.array([x, y])
-        ratio = np.clip(((here-self.point)*self.segment).sum(axis=1)/self.length2, 0., 1.)
-        foot = self.point+self.segment*ratio[:, None]
+        low, high = 0, len(self.point)
+        if near is not None:
+            low, high = max(0, near-window), min(len(self.point), near+window)
+        point = self.point[low:high]
+        segment = self.segment[low:high]
+        length2 = self.length2[low:high]
+        ratio = np.clip(((here-point)*segment).sum(axis=1)/length2, 0., 1.)
+        foot = point+segment*ratio[:, None]
         index = int(np.argmin(((foot-here)**2).sum(axis=1)))
-        tangent = self.segment[index]/math.sqrt(self.length2[index])
+        tangent = segment[index]/math.sqrt(length2[index])
         offset = here-foot[index]
         lateral = float(-tangent[1]*offset[0]+tangent[0]*offset[1])
-        step = float(np.linalg.norm(self.segment[index])*ratio[index])
-        return float(self.distance[index]+step), lateral
+        step = float(np.linalg.norm(segment[index])*ratio[index])
+        return float(self.distance[low+index]+step), lateral, low+index
 
 
 def load_widths(route: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -113,6 +135,9 @@ def main() -> None:
                         help='走行時に使った projection.yaml')
     parser.add_argument('--output', type=Path, required=True, help='距離ごとの集計CSV')
     parser.add_argument('--pose-topic', default='/localization/pose_enu')
+    parser.add_argument('--max-gap', type=float, default=30.,
+                        help='この秒数を超える記録の途切れで打ち切る。1つの記録に複数回の'
+                             '走行が入っている場合に、最初の走行だけを見る')
     args = parser.parse_args()
 
     frame = RouteFrame(args.route, args.projection)
@@ -122,12 +147,23 @@ def main() -> None:
     poses = data.get(args.pose_topic, [])
     if not poses:
         raise SystemExit(f'姿勢が記録されていません: {args.pose_topic}')
+    for position, ((previous, _), (stamp, _)) in enumerate(zip(poses, poses[1:]), start=1):
+        if stamp-previous > args.max_gap:
+            print(f'記録が{stamp-previous:.0f}s途切れたため、ここまでを1回の走行として扱う')
+            poses = poses[:position]
+            limit_time = previous
+            break
+    else:
+        limit_time = poses[-1][0]
+    data = {name: [(stamp, message) for stamp, message in rows if stamp <= limit_time]
+            for name, rows in data.items()}
 
     track = []
+    near = None
     for stamp, message in poses:
         position = message.pose.pose.position
-        distance, lateral = frame.project(position.x, position.y)
-        index = int(np.argmin(np.abs(frame.distance-distance)))
+        distance, lateral, index = frame.project(position.x, position.y, near)
+        near = index
         limit = left[index] if lateral >= 0 else right[index]
         track.append((stamp, distance, lateral, limit, index))
 
@@ -136,8 +172,10 @@ def main() -> None:
     for stamp, message in status:
         key = (message.state, message.decision, message.last_cause)
         decisions.setdefault(key, []).append(stamp)
-    contacts = sum(1 for _, message in data.get('/body_contacts', [])
-                   if getattr(message, 'contacts', []))
+    # 接触トピックは構成によっては配信されない。記録が無いことを0件と書かない
+    contact_messages = data.get('/body_contacts')
+    contacts = (None if not contact_messages else
+                sum(1 for _, message in contact_messages if getattr(message, 'contacts', [])))
 
     start = track[0][0]
     with args.output.open('w', newline='') as stream:
@@ -156,7 +194,8 @@ def main() -> None:
           f'/ 最大 {lateral.max():.2f} m')
     print(f'幅の超過 {int((over > 0).sum())} 点 ({100*(over > 0).mean():.1f}%) / '
           f'最大 {over.max():.2f} m')
-    print(f'接触 {contacts} 件')
+    print('接触 記録なし（この構成では配信されない）' if contacts is None
+          else f'接触 {contacts} 件')
     print('route_manager の状態:')
     for (state, decision, cause), stamps in sorted(decisions.items(), key=lambda kv: -len(kv[1])):
         print(f'  state={state} decision={decision} cause={cause or "-"}: {len(stamps)} 回')
