@@ -9,10 +9,16 @@
 | cone | 同じ当てはめに追加の余裕を引く | ロードコーンの設置は直線から外れ、外側はコース外である |
 | discrete | 区間内の最小値を使う | 柱や車止めは間を通れるが、最も近いものに合わせる |
 | none | 上限値を使う | 探索範囲に境界が無い |
-| open_wide | 広い区間の上限値を使う | 障害物が多く、回避余地を確保する必要がある |
+| open_wide | 遠い側の検出から求め、広い区間の上限で頭打ちにする | 近い検出は置かれた障害物であり路端ではない |
+| crossing | 0 とする | 横断中に横移動しない |
 
 広場にコーンを疎に置いて通路を示す区間では、近い側の上限が既定では狭すぎる。
 区間表の `near_limit_m` 列で区間ごとに上書きする。
+
+観測から求めた値が映像の判断と大きく食い違う区間では、区間表の `left_override_m` /
+`right_override_m` に利用者の判断値を与える。URGは最も近い鉛直物で走査を打ち切るため、
+通り抜けられるボラードや疎な植栽を連続した境界として扱い、値を過小に見積もることがある。
+上書きした側は `basis` に その旨を残す。
 
 出力は提案値であり、測量値でも衝突余裕の保証値でもない。利用者が映像と突き合わせて
 確認したうえで経路へ反映する。
@@ -24,6 +30,25 @@ from pathlib import Path
 import numpy as np
 
 SIDES = (('left', 'urg_left_m'), ('right', 'urg_right_m'))
+
+
+def far_boundary(value: np.ndarray, far_floor: float) -> tuple[float, int] | None:
+    """障害物が多い区間で、遠い側の検出から路端の位置を求める.
+
+    置かれた障害物は経路の近くに現れるため、近い検出を使うと路端を過小に見積もる。
+    一定距離より遠い検出だけを残し、その中央値を路端とする。
+
+    Args:
+        value (np.ndarray): 境界までの距離 [m]。未検出は NaN.
+        far_floor (float): 路端として扱う最小距離 [m].
+
+    Returns:
+        tuple[float, int] | None: 路端の位置と採用点数。点数が足りなければ None.
+    """
+    found = value[(~np.isnan(value))&(value >= far_floor)]
+    if len(found) < 8:
+        return None
+    return float(np.median(found)), int(len(found))
 
 
 def fit_boundary(distance: np.ndarray, value: np.ndarray, near_limit: float,
@@ -76,8 +101,10 @@ def main() -> None:
     parser.add_argument('--max-curvature', type=float, default=2.,
                         help='これを超える曲率の断面を除く [deg/m]')
     parser.add_argument('--cap', type=float, default=2.5, help='境界が無い区間の上限 [m]')
-    parser.add_argument('--wide-cap', type=float, default=4.,
+    parser.add_argument('--wide-cap', type=float, default=3.,
                         help='障害物が多い広い区間の上限 [m]')
+    parser.add_argument('--far-floor', type=float, default=2.,
+                        help='障害物が多い区間で路端として扱う最小距離 [m]')
     args = parser.parse_args()
 
     rows = [r for r in csv.DictReader(args.cross_sections.open())
@@ -100,6 +127,14 @@ def main() -> None:
                 boundary = spread = None
                 count = int((~np.isnan(values)).sum())
                 near_limit = float(region.get('near_limit_m') or args.near_limit)
+                override = region.get(f'{side}_override_m')
+                if override:
+                    writer.writerow([f'{start:.0f}', f'{end:.0f}', region['name'], side, kind,
+                                     count, '', '', f'{float(override):.1f}', '映像判断で上書き'])
+                    print(f'{start:5.0f}-{end:5.0f} {region["name"][:20]:<20} '
+                          f'{"左" if side == "left" else "右"} {kind:<10} '
+                          f'{"-":>6} {"-":>6} {float(override):7.1f}')
+                    continue
                 if kind in ('continuous', 'cone'):
                     fitted = fit_boundary(distance[inside], values, near_limit, 1)
                     if fitted is None:
@@ -116,7 +151,15 @@ def main() -> None:
                         boundary = float(np.percentile(found, 5))
                         offset, basis = max(0., boundary-args.body_margin), '下側5%点'
                 elif kind == 'open_wide':
-                    offset, basis = args.wide_cap, '広い区間の上限'
+                    far = far_boundary(values, args.far_floor)
+                    if far is None:
+                        offset, basis = args.wide_cap, '広い区間の上限'
+                    else:
+                        boundary, count = far
+                        offset = min(max(0., boundary-args.body_margin), args.wide_cap)
+                        basis = '遠い側の検出'
+                elif kind == 'crossing':
+                    offset, basis = 0., '横断部'
                 else:
                     offset, basis = args.cap, '上限'
                 writer.writerow([
