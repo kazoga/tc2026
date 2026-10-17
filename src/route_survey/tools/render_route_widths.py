@@ -167,7 +167,7 @@ def load_run(path: Path) -> tuple[np.ndarray, np.ndarray]:
 
 
 def draw_profile(axis, distance: np.ndarray, left: np.ndarray, right: np.ndarray,
-                 regions: list[dict], cap: float, run: tuple = None) -> None:
+                 regions: list[dict], cap: float, run: list = None) -> None:
     """距離方向に、左右の回避幅と区間の切れ目を描く.
 
     Args:
@@ -189,8 +189,10 @@ def draw_profile(axis, distance: np.ndarray, left: np.ndarray, right: np.ndarray
         axis.axvline(region['start'], color='#999999', linewidth=.6)
         axis.annotate(str(number), (region['start'], cap*1.02),
                       fontsize=7, color='#333333')
-    if run is not None:
-        axis.plot(run[0], run[1], color='#111111', linewidth=.8, label='走行時の横ずれ')
+    for number, (travelled, lateral) in enumerate(run or []):
+        axis.plot(travelled, lateral, color='#111111', linewidth=.8, linestyle='none',
+                  marker='.', markersize=1,
+                  label='走行時の横ずれ' if number == 0 else None)
     axis.axhline(0, color='#333333', linewidth=.8)
     axis.set_xlim(distance[0], distance[-1])
     axis.set_ylim(-cap*1.1, cap*1.1)
@@ -263,8 +265,8 @@ def main() -> None:
                         help='回避幅を書き込んだ waypoints.csv')
     parser.add_argument('--regions', type=Path, required=True, help='区間表 regions.csv')
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--run', type=Path, default=None,
-                        help='走行記録の集計CSV。指定すると横ずれを重ねる')
+    parser.add_argument('--run', type=Path, action='append',
+                        help='走行記録の集計CSV。指定すると横ずれを重ねる。複数指定できる')
     parser.add_argument('--cap', type=float, default=None,
                         help='色と縦軸の上限 [m]。既定は入力の最大値')
     parser.add_argument('--dpi', type=int, default=160)
@@ -284,7 +286,7 @@ def main() -> None:
                           distance, regions, cap)
     figure.colorbar(collection, ax=figure.axes[0], shrink=.6, label='回避幅 [m]')
     draw_profile(figure.add_subplot(grid[1]), distance, left, right, regions, cap,
-                 load_run(args.run) if args.run else None)
+                 [load_run(path) for path in args.run or []])
     draw_table(figure.add_subplot(grid[2]), region_table(regions, distance, left, right))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(args.output, dpi=args.dpi, bbox_inches='tight')
