@@ -168,13 +168,13 @@ def test_task_a_section_starts_at_the_split_point() -> None:
 
 
 def test_task_a_section_has_avoidance_width_and_no_stop(task_a_waypoints: list) -> None:
-    """課題A区間は左右1.0 mの回避幅を持ち、停止点を持たない."""
+    """課題A区間は左右1.5 mの回避幅を持ち、停止点を持たない."""
 
     labels = [wp.label for wp in task_a_waypoints]
     gate_first, gate_last = labels.index("G"), len(labels) - 1 - labels[::-1].index("G")
     section = task_a_waypoints[gate_first + 1 : gate_last]
 
-    assert {(wp.right_open, wp.left_open) for wp in section} == {(1.0, 1.0)}
+    assert {(wp.right_open, wp.left_open) for wp in section} == {(1.5, 1.5)}
     assert not any(wp.line_stop or wp.signal_stop for wp in section)
 
 
