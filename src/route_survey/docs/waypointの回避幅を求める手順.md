@@ -38,7 +38,7 @@
 | 記録区間の対応 | `run<N>/summary.json`。各記録区間がどのbagかを示す |
 | 地図 | `optimized_poses_enu.npy`、`keyframes.json`、`hardware.yaml` |
 | 路面領域 | `surface_mask.npz`（20 cm格子の路面判定） |
-| 経路 | `fixed/waypoints.csv` と `waypoints_enu.json`（弧長・時刻・記録区間を持つ） |
+| 経路 | `fixed/waypoints.csv` と `waypoints_enu.json`（弧長・時刻・記録区間を持つ）。`tools/build_route.py` の出力 |
 
 経路と地図のENU原点が一致していることを確認する。一致していなければ以降の測定は
 意味を持たない。

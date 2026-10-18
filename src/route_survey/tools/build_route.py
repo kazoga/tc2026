@@ -74,7 +74,7 @@ for i,s in enumerate(specs,1):
  e['boundary_type']='road_edge' if e['kind'] in ('road_edge_stop','signal_road_edge_stop') else 'white_stop_line' if e['kind']=='queue_stop' else 'goal_line'
  e['official_boundary_tolerance_m']={'before':1.5,'body_must_not_cross':True} if e['boundary_type']=='road_edge' else {'before':1.0,'after':.5,'body_must_not_exceed_after':True} if e['boundary_type']=='white_stop_line' else {'entire_body_must_cross':True}
  e['repeat_observations']=[dict(id=h,x=G[h]['x'],y=G[h]['y'],distance_to_primary_m=float(np.hypot(G[h]['x']-g['x'],G[h]['y']-g['y'])),camera=f'sources/camera/{h}_+0s.jpg') for h in repeat.get(g['id'],[])]
- if e['kind']=='signal_road_edge_stop':e['optional_signal_recognition_attribute']=True;e['signal_is_stop']=0 # Green-only input is insufficient to verify clear crossing.
+ if e['kind']=='signal_road_edge_stop':e['optional_signal_recognition_attribute']=True;e['signal_is_stop']=1 # 信号交差点の道路端。再開条件は信号認識の実装側で担保する。
  if e['kind']=='goal_stop':e['resume_policy']='finish';e['line_is_stop']=0 # Native follower enters FINISHED at final ordinary WP.
  event_rows.append(e)
 # Deterministic simplification between every required marker and recording boundary.
@@ -119,7 +119,7 @@ fields=['label','latitude','longitude','altitude','heading_deg','right_is_open',
 rows=[]
 for i,v in enumerate(points):
  llh=enu_to_llh_on_ground(v['x'],v['y'],proj,ground_altitude=proj.origin_altitude);e=by_wp.get(i)
- rows.append(dict(label=e['id'] if e else f'WP{i:04d}',latitude=f'{llh.latitude:.11f}',longitude=f'{llh.longitude:.11f}',altitude='',heading_deg=f'{yaw_enu_rad_to_heading_deg(yaws[i]):.8f}',right_is_open=0,left_is_open=0,line_is_stop=int(e['line_is_stop']) if e else 0,signal_is_stop=0,isnot_skipnum=1))
+ rows.append(dict(label=e['id'] if e else f'WP{i:04d}',latitude=f'{llh.latitude:.11f}',longitude=f'{llh.longitude:.11f}',altitude='',heading_deg=f'{yaw_enu_rad_to_heading_deg(yaws[i]):.8f}',right_is_open=0,left_is_open=0,line_is_stop=int(e['line_is_stop']) if e else 0,signal_is_stop=int(e['signal_is_stop']) if e else 0,isnot_skipnum=1))
  v.update(index=i,label=rows[-1]['label'],yaw=yaws[i],distance_from_start_m=float(arc[i]),event_id=e['id'] if e else None,width_status='unknown',**{k:rows[-1][k] for k in fields[1:]})
 for directory,values in [(R/'route',rows)]:
  with (directory/'fixed/waypoints.csv').open('w',newline='') as f:w=csv.DictWriter(f,fields);w.writeheader();w.writerows(values)
@@ -135,7 +135,7 @@ info=[dict(id='START',kind='start',name='記録時スタート位置',x=float(p[
 for e in event_rows+excluded+info:
  llh=enu_to_llh_on_ground(e['x'],e['y'],proj,ground_altitude=proj.origin_altitude);e.update(latitude=llh.latitude,longitude=llh.longitude)
 # Optional tasks are not silently enabled by marker interpretation.
-optional=dict(A=dict(enabled=False,reason='事前計測なし区域。固定計測ルートを作成しない。'),B=dict(enabled=False,road_edge_events=['E07','E11'],reason='信号属性はイベントに保持。現followerのsignal_stopはsig_recog==1だけでも再開するため基本CSVはオペレータ再開。横断先安全判断と合わせた実装確認が必要。'),D1_D2=dict(enabled=False,reason='配送先が当日指定のため固定配送点を生成しない。'),E=dict(enabled=False,reason='対象ロボットの認識機能を本ルート生成では実装しない。'))
+optional=dict(A=dict(enabled=False,reason='事前計測なし区域。固定計測ルートを作成しない。'),B=dict(enabled=True,road_edge_events=['E07','E11'],reason='信号交差点の道路端にsignal_is_stopを立てる。followerのsignal_stopはmanual_startに加えsig_recog==1でも再開するため、横断先の安全判断は信号認識の実装側で担保する。'),D1_D2=dict(enabled=False,reason='配送先が当日指定のため固定配送点を生成しない。'),E=dict(enabled=False,reason='対象ロボットの認識機能を本ルート生成では実装しない。'))
 # Duplicate detection quantifies along/lateral relation using original body direction.
 a=G['R2-01'];b=G['R2-02'];delta=np.array([b['x']-a['x'],b['y']-a['y']]);fwd=np.array([np.cos(b['yaw']),np.sin(b['yaw'])]);excluded[0].update(separation_m=float(np.linalg.norm(delta)),along_m=float(delta@fwd),lateral_m=float(delta@np.array([-fwd[1],fwd[0]])),time_difference_s=b['time']-a['time'])
 # All 26 groups receive an explicit disposition.
@@ -155,6 +155,6 @@ features=[dict(type='Feature',properties=dict(kind='route',length_m=float(arc[-1
 for e in event_rows+info+excluded:features.append(dict(type='Feature',properties=e,geometry=dict(type='Point',coordinates=[e['longitude'],e['latitude']])))
 (R/'route_and_events.geojson').write_text(json.dumps(dict(type='FeatureCollection',features=features),ensure_ascii=False))
 np.savez_compressed(R/'sources/route_geometry.npz',raw_xy=raw['xy'],raw_time=raw['time'],raw_run=raw['run'],raw_frame=raw['frame'],simplified_indices=keep,route_xy=p,route_arc=arc,route_yaw=yaws)
-summary=dict(length_m=float(arc[-1]),waypoints=len(rows),source_pose_count=N,button_messages=sum(r['joy_count'] for r in J),button_rising_edges=sum(len(g['presses']) for r in J for g in r['groups']),marker_groups=len(G),course_events=len(event_rows),stop_waypoints=sum(r['line_is_stop'] for r in rows),road_edge_stops=sum(e['kind']=='road_edge_stop' for e in event_rows),queue_stops=2,signal_road_edge_stops=2,goal_events=1,repeat_supports=sum(len(e['repeat_observations']) for e in event_rows),simplification_tolerance_m=.06,max_waypoint_spacing_m=.75,source_map=str(M/'map_rtk_constrained_enu.pcd'),source_map_sha256=json.loads((M/'map_summary.json').read_text())['map_sha256'],source_map_sha256_file='map_enu_xyz_intensity.npy',gnss_used_for_map=True,gnss_used_for_route_tracking=False,full_course_source_runs=[1,2,3],repeat_validation_runs=[4,5,6],native_signal_stop_enabled=False,route_widths='unknown; zero lateral avoidance allowance',production_activated=False,review_items=['R2-01押し直しの解釈','停止目標と車体外形・到達閾値の整合','ゴール白線と車体最後端の位置'],gaps=gaps)
+summary=dict(length_m=float(arc[-1]),waypoints=len(rows),source_pose_count=N,button_messages=sum(r['joy_count'] for r in J),button_rising_edges=sum(len(g['presses']) for r in J for g in r['groups']),marker_groups=len(G),course_events=len(event_rows),stop_waypoints=sum(r['line_is_stop'] for r in rows),road_edge_stops=sum(e['kind']=='road_edge_stop' for e in event_rows),queue_stops=2,signal_road_edge_stops=2,goal_events=1,repeat_supports=sum(len(e['repeat_observations']) for e in event_rows),simplification_tolerance_m=.06,max_waypoint_spacing_m=.75,source_map=str(M/'map_rtk_constrained_enu.pcd'),source_map_sha256=json.loads((M/'map_summary.json').read_text())['map_sha256'],source_map_sha256_file='map_enu_xyz_intensity.npy',gnss_used_for_map=True,gnss_used_for_route_tracking=False,full_course_source_runs=[1,2,3],repeat_validation_runs=[4,5,6],native_signal_stop_enabled=True,route_widths='unknown; zero lateral avoidance allowance',production_activated=False,review_items=['R2-01押し直しの解釈','停止目標と車体外形・到達閾値の整合','ゴール白線と車体最後端の位置'],gaps=gaps)
 (R/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2))
 print(json.dumps(summary,ensure_ascii=False,indent=2))
