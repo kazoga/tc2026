@@ -72,6 +72,12 @@ python3 -m pytest src/route_planner/tests/test_tsukuba2026_route.py
 
 経路は3,997点になる。課題A区間は293点・215 mである。
 
+**可変ブロックの探索には `networkx` が要る。** `package.xml` が `python3-networkx` を
+実行依存に挙げている。apt で入れていない環境では、`networkx` を持つ venv の
+site-packages を `PYTHONPATH` へ通してから起動する。見つからない場合、`/get_route` は
+`networkx is required for variable route solving` で失敗し、ルートを取得できない。
+課題A非対応のルートは固定ブロックだけなので影響を受けない。
+
 ## 起動する
 
 起動カードは `route_planner` と `route_manager` の双方に同名で置く。`robot_console`

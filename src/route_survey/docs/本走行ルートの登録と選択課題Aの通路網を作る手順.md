@@ -124,6 +124,11 @@ colcon build --packages-select route_planner route_manager route_survey
 経路CSVの構成を変えた場合は、`build/route_planner` と `install/route_planner` を消して
 から再ビルドする。消さないと古いCSVが共有ディレクトリに残る。
 
+可変ブロックの探索には `networkx` が要る。apt の `python3-networkx` を入れていない環境
+では、`networkx` を持つ venv の site-packages を `PYTHONPATH` へ通してから起動する。
+`ros2 launch` が起動するノードはシステムのPythonで動くため、venvを有効化しただけでは
+足りない。
+
 ## 検証
 
 `src/route_planner/tests/test_tsukuba2026_route.py` が次を検査する。
