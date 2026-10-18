@@ -16,13 +16,15 @@
 
 | 成果物 | 置き場所 | 内容 |
 |---|---|---|
-| 回避幅を書き込んだ経路CSV | リポジトリ外の作業ディレクトリ | `right_is_open` / `left_is_open` だけを更新した `fixed/waypoints.csv` |
 | 区間定義 | `src/route_survey/params/tsukuba2026_regions.csv` | 区間の範囲・名前・境界の種類・上書き値・説明。**この手順の正本** |
-| 全域の回避幅の図 | リポジトリ外の作業ディレクトリ | 全点の幅をENU俯瞰図と距離方向の帯で1枚にしたPNG |
+| 回避幅を書き込んだ経路CSV | `src/route_survey/results/tsukuba2026_waypoints.csv` | `right_is_open` / `left_is_open` だけを更新した経路 |
+| 全域の回避幅の図 | `src/route_survey/results/tsukuba2026_route_widths.png` | 全点の幅をENU俯瞰図と距離方向の帯で1枚にしたPNG |
 | 区間の説明 | リポジトリ外の作業ディレクトリ | 区間ごとの写真・説明・幅をまとめた1枚のHTML |
 
 **区間の説明HTMLは現地の写真を含むため、リポジトリで管理しない。** 作業ディレクトリ
-へ出力し、必要な相手へ個別に渡す。区間定義CSVは文字情報だけなのでリポジトリに置く。
+へ出力し、必要な相手へ個別に渡す。ほかの3つは文字と図だけなのでリポジトリに置く。
+経路CSVと図は手順の出力であり、本番として使うと決めた経路ではない。実機での確認を
+経てから `src/route_planner/routes/<コース名>/` へ移す。
 
 ## 入力
 
@@ -243,9 +245,9 @@ python3 src/route_survey/tools/apply_region_widths.py \
 ```bash
 python3 src/route_survey/tools/render_route_widths.py \
   --waypoints-enu <経路>/waypoints_enu.json \
-  --route <出力>/route_with_widths/fixed/waypoints.csv \
+  --route src/route_survey/results/tsukuba2026_waypoints.csv \
   --regions src/route_survey/params/tsukuba2026_regions.csv \
-  --output <出力>/route_widths_overview.png
+  --output src/route_survey/results/tsukuba2026_route_widths.png
 ```
 
 俯瞰図は回避できる範囲を実寸で塗るため、拡大すれば区間ごとの広がりをそのまま読める。
