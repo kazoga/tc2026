@@ -139,7 +139,7 @@ def section(number: int, region: dict, chosen: tuple, frames_dir: Path,
             <th>根拠</th><th>標本数</th></tr>
         {rows}
       </table>
-      <details><summary>映像からの観測メモ（{len(notes)} 件）</summary>
+      <details open><summary>映像からの観測メモ（{len(notes)} 件）</summary>
         <ul>{note_items}</ul></details>
     </div>
   </div>
@@ -200,6 +200,15 @@ def main() -> None:
  details {{ margin-top: 10px; font-size: 13px; }}
  ul {{ margin: 6px 0; padding-left: 20px; }}
  .lead {{ background: #f8f8f8; border-left: 4px solid #999; padding: 8px 12px; }}
+ @page {{ size: A4; margin: 12mm; }}
+ @media print {{
+   body {{ max-width: none; padding: 0; font-size: 11px; }}
+   h1 {{ font-size: 16px; }}
+   h2 {{ font-size: 13px; }}
+   section {{ break-inside: avoid; page-break-inside: avoid; }}
+   .photo {{ flex: 0 0 300px; }}
+   table, details {{ font-size: 10px; }}
+ }}
 </style></head><body>
 <h1>{html.escape(args.title)}</h1>
 <p class="lead">全{len(regions)}区間、{total:.0f} m。写真は手動走行時の前方カメラから、

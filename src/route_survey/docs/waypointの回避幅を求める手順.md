@@ -19,7 +19,7 @@
 | 区間定義 | `src/route_survey/params/tsukuba2026_regions.csv` | 区間の範囲・名前・境界の種類・上書き値・説明。**この手順の正本** |
 | 回避幅を書き込んだ経路CSV | `src/route_survey/results/tsukuba2026_waypoints.csv` | `right_is_open` / `left_is_open` だけを更新した経路 |
 | 全域の回避幅の図 | `src/route_survey/results/tsukuba2026_route_widths.png` | 全点の幅をENU俯瞰図と距離方向の帯で1枚にしたPNG |
-| 区間の説明 | リポジトリ外の作業ディレクトリ | 区間ごとの写真・説明・幅をまとめた1枚のHTML |
+| 区間の説明 | リポジトリ外の作業ディレクトリ | 区間ごとの写真・説明・幅をまとめたHTMLと、配布用のPDF |
 
 **区間の説明HTMLは現地の写真を含むため、リポジトリで管理しない。** 作業ディレクトリ
 へ出力し、必要な相手へ個別に渡す。ほかの3つは文字と図だけなのでリポジトリに置く。
@@ -275,7 +275,18 @@ python3 src/route_survey/tools/build_region_guide.py \
 場合は、最寄りのコマを区間外と明示して使う。画像はHTMLへ埋め込むので1ファイルだけで
 閲覧できる。
 
-**出力はリポジトリの外へ置く。** 現地の写真を含むため、リポジトリで管理しない。
+HTMLは閲覧環境を選ぶため、配布にはPDFを使う。HTMLには印刷用の体裁を入れてあり、
+ヘッドレスのブラウザでそのまま変換できる。区間が途中で改ページされることはない。
+
+```bash
+google-chrome --headless=new --disable-gpu --no-pdf-header-footer \
+  --print-to-pdf=<出力の絶対パス>/region_guide.pdf \
+  file://<出力の絶対パス>/region_guide.html
+```
+
+`--print-to-pdf` と `file://` は絶対パスで渡す。A4縦、33区間で28ページになる。
+
+**HTMLもPDFもリポジトリの外へ置く。** 現地の写真を含むため、リポジトリで管理しない。
 
 ## 検証
 
