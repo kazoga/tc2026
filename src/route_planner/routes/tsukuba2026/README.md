@@ -3,10 +3,14 @@
 2026年のつくばチャレンジ本走行コースを、全域を固定ブロックとして走る経路である。
 選択課題には対応せず、記録した周回をそのまま走る。
 
-- 正本: `fixed/waypoints.csv`。LLHのみを保存し、高度は空欄とする。列は
-  [route_planner README](../../README.md) のCSV仕様に従う。
-- 経路構成: `route_config.yaml`。固定ブロック `tsukuba2026_full_course` 1つで
-  CSV全体を連結する。可変ブロックを持たないため、滞留時の再探索はできない。
+- 正本: `fixed/part1.csv`（739点）と `fixed/part2.csv`（2,965点）。LLHのみを保存し、
+  高度は空欄とする。列は [route_planner README](../../README.md) のCSV仕様に従う。
+  2ファイルの連結が1本の経路であり、同じ行が重複して現れることはない。
+- 分割点: `WP0738`。選択課題Aのゲートへ入る位置であり、停止点ではない。課題Aに対応する
+  ルートは、同じ2ファイルの間に可変ブロックを挟む別の `route_config` として定義する。
+  経路CSVを複製せずに2つのルートを持てるようにするための分割である。
+- 経路構成: `route_config.yaml`。2つの固定ブロックをこの順で連結する。可変ブロックを
+  持たないため、滞留時の再探索はできない。
 - 規模: 3,704点、経路長 約2,241 m。waypoint間隔は最大 0.75 m。
 - 停止属性: `line_is_stop` が16点、`signal_is_stop` は全点0である。信号交差点の
   道路端2点（E07、E11）も `line_is_stop` だけを持ち、オペレータが再開する。
@@ -32,11 +36,13 @@
 成果物を更新したときは次を実行する。`cmp` と pytest が、配置した経路と
 `route_survey` の成果物が同一であることを検査する。
 
+成果物を `WP0738` の行までと、その次の行からの2つへ分けて配置する。ヘッダは双方に置く。
+
 ```bash
-cp src/route_survey/results/tsukuba2026_waypoints.csv \
-   src/route_planner/routes/tsukuba2026/fixed/waypoints.csv
-cmp src/route_survey/results/tsukuba2026_waypoints.csv \
-    src/route_planner/routes/tsukuba2026/fixed/waypoints.csv
+python3 src/route_survey/tools/split_route_csv.py \
+  --source src/route_survey/results/tsukuba2026_waypoints.csv \
+  --split-label WP0738 \
+  --output src/route_planner/routes/tsukuba2026/fixed
 python3 -m pytest src/route_planner/tests/test_tsukuba2026_route.py
 ```
 
@@ -63,9 +69,11 @@ CSVはビルド時に共有ディレクトリへコピーされる。通常insta
 
 ## 確認した範囲
 
-- `route_config.yaml` から3,704点が1ブロックとして組み立てられ、全点が固定区間、
-  停止16点、点間隔0.75 m以下であることを `tests/test_tsukuba2026_route.py` で確認した。
-- 配置した経路CSVが `route_survey` の成果物とバイト単位で一致することを確認した。
+- `route_config.yaml` から3,704点が組み立てられ、全点が固定区間、停止16点、
+  点間隔0.75 m以下であることを `tests/test_tsukuba2026_route.py` で確認した。
+- 2ファイルの連結が `route_survey` の成果物と一致することを確認した。
+- 分割前の1ブロック構成と比べ、ラベル・位置・停止属性・回避幅は変わらない。分割点
+  `WP0738` の姿勢だけ、ブロック末尾の再計算により0.18度変わる。
 
 **実機では走行していない。** 回避幅の値、停止位置、信号交差点の扱いは実機走行で
 確認していない。模擬環境で確認した範囲は

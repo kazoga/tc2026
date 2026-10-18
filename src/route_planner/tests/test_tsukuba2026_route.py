@@ -24,7 +24,10 @@ from geo_pose_converter.geo_core import load_projection_config_from_yaml  # noqa
 from route_planner.route_builder import RouteBuilder  # noqa: E402
 
 ROUTE_DIR = PACKAGE_DIR / "routes" / "tsukuba2026"
-ROUTE_CSV = ROUTE_DIR / "fixed" / "waypoints.csv"
+# 経路は選択課題Aのゲート位置 (WP0738) で2ファイルに分かれている。連結すると
+# route_survey の成果物と一致する。
+ROUTE_CSV_PARTS = (ROUTE_DIR / "fixed" / "part1.csv", ROUTE_DIR / "fixed" / "part2.csv")
+SPLIT_LABEL = "WP0738"
 SURVEY_CSV = (
     WORKSPACE_DIR / "src" / "route_survey" / "results" / "tsukuba2026_waypoints.csv"
 )
@@ -50,19 +53,36 @@ def route_waypoints() -> list:
     return builder.build_route("", "", []).waypoints
 
 
-def test_registered_csv_matches_route_survey_result() -> None:
-    """登録した経路CSVが route_survey の成果物と一致する."""
+def test_registered_csv_parts_concatenate_to_route_survey_result() -> None:
+    """分割した経路CSVを連結すると route_survey の成果物と一致する."""
 
-    assert ROUTE_CSV.read_bytes() == SURVEY_CSV.read_bytes()
+    head, *rest = [path.read_text(encoding="utf-8") for path in ROUTE_CSV_PARTS]
+    joined = head + "".join(text.split("\n", 1)[1] for text in rest)
+
+    assert joined == SURVEY_CSV.read_text(encoding="utf-8")
+
+
+def test_split_point_is_not_a_stop_waypoint() -> None:
+    """分割点が停止点でないことを確かめる.
+
+    ブロック末尾の waypoint は姿勢が直前点からの方位で上書きされるため、停止点を
+    分割点にすると停止時の向きが変わる。
+    """
+
+    last = ROUTE_CSV_PARTS[0].read_text(encoding="utf-8").strip().splitlines()[-1]
+    fields = last.split(",")
+    assert fields[0] == SPLIT_LABEL
+    assert fields[7] == "0" and fields[8] == "0"
 
 
 def test_route_config_covers_whole_course_as_fixed(route_waypoints: list) -> None:
-    """全域が1つの固定ブロックとして読み込まれる."""
+    """2つの固定ブロックが全域として読み込まれる."""
 
     assert len(route_waypoints) == 3704
     assert route_waypoints[0].label == "WP0000"
     assert route_waypoints[-1].label == "E17"
     assert all(wp.segment_is_fixed for wp in route_waypoints)
+    assert [wp.label for wp in route_waypoints].count(SPLIT_LABEL) == 1
 
 
 def test_route_keeps_stop_attributes_and_spacing(route_waypoints: list) -> None:
