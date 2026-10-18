@@ -1,0 +1,6 @@
+# つくば2026 本走行コース（選択課題A非対応）。
+# fixed/waypoints.csv の全3,704点を1つの固定ブロックとして走る。
+blocks:
+- name: tsukuba2026_full_course
+  type: fixed
+  segment_id: fixed/waypoints.csv
