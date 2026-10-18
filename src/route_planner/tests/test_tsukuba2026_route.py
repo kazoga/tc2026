@@ -1,4 +1,6 @@
-"""つくば2026 本走行コース（選択課題A非対応）の登録内容を検査する.
+"""つくば2026 本走行コースの登録内容を検査する.
+
+選択課題Aに対応するルートと対応しないルートの双方を扱う。
 
 登録した経路が route_survey の成果物と同一であること、route_config.yaml から
 全域を固定ブロックとして組み立てられること、起動カードが実在するファイルを
@@ -39,18 +41,31 @@ PROJECTION_YAML = (
 MAX_SPACING_M = 0.75
 
 
-@pytest.fixture(scope="module")
-def route_waypoints() -> list:
-    """route_config.yaml から組み立てたwaypoint列を返す."""
+def _build(config_name: str) -> list:
+    """指定した route_config から waypoint 列を組み立てる."""
 
     projection = load_projection_config_from_yaml(str(PROJECTION_YAML))
     builder = RouteBuilder(
-        str(ROUTE_DIR / "route_config.yaml"),
+        str(ROUTE_DIR / config_name),
         csv_base_dir=str(ROUTE_DIR),
         projection=projection,
     )
     builder.load()
     return builder.build_route("", "", []).waypoints
+
+
+@pytest.fixture(scope="module")
+def route_waypoints() -> list:
+    """課題A非対応のルートの waypoint 列を返す."""
+
+    return _build("route_config.yaml")
+
+
+@pytest.fixture(scope="module")
+def task_a_waypoints() -> list:
+    """課題A対応のルートの waypoint 列を返す."""
+
+    return _build("route_config_task_a.yaml")
 
 
 def test_registered_csv_parts_concatenate_to_route_survey_result() -> None:
@@ -115,3 +130,62 @@ def test_launch_cards_point_to_existing_files() -> None:
     )
     manager_card = yaml.safe_load(manager_card_path.read_text(encoding="utf-8"))
     assert "route_manager" in manager_card
+
+
+def test_task_a_route_inserts_variable_block_without_copying_csv(
+    route_waypoints: list, task_a_waypoints: list
+) -> None:
+    """課題A対応のルートが、同じ固定CSVの間に可変ブロックを挟んで組み立つ."""
+
+    task_a_config = yaml.safe_load(
+        (ROUTE_DIR / "route_config_task_a.yaml").read_text(encoding="utf-8")
+    )["blocks"]
+    fixed_segments = [b["segment_id"] for b in task_a_config if b["type"] == "fixed"]
+    assert fixed_segments == [path.name and f"fixed/{path.name}" for path in ROUTE_CSV_PARTS]
+
+    labels = [wp.label for wp in task_a_waypoints]
+    gate_first, gate_last = labels.index("G"), len(labels) - 1 - labels[::-1].index("G")
+    section = task_a_waypoints[gate_first : gate_last + 1]
+    # 非対応のルートはそのまま残り、分割点の直後へ課題A区間が挿入される。
+    assert len(task_a_waypoints) == len(route_waypoints) + len(section)
+    assert labels[gate_first - 1] == SPLIT_LABEL
+    assert "O11" in labels
+    assert not any(wp.segment_is_fixed for wp in section[1:-1])
+
+
+def test_task_a_section_starts_at_the_split_point() -> None:
+    """課題A区間の入口が分割点と同じ位置にあり、そこで左折する."""
+
+    waypoints = _build("route_config_task_a.yaml")
+    labels = [wp.label for wp in waypoints]
+    gate = labels.index("G")
+    split = waypoints[gate - 1]
+    assert split.label == SPLIT_LABEL
+    assert math.dist(
+        (split.pose.position.x, split.pose.position.y),
+        (waypoints[gate].pose.position.x, waypoints[gate].pose.position.y),
+    ) < 0.05
+
+
+def test_task_a_section_has_avoidance_width_and_no_stop(task_a_waypoints: list) -> None:
+    """課題A区間は左右1.0 mの回避幅を持ち、停止点を持たない."""
+
+    labels = [wp.label for wp in task_a_waypoints]
+    gate_first, gate_last = labels.index("G"), len(labels) - 1 - labels[::-1].index("G")
+    section = task_a_waypoints[gate_first + 1 : gate_last]
+
+    assert {(wp.right_open, wp.left_open) for wp in section} == {(1.0, 1.0)}
+    assert not any(wp.line_stop or wp.signal_stop for wp in section)
+
+
+def test_task_a_route_keeps_spacing(task_a_waypoints: list) -> None:
+    """課題Aを挟んでも点間隔が保たれる."""
+
+    spacing = [
+        math.dist(
+            (previous.pose.position.x, previous.pose.position.y),
+            (current.pose.position.x, current.pose.position.y),
+        )
+        for previous, current in zip(task_a_waypoints, task_a_waypoints[1:])
+    ]
+    assert max(spacing) <= MAX_SPACING_M + 1e-6

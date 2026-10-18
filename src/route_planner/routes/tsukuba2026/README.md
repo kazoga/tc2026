@@ -1,7 +1,7 @@
 # つくば2026 本走行コース
 
-2026年のつくばチャレンジ本走行コースを、全域を固定ブロックとして走る経路である。
-選択課題には対応せず、記録した周回をそのまま走る。
+2026年のつくばチャレンジ本走行コースである。選択課題Aに対応しないルートと、対応する
+ルートの2つを、同じ経路CSVから定義する。
 
 - 正本: `fixed/part1.csv`（739点）と `fixed/part2.csv`（2,965点）。LLHのみを保存し、
   高度は空欄とする。列は [route_planner README](../../README.md) のCSV仕様に従う。
@@ -43,8 +43,32 @@ python3 src/route_survey/tools/split_route_csv.py \
   --source src/route_survey/results/tsukuba2026_waypoints.csv \
   --split-label WP0738 \
   --output src/route_planner/routes/tsukuba2026/fixed
+python3 src/route_survey/tools/build_task_a_route.py \
+  --spec src/route_survey/params/tsukuba2026_task_a_graph.yaml \
+  --output src/route_planner/routes/tsukuba2026
 python3 -m pytest src/route_planner/tests/test_tsukuba2026_route.py
 ```
+
+## 選択課題A対応のルート
+
+`route_config_task_a.yaml` は、同じ `fixed/part1.csv` と `fixed/part2.csv` の間に、
+市役所職員駐車場3の通路網を可変ブロックとして挟む。経路CSVは複製しない。
+
+- 通路網: `variable/nodes.csv`（13ノード）、`variable/edges.csv`（16エッジ、総延長420 m）、
+  `variable/segments/edge_<始点>_<終点>.csv`。いずれも
+  `src/route_survey/tools/build_task_a_route.py` が
+  [通路網の定義](../../../route_survey/params/tsukuba2026_task_a_graph.yaml)から生成する。
+  手で編集せず、定義を直して作り直す。
+- 進入と退出: 可変ブロックの `start` と `goal` はどちらもノード `G` で、分割点 `WP0738`
+  と同じ位置にある。ロボットは歩道上のここで左折し、歩道と駐車場の境界から進入して、
+  チェックポイント `O11` を通り、同じ位置へ戻る。
+- 回避幅: 課題A区間は左右とも1.0 m。停止点は持たない。進入前の安全確認は、分割点の
+  3.3 m手前にある道路端停止 `E04` で行う。
+- 封鎖時: 通路が塞がれて滞留した場合、`route_follower` の `/report_stuck` から
+  `route_manager` が `/update_route` を呼び、`route_planner` が封鎖エッジを除いて
+  再探索する。可変ブロックであるため、看板の検出に依存しない。
+
+経路は3,997点になる。課題A区間は293点・215 mである。
 
 ## 起動する
 
@@ -52,8 +76,11 @@ python3 -m pytest src/route_planner/tests/test_tsukuba2026_route.py
 からはこのカード名で選ぶ。`route_manager` の `start_label` と `goal_label` は空であり、
 全域を走る。
 
-- `src/route_planner/params/tsukuba2026.yaml`
-- `src/route_manager/params/tsukuba2026.yaml`
+- 課題A非対応: `src/route_planner/params/tsukuba2026.yaml`、
+  `src/route_manager/params/tsukuba2026.yaml`
+- 課題A対応: `src/route_planner/params/tsukuba2026_task_a.yaml`、
+  `src/route_manager/params/tsukuba2026_task_a.yaml`。`route_manager` 側は
+  `checkpoint_labels` に `O11` を持つ
 
 ```bash
 colcon build --packages-select route_planner route_manager
@@ -72,6 +99,10 @@ CSVはビルド時に共有ディレクトリへコピーされる。通常insta
 - `route_config.yaml` から3,704点が組み立てられ、全点が固定区間、停止16点、
   点間隔0.75 m以下であることを `tests/test_tsukuba2026_route.py` で確認した。
 - 2ファイルの連結が `route_survey` の成果物と一致することを確認した。
+- 課題A対応のルートが、同じ2ファイルの間へ可変ブロックを挟んで組み立てられること、
+  課題A区間の回避幅が左右1.0 mで停止点を持たないこと、点間隔が保たれることを確認した。
+- 通路の封鎖を模して、`O10`-`O11` を除くと `O9` 経由へ、さらに `O9`-`O11` も除くと
+  `O12`-`O13` 経由へ再探索できることを確認した。
 - 分割前の1ブロック構成と比べ、ラベル・位置・停止属性・回避幅は変わらない。分割点
   `WP0738` の姿勢だけ、ブロック末尾の再計算により0.18度変わる。
 
